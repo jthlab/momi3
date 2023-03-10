@@ -1,3 +1,4 @@
+"miscellaneous shared functions that don't fit anywhere else"
 from collections import Counter, namedtuple
 from copy import deepcopy
 from dataclasses import dataclass
@@ -11,6 +12,10 @@ from jax.tree_util import register_pytree_node_class
 from jax.util import safe_zip
 
 oe_einsum = partial(opt_einsum.contract, optimize="optimal", backend="jax")
+
+
+def Ne_t(Ne0, Ne1, t0, t1, t):
+    return Ne0 * (Ne1 / Ne0) ** (t1 - t) / (t1 - t0)
 
 
 def traverse(params, path):

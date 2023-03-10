@@ -14,6 +14,7 @@ from jax import vmap
 from momi3.common import (
     Axes,
     Event,
+    Ne_t,
     PopCounter,
     Population,
     State,
@@ -125,7 +126,10 @@ class Lift:
                         for path in (self.t0.path, self.t1.path)
                     ]
                 )
-                ret[pop] = (N0, N1)
+                if params["demes"][i]["epochs"][j]["size_function"] == "constant":
+                    ret[pop] = N0
+                else:
+                    ret[pop] = (N0, N1)
             return ret
 
         self._f_Ne = f_Ne
@@ -161,12 +165,11 @@ class Lift:
                     pop = s
                     involved_pops = {pop}
                     i = list(axes).index(pop)
-                    N1, N0 = size_d[pop]
+                    Ne = size_d[pop]
                     plp, etbl = _lift1(
                         plp,
                         i,
-                        N0,
-                        N1,
+                        Ne,
                         tau,
                         mats["d"],
                         mats["Q"],
@@ -178,10 +181,11 @@ class Lift:
                 else:
                     M = self._migmat(params, s)
                     mats = aux["mats"]["multi"][s]
-                    # FIXME we only support constant size for continuous migration. (this wouldn't be so hard to fix)
                     involved_pops = {x for ab in s for x in ab}
-                    coal = {pop: 1.0 / size_d[pop][0] for pop in involved_pops}
-                    plp, etbl = _liftmulti(plp, axes, coal, tau, M, mats["cmm"])
+                    Ne = {pop: size_d[pop] for pop in involved_pops}
+                    plp, etbl = _liftmulti(
+                        plp, axes, Ne, (t0_val, t1_val), M, mats["cmm"]
+                    )
                 inds = [0] * st.pl.ndim
                 for pop in involved_pops:
                     inds[list(axes).index(pop)] = slice(None)
@@ -191,14 +195,13 @@ class Lift:
         return st._replace(pl=plp, phi=st.phi + phip)
 
 
-def _lift1(pl, in_axis, N0, N1, tau, d, Q, QQ, RR, W, terminal):
+def _lift1(pl, in_axis, Ne, tau, d, Q, QQ, RR, W, terminal):
     """
     Lift a partial likelihood along a single axis.
     Args:
         pl: The partial likelihood to lift
         in_axis: axis along which to lift
-        N0: population size at the bottom of the branch (closest to present)
-        N1: population size at the top of the branch (closest to root)
+        Ne: effective population size (if constant) or (N0, N1) size at the bottom/top of the branch
         tau: elapsed time along branch.
         d, Q, W: precomputed matrices; see setup()
         terminal: if true, do not perform lifting
@@ -215,11 +218,11 @@ def _lift1(pl, in_axis, N0, N1, tau, d, Q, QQ, RR, W, terminal):
         # this should be enforced by demes anyways, but maybe check earlier in the code.
         j = jnp.arange(2, nv + 1)
         # expected time to coal with pop size N0
-        cm = N0 / (j * (j - 1) / 2)
+        cm = Ne / (j * (j - 1) / 2)
         fn = W @ cm
         etbl = jnp.r_[0, fn, 0]
         return None, etbl
-    etbl, R = _etbl_R(nv, N0, N1, tau, W)
+    etbl, R = _etbl_R(nv, Ne, tau, W)
     # now compute the lifted partial likelihood
     # we basically want to contract the partial likelihood along the lifted axis with the matrix
     # Q * exp(d * R) * Qinv. however for numerical & computational reasons, avoid matrix-matrix products or inversion
@@ -241,35 +244,40 @@ def _lift1(pl, in_axis, N0, N1, tau, d, Q, QQ, RR, W, terminal):
     return plp, etbl
 
 
-def _liftmulti(pl, axes, coal, tau, mig_mat, cmm):
+def _liftmulti(pl, axes, Ne, t, mig_mat, cmm):
     """Lift multiple populations who are migrating continuously."""
-    params = {"coal": coal, "mig": mig_mat}
-    return lift_cm(params, tau, pl, axes, cmm)
+    params = {"Ne": Ne, "mig": mig_mat}
+    return lift_cm(params, t, pl, axes, cmm)
 
 
-def _etbl_R(nv, N0, N1, tau, W):
+def _etbl_R(nv, Ne, tau, W):
     """Total branch length subtended by the lifted axis.
 
     Args:
         nv: number of lineages
-        N0: starting population size
-        N1: ending population size
+        Ne: starting/ending population size
         tau: elapsed time
 
     Returns:
        Expected branch length subtending j=2, ..., nv lineages.
     """
     # N1 = N0 * exp(-g * tau) => g = -log(N1 / N0) / tau
-    g = -(jnp.log(N0) - jnp.log(N1)) / tau
     j = jnp.arange(2, nv + 1)
+    jC2 = j * (j - 1) / 2.0
     f_const = vmap(exp_integral, (None, None, 0))
-    f_exp = vmap(partial(exp_integralEGPS, g), (None, None, 0))
-    cm = lax.cond(jnp.isclose(g, 0.0), f_const, f_exp, 1 / N1, tau, j * (j - 1) / 2.0)
+    if isinstance(Ne, tuple):
+        N1, N0 = Ne
+        g = -(jnp.log(N0) - jnp.log(N1)) / tau
+        f_exp = vmap(partial(exp_integralEGPS, g), (None, None, 0))
+        cm = lax.cond(jnp.isclose(g, 0.0), f_const, f_exp, 1 / N1, tau, jC2)
+        R = lax.cond(jnp.isclose(g, 0.0), _R_const, partial(_R_exp, g), N1, tau)
+    else:
+        cm = f_const(1 / Ne, tau, jC2)
+        R = _R_const(Ne, tau)
     fn = W @ cm
     k = j - 1
     e_tmrca_min_tau = ((k / nv) * fn).sum()
     etbl = jnp.r_[0, fn, jnp.where(jnp.isinf(tau), 0, tau - e_tmrca_min_tau)]
-    R = lax.cond(jnp.isclose(g, 0.0), _R_const, partial(_R_exp, g), N1, tau)
     return etbl, R
 
 
@@ -300,9 +308,7 @@ def _get_size(deme, j, t):
     Ne1 = 2 * ep["end_size"]
     t0 = ep["end_time"]
     # start_size = end_size * exp(g * (end_time - start_time)) => g = log(Ne0/Ne1) / (t0-t1)
-    g = (jnp.log(Ne0) - jnp.log(Ne1)) / (t1 - t0)
-    ret = Ne0 * jnp.exp(-g * (t1 - t))
-    return ret
+    return Ne_t(Ne0, Ne1, t0, t1, t)
 
 
 @dataclass

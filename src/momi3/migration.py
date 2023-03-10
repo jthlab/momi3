@@ -1,13 +1,12 @@
 import itertools as it
-import operator
-from functools import reduce
 
 import jax
 import jax.numpy as jnp
 import scipy.sparse as sps
-from jax import jacfwd
+from diffrax import ODETerm, Tsit5, diffeqsolve
+from jax import jacfwd, lax, vmap
 
-from .common import Axes, Population
+from .common import Axes, Ne_t, Population
 from .kronprod import GroupedKronProd
 from .momints import _drift, _migration, _mutation
 from .spexpm import expmv
@@ -33,7 +32,70 @@ def lift_cm_aux(
     return tm
 
 
-def lift_cm(params: dict, t: float, pl: jnp.ndarray, axes, aux):
+def _e0_like(pl):
+    return jnp.zeros(pl.size).at[0].set(1.0).reshape(pl.shape)
+
+
+def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
+    Ne = params["Ne"]
+    const = all(not isinstance(Ne[pop], tuple) for pop in Ne)
+    if const:
+        return lift_cm_const(params, t[1] - t[0], pl, axes, aux)
+    # population sizes are changing, so we have to use a differential
+    # equation solver
+    dims = pl.shape
+    Q_mig, Q_mut = _Q_mig_mut(
+        dims,
+        axes,
+        params["mig"],
+        aux,
+    )
+
+    def A(s, y, args):
+        theta, tr = args
+        coal = {}
+        for pop in Ne:
+            if isinstance(Ne[pop], tuple):
+                N1, N0 = Ne[pop]
+                coal[pop] = 1.0 / Ne_t(N0, N1, t[0], t[1], s)
+            else:
+                # Ne is a float
+                coal[pop] = 1.0 / Ne[pop]
+        Qd = _Q_drift(dims, axes, coal, aux)
+        Q_lift = Q_mig + Qd * 0.5 + Q_mut * theta
+        # after passage through lax.cond dims is traced, but we need it staticially known to compute the matmul
+        T = lax.cond(tr, lambda x: x.T, lambda x: x, Q_lift)._replace(dims=Q_lift.dims)
+        return T @ y
+
+    term = ODETerm(A)
+    solver = Tsit5()
+
+    def solve(theta, y0, tr):
+        return diffeqsolve(
+            term,
+            solver,
+            t0=t[0],
+            t1=t[1],
+            dt0=(t[1] - t[0]) / 50,
+            y0=y0,
+            args=(theta, tr),
+        ).ys[0]
+
+    eps = 1e-7
+    e0 = _e0_like(pl)
+    res = vmap(solve, (0, 0, 0))(
+        jnp.array([0.0, eps, -eps]),
+        jnp.array([pl, e0, e0]),
+        jnp.array([True, False, False]),
+    )
+    plp = res[0]
+    # etbl = jacrev(solve)(0.)
+    # got an error getting this to work with sparse matrices, so for now settle for finite diffs
+    etbl = (res[1] - res[2]) / (2 * eps)
+    return plp, etbl
+
+
+def lift_cm_const(params: dict, t: float, pl: jnp.ndarray, axes, aux):
     """
     Lift partial likelihoods under continuous migration.
 
@@ -49,19 +111,25 @@ def lift_cm(params: dict, t: float, pl: jnp.ndarray, axes, aux):
         for these populations.
     """
     dims = pl.shape
-    Q_mig, Q_drift, Q_mut = _Q_matrix(
+    Ne = params["Ne"]
+    coal = {pop: 1.0 / Ne[pop] for pop in Ne}
+    Q_drift = _Q_drift(
         dims,
         axes,
-        params["coal"],
+        coal,
+        aux,
+    )
+    Q_mig, Q_mut = _Q_mig_mut(
+        dims,
+        axes,
         params["mig"],
         aux,
     )
     Q_lift = Q_mig + Q_drift * 0.5
     pl_lift = expmv(Q_lift.T, t, pl)
     assert pl_lift.shape == pl.shape
-    D = reduce(operator.mul, pl.shape)
     # now compute the expected branch lengths
-    e0 = jnp.eye(D, 1, 0).reshape(pl.shape)
+    e0 = _e0_like(pl)
 
     def f(theta):
         # note: Q_mut * (...) has to be implemented as multiplication from the right order for it to work with traced
@@ -74,19 +142,23 @@ def lift_cm(params: dict, t: float, pl: jnp.ndarray, axes, aux):
     return pl_lift, etbl
 
 
-def _Q_matrix(
-    dims, axes, coal_rates, mig_mat, aux
+def _Q_drift(
+    dims, axes, coal_rates, aux
 ) -> tuple[GroupedKronProd, GroupedKronProd, GroupedKronProd]:
     """construct Q matrix for continuously migrating populations"""
     s = list(coal_rates)  # these are the populations participating in the migration
     i = list(axes).index
-    Q_drift = GroupedKronProd(
+    return GroupedKronProd(
         [{i(ss): aux["drift"][ss] * coal_rates[ss]} for ss in s], dims
     )
-    # ^^^^^^^^^^^^
-    # This is *not* the same as
-    #   Q_drift = KronProd([{i: aux['drift'][i] * (coal_rates[i] / 4.) for i in pop_inds}]):
-    #   ^^^^^ is kronecker product, the other/correct is Kronkecker sum
+
+
+def _Q_mig_mut(
+    dims, axes, mig_mat, aux
+) -> tuple[GroupedKronProd, GroupedKronProd, GroupedKronProd]:
+    """construct Q matrix for continuously migrating populations"""
+    s = list(aux["mut"])
+    i = list(axes).index
     Q_mut = GroupedKronProd([{i(ss): aux["mut"][ss]} for ss in s], dims)
     # migration matrix is a bit trickier
     terms = []
@@ -99,7 +171,7 @@ def _Q_matrix(
             terms.append({i1: m_ij * u1[0], i2: u1[1]})
             terms.append({i2: m_ij * u2[1]})
     Q_mig = GroupedKronProd(terms, dims)
-    return Q_mig, Q_drift, Q_mut
+    return Q_mig, Q_mut
 
 
 def _bcoo_kron(A, B):
