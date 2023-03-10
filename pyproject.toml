@@ -9,5 +9,5 @@ build-backend = "setuptools.build_meta"
 version_scheme = "no-guess-dev"
 
 [tool.isort]
-profile = black
-known_first_party = momi3
+profile = "black"
+known_first_party = "momi3"
