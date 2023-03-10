@@ -2,4 +2,5 @@
 Contributors
 ============
 
-* Jonathan Terhorst <terhorst@gmail.com>
+* Enes Dilber <enes@umich.edu>
+* Jonathan Terhorst <jonth@umich.edu>
