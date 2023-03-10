@@ -1,0 +1,51 @@
+description: |
+  A ten population model of out-of-Africa, including two pulses of
+  Denisovan admixture into Papuans, and several pulses of Neandertal
+  admixture into non-Africans.
+  Most parameters are from Jacobs et al. (2019), Table S5 and Figure S5.
+  This model is an extension of one from Malaspinas et al. (2016), thus
+  some parameters are inherited from there.
+time_units: generations
+doi:
+- https://doi.org/10.1016/j.cell.2019.02.035
+- https://doi.org/10.1038/nature18299
+
+metadata: {
+  sampled_demes: ['YRI', 'Papuan', 'NeaA', 'DenA'],
+  sample_sizes: [8, 6, 5, 4],
+  rho: 0.,
+  theta: 0.0005,
+  burnin: 200
+}
+
+demes:
+- name: YRI
+  epochs:
+  - {end_time: 20225.0, start_size: 32671.0}
+  - {end_time: 2218.0, start_size: 41563.0}
+  - {end_time: 0, start_size: 48433.0}
+- name: DenA
+  ancestors: [YRI]
+  start_time: 20225.0
+  epochs:
+  - {end_time: 15090.0, start_size: 13249.0}
+  - {end_time: 12500.0, start_size: 100.0}
+  - {end_time: 9750.0, start_size: 100.0}
+  - {end_time: 0, start_size: 5083.0}
+- name: NeaA
+  ancestors: [DenA]
+  start_time: 15090.0
+  epochs:
+  - {end_time: 3375.0, start_size: 13249.0}
+  - {end_time: 0, start_size: 826.0}
+- name: Papuan
+  ancestors: [YRI]
+  start_time: 1784.0
+  epochs:
+  - {end_time: 1685.0, start_size: 243.0}
+  - {end_time: 0, start_size: 8834.0}
+
+
+pulses:
+- {sources: [NeaA], dest: YRI, time: 1853.0, proportions: [0.024]}
+- {sources: [DenA], dest: Papuan, time: 1575.8620689655172, proportions: [0.018]}

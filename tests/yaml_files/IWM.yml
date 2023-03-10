@@ -1,0 +1,28 @@
+description: Isolation with Migration
+time_units: generations
+metadata: {
+  sampled_demes: ['deme0', 'deme1'],
+  sample_sizes: [6, 10],
+  rho: 0.,
+  theta: 0.0005,
+  burnin: 200
+}
+
+demes:
+- name: ANC
+  description: The ancestral deme
+  epochs:
+    - {start_size: 100, end_time: 10}
+- name: deme0
+  description: The derived deme, 1/2 the size of the ancestral.
+  ancestors: [ANC]
+  epochs:
+    - {start_size: 50, end_time: 0}
+- name: deme1
+  description: The derived deme, 1/2 the size of the ancestral.
+  ancestors: [ANC]
+  epochs:
+    - {start_size: 50, end_time: 0}
+
+migrations:
+- {demes: [deme0, deme1], rate: 0.1}
