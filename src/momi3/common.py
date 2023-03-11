@@ -15,7 +15,7 @@ oe_einsum = partial(opt_einsum.contract, optimize="optimal", backend="jax")
 
 
 def Ne_t(Ne0, Ne1, t0, t1, t):
-    return Ne0 * (Ne1 / Ne0) ** (t1 - t) / (t1 - t0)
+    return Ne0 * (Ne1 / Ne0) ** ((t1 - t) / (t1 - t0))
 
 
 def traverse(params, path):
