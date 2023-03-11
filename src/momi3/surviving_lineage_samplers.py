@@ -169,8 +169,10 @@ def Migration_sample(
             coal = jnp.array(
                 [1 / Ne_dict[pop] for pop in Ne_dict]
             )  # only handles constant pop size migration
-        except:
-            raise NotImplementedError("Exponential Growth Migration Sampler is not implemented")
+        except TypeError as e:
+            raise NotImplementedError(
+                "Exponential Growth Migration Sampler is not implemented"
+            ) from e
 
         n0 = [n.get(i, 1) for i in Ne_dict]
 
@@ -240,10 +242,10 @@ def Lift_sample(
         sizes = ev._f_Ne(demo_dict)
         for pop in pops:
             s = sizes[pop]
-            if isinstance(s, float | int):
-                Ne0 = Ne1 = s
-            else:
+            if isinstance(s, tuple):
                 Ne0, Ne1 = s
+            else:
+                Ne0 = Ne1 = s
 
             Ne0s_dict[pop].append(Ne0)
             Ne1s_dict[pop].append(Ne1)
