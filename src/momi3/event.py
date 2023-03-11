@@ -217,10 +217,13 @@ class ETBuilder:
         assert set(X) == set(self._leaves)
         # initialize leaf node partials
         for pop in self._leaves:
+            XX = X[pop].astype(
+                float
+            )  # int partial likelihoods causes all sorts of problems further down
             ns = self._num_samples.get(pop, 0)
-            assert X[pop].shape == (ns + 1,)
-            l0 = X[pop][0] == 1.0  # & (X[pop][1:] == 0.0).all()
-            self.nodes[self._leaves[pop]]["state"] = State(pl=X[pop], phi=0.0, l0=l0)
+            assert XX.shape == (ns + 1,)
+            l0 = XX[0] == 1.0  # & (X[pop][1:] == 0.0).all()
+            self.nodes[self._leaves[pop]]["state"] = State(pl=XX, phi=0.0, l0=l0)
         # traverse tree starting at leaves and working up
         for u in nx.topological_sort(self._T):
             child_state = {}

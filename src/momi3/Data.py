@@ -165,7 +165,7 @@ def get_X_batches(num_deriveds, leaves, n_samples, batch_size, add_etbl_vecs=Tru
                     n_extra = 3
                 else:
                     n_extra = 0
-                X[pop] = np.array((batch_size + n_extra) * [[1]])
+                X[pop] = np.array((batch_size + n_extra) * [[1.0]])
             else:
                 if add_etbl_vecs:
                     # First three are for Total Branch Length
@@ -177,7 +177,7 @@ def get_X_batches(num_deriveds, leaves, n_samples, batch_size, add_etbl_vecs=Tru
                 for d in num_deriveds[pop][start:end]:
                     X[pop].append(one_hot(n + 1, d))
 
-                X[pop] = np.array(X[pop])
+                X[pop] = np.array(X[pop]).astype(float)
 
         X_batches.append(X)
         start = end
