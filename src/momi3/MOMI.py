@@ -54,7 +54,7 @@ class Momi(object):
         self._auxd = T.auxd
         self._demo_dict = demo_dict
         self._JAX_functions = JAX_functions(
-            demo_dict=demo_dict, T=T, jitted=jitted, batch_size=batch_size
+            demo_dict=demo_dict, T=T, jitted=jitted
         )
 
     @property
@@ -69,7 +69,9 @@ class Momi(object):
         theta_dict.update(params._theta_nuisance_dict)
 
         esfs = self._JAX_functions.esfs
-        return esfs(theta_dict, num_derived, auxd=self._auxd)
+        for pop in num_derived:
+            num_derived[pop] = np.array([num_derived[pop]])
+        return esfs(theta_dict, num_derived, 1, auxd=self._auxd)[0]
 
     def total_branch_length(self, params="default"):
         if params == "default":
@@ -81,7 +83,7 @@ class Momi(object):
         etbl = self._JAX_functions.etbl
         return etbl(theta_dict, auxd=self._auxd)
 
-    def sfs_spectrum(self, params="default"):
+    def sfs_spectrum(self, params="default", batch_size: int = 10000):
         if params == "default":
             params = self._default_params
         theta_dict = deepcopy(params._theta_train_dict)
@@ -95,7 +97,7 @@ class Momi(object):
             num_deriveds[pop] = mutant_sizes[:, i]
 
         esfs = self._JAX_functions.esfs
-        esfs_vec = jax.vmap(esfs, (None, 0, None))(theta_dict, num_deriveds, self._auxd)
+        esfs_vec = esfs(theta_dict, num_deriveds, batch_size, self._auxd)
 
         spectrum = jnp.zeros([self._n_samples[pop] + 1 for pop in self._n_samples])
         for b, val in zip(mutant_sizes[1:-1], esfs_vec[1:-1]):

@@ -121,6 +121,78 @@ def get_data(
     return get_data_by_jsfs(sampled_demes, sample_sizes, leaves, jsfs, batch_size)
 
 
+def get_sfs_batches(sfs, leaves, n_samples, batch_size):
+    sfs_batches = []
+    n_entries = len(sfs)
+    batch_size = min(batch_size, n_entries)
+    if n_entries % batch_size == 0:
+        n_batches = n_entries // batch_size
+    else:
+        n_batches = n_entries // batch_size + 1
+
+    start = 0
+    for i in range(n_batches):
+        end = start + batch_size
+        sfs_batches.append(sfs[start:end])
+        start = end
+
+    if end != n_entries:
+        sfs_batches[-1] = np.pad(sfs_batches[-1], [0, end - n_entries])
+    else:
+        pass
+
+    return sfs_batches
+
+
+def get_X_batches(num_deriveds, leaves, n_samples, batch_size, add_etbl_vecs=True):
+    X_batches = []
+    n_entries = len(num_deriveds[list(num_deriveds)[0]])
+    batch_size = min(batch_size, n_entries)
+    if n_entries % batch_size == 0:
+        n_batches = n_entries // batch_size
+    else:
+        n_batches = n_entries // batch_size + 1
+
+    start = 0
+    for i in range(n_batches):
+        end = start + batch_size
+        X = {}
+        for pop in leaves:
+            X[pop] = []
+            n = n_samples.get(pop, 0)
+            if n == 0:
+                if add_etbl_vecs:
+                    n_extra = 3
+                else:
+                    n_extra = 0
+                X[pop] = np.array((batch_size + n_extra) * [[1]])
+            else:
+                if add_etbl_vecs:
+                    # First three are for Total Branch Length
+                    X[pop].append(ones(n + 1))
+                    X[pop].append(one_hot(n + 1, 0))
+                    X[pop].append(one_hot(n + 1, n))
+
+                # Rest for entries
+                for d in num_deriveds[pop][start:end]:
+                    X[pop].append(one_hot(n + 1, d))
+
+                X[pop] = np.array(X[pop])
+
+        X_batches.append(X)
+        start = end
+
+    if end != n_entries:
+        X_batches[-1] = X_batches[-1] | {
+            key: np.pad(X_batches[-1][key], [[0, end - n_entries], [0, 0]])
+            for key in num_deriveds
+        }
+    else:
+        pass
+
+    return X_batches
+
+
 def get_data_by_jsfs(
     sampled_demes: tuple[str],
     sample_sizes: tuple[int],
@@ -168,47 +240,7 @@ def get_data_by_jsfs(
     num_deriveds = dict(zip(sampled_demes, non_zero_indeces))
 
     n_entries = len(sfs)
-    batch_size = min(batch_size, n_entries)
-    if n_entries % batch_size == 0:
-        n_batches = n_entries // batch_size
-    else:
-        n_batches = n_entries // batch_size + 1
-
-    X_batches = []
-    sfs_batches = []
-
-    start = 0
-    for i in range(n_batches):
-        end = start + batch_size
-        X = {}
-        for pop in leaves:
-            X[pop] = []
-            n = n_samples.get(pop, 0)
-            if n == 0:
-                X[pop] = np.array((batch_size + 3) * [[1]])
-            else:
-                # First three are for Total Branch Length
-                X[pop].append(ones(n + 1))
-                X[pop].append(one_hot(n + 1, 0))
-                X[pop].append(one_hot(n + 1, n))
-
-                # Rest for entries
-                for d in num_deriveds[pop][start:end]:
-                    X[pop].append(one_hot(n + 1, d))
-
-                X[pop] = np.array(X[pop])
-
-        X_batches.append(X)
-        sfs_batches.append(sfs[start:end])
-        start = end
-
-    if end != n_entries:
-        X_batches[-1] = X_batches[-1] | {
-            key: np.pad(X_batches[-1][key], [[0, end - n_entries], [0, 0]])
-            for key in num_deriveds
-        }
-        sfs_batches[-1] = np.pad(sfs_batches[-1], [0, end - n_entries])
-    else:
-        pass
+    sfs_batches = get_sfs_batches(sfs, leaves, n_samples, batch_size)
+    X_batches = get_X_batches(num_deriveds, leaves, n_samples, batch_size)
 
     return Data(sfs_batches, X_batches, n_samples, n_entries, freqs_matrix=None)

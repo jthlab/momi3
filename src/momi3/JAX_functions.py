@@ -6,6 +6,7 @@ import jax.numpy as jnp
 from cached_property import cached_property
 
 from momi3.utils import sum_dicts, update
+from momi3.Data import get_X_batches
 
 
 @jax.jit
@@ -16,51 +17,13 @@ def multinomial_log_likelihood(P, Q, Q_sum):
 
 
 class JAX_functions:
-    def __init__(self, demo_dict, T, jitted=False, batch_size=None):
+    def __init__(self, demo_dict, T, jitted=False):
         self.demo_dict = demo_dict
         self._f = T.execute
         self.auxd = T._auxd
         self.leaves = T._leaves
         self._n_samples = T._num_samples
         self.jitted = jitted
-        self.batch_size = batch_size
-
-    def get_batches(self, data):
-        batch_size = self.batch_size
-        sfs = data.sfs
-        num_deriveds = data.num_deriveds
-
-        if batch_size is None:
-            Num_deriveds = [num_deriveds]
-            Sfs = [sfs]
-
-        else:
-            n_entries = len(next(iter(num_deriveds.values())))
-            start = 0
-
-            Num_deriveds = []
-            Sfs = []
-            for i in range(n_entries // batch_size):
-                end = start + batch_size
-                num_deriveds_batch = {
-                    key: num_deriveds[key][start:end] for key in num_deriveds
-                }
-                sfs_batch = sfs[start:end]
-                Num_deriveds.append(num_deriveds_batch)
-                Sfs.append(sfs_batch)
-                start = end
-
-            if end != n_entries:
-                pad_width = [0, n_entries - end]
-                num_deriveds_batch = {
-                    key: jnp.pad(num_deriveds[key][end:], pad_width)
-                    for key in num_deriveds
-                }
-                sfs_batch = jnp.pad(sfs[end:], pad_width)
-                Num_deriveds.append(num_deriveds_batch)
-                Sfs.append(sfs_batch)
-
-        return Num_deriveds, Sfs
 
     @cached_property
     def esfs_tensor_prod(self):
@@ -84,24 +47,22 @@ class JAX_functions:
         demo_dict = self.demo_dict
         leaves = self.leaves
         _n_samples = self._n_samples
-        esfs_tensor_prod = self.esfs_tensor_prod
+        esfs_vmap = self.esfs_vmap
 
         def _esfs(
             theta_dict,
-            num_derived,
+            num_deriveds,
+            batch_size,
             auxd,
             demo_dict=demo_dict,
             leaves=leaves,
             _n_samples=_n_samples,
-            esfs_tensor_prod=esfs_tensor_prod,
+            esfs_vmap=esfs_vmap,
         ):
-            X = {}
-            for pop in leaves:
-                # some ghost populations may not be sampled. then they have trivial partial leaf likelihood.
-                ns = _n_samples.get(pop, 0)
-                d = num_derived.get(pop, 0)
-                X[pop] = jax.nn.one_hot(jnp.array([d]), ns + 1)[0]
-            return esfs_tensor_prod(theta_dict, X, auxd)
+            X_batches = get_X_batches(num_deriveds, leaves, _n_samples, batch_size, add_etbl_vecs=False)
+            f = lambda X_batch: esfs_vmap(theta_dict, X_batch, auxd)
+            V = list(map(f, X_batches))
+            return jnp.concatenate(V)
 
         return _esfs
 
@@ -133,16 +94,16 @@ class JAX_functions:
             _n_samples=_n_samples,
             esfs_tensor_prod=esfs_tensor_prod,
         ):
-            vecs = [{}, {}, {}]
+            X_batch = [{}, {}, {}]
             for pop in leaves:
                 ns = _n_samples.get(pop, 0)
-                vecs[0][pop] = jnp.ones(ns + 1, dtype="f")
-                vecs[1][pop] = jax.nn.one_hot(jnp.array([0]), ns + 1)[0]
-                vecs[2][pop] = jax.nn.one_hot(jnp.array([ns]), ns + 1)[0]
+                X_batch[0][pop] = jnp.ones(ns + 1, dtype="f")
+                X_batch[1][pop] = jax.nn.one_hot(jnp.array([0]), ns + 1)[0]
+                X_batch[2][pop] = jax.nn.one_hot(jnp.array([ns]), ns + 1)[0]
 
-            ret0 = esfs_tensor_prod(theta_dict, vecs[0], auxd)
-            ret1 = esfs_tensor_prod(theta_dict, vecs[1], auxd)
-            ret2 = esfs_tensor_prod(theta_dict, vecs[2], auxd)
+            ret0 = esfs_tensor_prod(theta_dict, X_batch[0], auxd)
+            ret1 = esfs_tensor_prod(theta_dict, X_batch[1], auxd)
+            ret2 = esfs_tensor_prod(theta_dict, X_batch[2], auxd)
             return (ret0 - ret1 - ret2).flatten()[0]
 
         return _etbl

@@ -1,4 +1,5 @@
 import numpy as np
+import demes
 
 from momi3.event import ETBuilder
 from momi3.MOMI import Momi
@@ -40,3 +41,13 @@ def test_non_adm_non_mig():
     s2 = momi.sfs_entry(d)
 
     np.testing.assert_allclose(s1, s2)
+
+
+def jacobson_bound_sampler():
+    n = 4
+    demo = demes.load("yaml_files/jacobson.yml")
+    sampled_demes = demo.metadata["sampled_demes"]
+    sample_sizes = 9 * [n]
+    momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
+    bounds = momi.bound_sampler(momi._default_params, [], 100)
+    Momi(demo, sampled_demes, sample_sizes, jitted=True, bounds=bounds)
