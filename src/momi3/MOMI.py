@@ -5,7 +5,6 @@ from typing import Union
 
 # import logging
 import demes
-import jax
 import jax.numpy as jnp
 import numpy as np
 from sparse._coo.core import COO
@@ -17,6 +16,21 @@ from momi3.optimizers import ProjectedGradient_optimizer
 from momi3.Params import Params
 from momi3.surviving_lineage_samplers import bound_sampler
 from momi3.utils import msprime_simulator
+
+
+def esfs(g: demes.Graph, sample_sizes: dict[str, int]):
+    """Compute the expected site frequency spectrum for a given demography and sample.
+
+    Params:
+        g: the demography, expressed as a `demes.Graph`.
+        sample_sizes: mapping from deme names in `g` to their sample sizes. Demes which are present in
+            `g` but missing in `sample_sizes` are assumed to be unsampled.
+
+    Returns:
+        Array with one axis per entry in `sample_sizes`, representing the expected site frequency spectrum
+        under `g`.
+    """
+    return Momi(g, *zip(*sample_sizes.items())).sfs_spectrum()
 
 
 class Momi(object):
@@ -53,9 +67,7 @@ class Momi(object):
         self._T = T
         self._auxd = T.auxd
         self._demo_dict = demo_dict
-        self._JAX_functions = JAX_functions(
-            demo_dict=demo_dict, T=T, jitted=jitted
-        )
+        self._JAX_functions = JAX_functions(demo_dict=demo_dict, T=T, jitted=jitted)
 
     @property
     def _default_params(self):
@@ -99,9 +111,9 @@ class Momi(object):
         esfs = self._JAX_functions.esfs
         esfs_vec = esfs(theta_dict, num_deriveds, batch_size, self._auxd)
 
-        spectrum = jnp.zeros([self._n_samples[pop] + 1 for pop in self._n_samples])
+        spectrum = np.zeros([self._n_samples[pop] + 1 for pop in self._n_samples])
         for b, val in zip(mutant_sizes[1:-1], esfs_vec[1:-1]):
-            spectrum = spectrum.at[tuple(b)].set(val)
+            spectrum[tuple(b)] = val
         return spectrum
 
     def loglik(
