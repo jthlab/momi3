@@ -3,7 +3,13 @@ from moments import Integration, Jackknife
 from pytest import fixture
 
 from momi3.common import Axes
-from momi3.migration import _Q_matrix, lift_cm_aux
+from momi3.migration import (
+    _lift_cm_const,
+    _lift_cm_exp,
+    _Q_drift,
+    _Q_mig_mut,
+    lift_cm_aux,
+)
 
 
 @fixture
@@ -30,8 +36,8 @@ def test_Qmig(axes, n, dims, rng):
     Qmig0 = Qmig0
     pops = [("A", "B")]
     aux = lift_cm_aux(axes, pops)
-    coal_rates = {s: 1 / 2.0 for s in pops[0]}
-    Qmig1, _, _ = _Q_matrix(dims, pops[0], coal_rates, {pops[0]: 0.01}, aux)
+    mig_mat = {pops[0]: 0.01}
+    Qmig1, _ = _Q_mig_mut(dims, axes, mig_mat, aux)
     M0, M1 = [np.asarray(x.todense()) for x in (Qmig0, Qmig1.materialize())]
     np.testing.assert_allclose(M0, M1, atol=1e-6)
 
@@ -43,8 +49,22 @@ def test_Qdrift(axes, n, dims, rng):
     pops = [("A", "B")]
     aux = lift_cm_aux(axes, pops)
     coal_rates = {s: 1 / 4.0 for s in pops[0]}
-    _, D1, _ = _Q_matrix(
-        dims, pops[0], coal_rates, {}, aux
+    D1 = _Q_drift(
+        dims, axes, coal_rates, aux
     )  # moments scales by 4 * Ne but we scale be Ne
     M0, M1 = [np.asarray(x.todense()) for x in (D0, D1.materialize())]
     np.testing.assert_allclose(M0, M1, atol=1e-6)
+
+
+def test_lift_eq_const_exp0(rng):
+    "test that lifting a 2-tensor with constant population size is the same as lifting with exponential growth(g=0)"
+    pl = rng.uniform(size=(8, 5))  # 5 is the minimum size for the migration matrices
+    params = {"Ne": {"A": (1.0, 1.0), "B": (2.0, 2.0)}, "mig": {("A", "B"): 0.01}}
+    axes = Axes(zip("AB", pl.shape))
+    aux = lift_cm_aux(axes, [("A", "B")])
+    t = (0.0, 1.0)
+    pl1 = _lift_cm_exp(params, t, pl, axes, aux)
+    # params has different form for const
+    params["Ne"] = dict(A=1.0, B=2.0)
+    pl2 = _lift_cm_const(params, t, pl, axes, aux)
+    np.testing.assert_allclose(pl1, pl2, atol=1e-6, rtol=1e-6)

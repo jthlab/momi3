@@ -1,9 +1,9 @@
 import itertools as it
 
+import diffrax as dfx
 import jax
 import jax.numpy as jnp
 import scipy.sparse as sps
-from diffrax import ODETerm, Tsit5, diffeqsolve
 from jax import jacfwd, lax, vmap
 
 from .common import Axes, Ne_t, Population
@@ -40,10 +40,17 @@ def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
     Ne = params["Ne"]
     const = all(not isinstance(Ne[pop], tuple) for pop in Ne)
     if const:
-        return lift_cm_const(params, t[1] - t[0], pl, axes, aux)
+        f = _lift_cm_const
+    else:
+        f = _lift_cm_exp
+    return f(params, t, pl, axes, aux)
+
+
+def _lift_cm_exp(params, t, pl, axes, aux):
     # population sizes are changing, so we have to use a differential
     # equation solver
     dims = pl.shape
+    Ne = params["Ne"]
     Q_mig, Q_mut = _Q_mig_mut(
         dims,
         axes,
@@ -67,11 +74,12 @@ def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
         T = lax.cond(tr, lambda x: x.T, lambda x: x, Q_lift)._replace(dims=Q_lift.dims)
         return T @ y
 
-    term = ODETerm(A)
-    solver = Tsit5()
+    term = dfx.ODETerm(A)
+    # solver = dfx.ImplicitEuler(nonlinear_solver=dfx.NewtonNonlinearSolver(rtol=1e-3, atol=1e-6))
+    solver = dfx.Dopri5()
 
     def solve(theta, y0, tr):
-        return diffeqsolve(
+        return dfx.diffeqsolve(
             term,
             solver,
             t0=t[0],
@@ -95,7 +103,7 @@ def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
     return plp, etbl
 
 
-def lift_cm_const(params: dict, t: float, pl: jnp.ndarray, axes, aux):
+def _lift_cm_const(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
     """
     Lift partial likelihoods under continuous migration.
 
@@ -110,6 +118,7 @@ def lift_cm_const(params: dict, t: float, pl: jnp.ndarray, axes, aux):
         Tuple (lifted_likelihood, phi) where phi contains the expected branch lengths subtending each entry of the JSFS
         for these populations.
     """
+    dt = t[1] - t[0]
     dims = pl.shape
     Ne = params["Ne"]
     coal = {pop: 1.0 / Ne[pop] for pop in Ne}
@@ -126,7 +135,7 @@ def lift_cm_const(params: dict, t: float, pl: jnp.ndarray, axes, aux):
         aux,
     )
     Q_lift = Q_mig + Q_drift * 0.5
-    pl_lift = expmv(Q_lift.T, t, pl)
+    pl_lift = expmv(Q_lift.T, dt, pl)
     assert pl_lift.shape == pl.shape
     # now compute the expected branch lengths
     e0 = _e0_like(pl)
@@ -135,7 +144,7 @@ def lift_cm_const(params: dict, t: float, pl: jnp.ndarray, axes, aux):
         # note: Q_mut * (...) has to be implemented as multiplication from the right order for it to work with traced
         # jax code
         Q = Q_lift + Q_mut * theta
-        v = expmv(Q, t, e0)
+        v = expmv(Q, dt, e0)
         return v
 
     etbl = jacfwd(f)(0.0).at[(0,) * pl.ndim].set(0.0)
