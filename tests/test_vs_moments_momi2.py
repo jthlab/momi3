@@ -311,6 +311,7 @@ def test_single_pop(run_type="pytest", **kwargs):
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
+@pytest.mark.exponential
 def test_single_pop_small_exponential_size(run_type="pytest", **kwargs):
     g = 1e-5
 
@@ -323,6 +324,7 @@ def test_single_pop_small_exponential_size(run_type="pytest", **kwargs):
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
+@pytest.mark.exponential
 def test_single_pop_exponential_size(run_type="pytest", **kwargs):
     g = 10.0
     size = 100.0
@@ -336,6 +338,7 @@ def test_single_pop_exponential_size(run_type="pytest", **kwargs):
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
+@pytest.mark.exponential
 def test_single_pop_exponential_size_minus(run_type="pytest", **kwargs):
     g = -1.5
 
@@ -601,6 +604,7 @@ def test_two_pop_IWM_sym_pulse(size, t, run_type="pytest", **kwargs):
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
+@pytest.mark.exponential
 def test_two_pop_exponential_minus(run_type="pytest", **kwargs):
     g = -1.0
     size = 50.0
@@ -614,6 +618,7 @@ def test_two_pop_exponential_minus(run_type="pytest", **kwargs):
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
+@pytest.mark.exponential
 def test_two_pop_exponential(run_type="pytest", **kwargs):
     g = 5.0
     size = 50.0
@@ -627,6 +632,7 @@ def test_two_pop_exponential(run_type="pytest", **kwargs):
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
+@pytest.mark.exponential
 def test_two_pop_exponential_pulse_0(run_type="pytest", **kwargs):
     g = 5.0
     size = 10.0
@@ -641,6 +647,7 @@ def test_two_pop_exponential_pulse_0(run_type="pytest", **kwargs):
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
+@pytest.mark.exponential
 def test_two_pop_exponential_two_pulses_0(run_type="pytest", **kwargs):
     g = 5.0
     size = 10.0
@@ -667,12 +674,15 @@ def test_two_pop_five_pulses(run_type="pytest", **kwargs):
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
+@pytest.mark.migration
+@pytest.mark.exponential
 def test_two_pop_exponential_migration(run_type="pytest", **kwargs):
-    g = 2.0
-    size = 10.0
+    g = 0.025
+    size = 1000.0
     rate = 0.01
+    t = 100.
 
-    demo, model1 = TwoDemes.Exponential(size=size, g=g).migration(rate=rate)
+    demo, model1 = TwoDemes.Exponential(t=t, size=size, g=g).migration(tstart=t, rate=rate)
     sampled_demes = ["A", "B"]
     sample_sizes = [10, 6]
     mvm = Momi_vs_Moments(demo, model1, sampled_demes, sample_sizes)
@@ -696,6 +706,7 @@ def test_three_pop(run_type="pytest", **kwargs):
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
+@pytest.mark.exponential
 def test_three_pop_exponential(run_type="pytest", **kwargs):
     size = 1.0
 
@@ -720,6 +731,7 @@ def test_three_pop_two_pulses(run_type="pytest", **kwargs):
     mvm.compare("momi3", "momi2", run_type, **kwargs)
 
 
+@pytest.mark.migration
 def test_three_pop_migrations(run_type="pytest", **kwargs):
     size = 1.0
     rate = 0.01
@@ -736,6 +748,8 @@ def test_three_pop_migrations(run_type="pytest", **kwargs):
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
+@pytest.mark.migration
+@pytest.mark.exponential
 def test_three_pop_exponential_migrations(run_type="pytest", **kwargs):
     size = 1.0
     rate = 0.01
@@ -748,6 +762,8 @@ def test_three_pop_exponential_migrations(run_type="pytest", **kwargs):
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
+@pytest.mark.migration
+@pytest.mark.exponential
 def test_three_pop_exponential_pulse_migration(run_type="pytest", **kwargs):
     t = 10
     g = 0.25
@@ -791,6 +807,15 @@ def test_five_pops_pulses(run_type="pytest", **kwargs):
     mvm.compare("momi3", "momi2", run_type, **kwargs)
 
 
+@pytest.mark.gutenkunst
+def test_gutenkunst(run_type="pytest", **kwargs):
+    demo = demes.load("yaml_files/gutenkunst_ooa.yml")
+    sampled_demes = ["YRI", "CEU", "CHB"]
+    sample_sizes = [4, 4, 4]
+    mvm = Momi_vs_Moments(demo, None, sampled_demes, sample_sizes)
+    mvm.compare("momi3", "moments", run_type, **kwargs)
+
+
 # FWDPY11 tests
 # These tests are comparing log-likelihood values of momi3 and moments
 # They are `not` running a fwdpy11 simulation. They assume the simualtion joint-sfs is located at:
@@ -814,6 +839,7 @@ def test_fwdpy11_IWMA(run_type="pytest", **kwargs):
 # grid_values of params_to_change[i] are grid_values[i]
 
 
+@pytest.mark.migration
 def test_two_pop_IWM_grid_same_sizes(run_type="pytest", **kwargs):
     size = 1.0
     t = 1.0
@@ -833,6 +859,7 @@ def test_two_pop_IWM_grid_same_sizes(run_type="pytest", **kwargs):
     )
 
 
+@pytest.mark.migration
 def test_two_pop_IWM_grid_split_time_size(run_type="pytest", **kwargs):
     size = 1.0
     t = 1.0
@@ -863,6 +890,7 @@ def test_two_pop_IWM_grid_split_time_size(run_type="pytest", **kwargs):
     )
 
 
+@pytest.mark.migration
 def test_two_pop_IWM_grid_rate(run_type="pytest", **kwargs):
     size = 1.0
     t = 2.0

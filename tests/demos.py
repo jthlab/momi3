@@ -174,14 +174,14 @@ class TwoDemes:
             return g, model1
 
     class Exponential:
-        def __init__(self, size=1, t=1.0, g=1.0):
+        def __init__(self, size=1, t=1.0, g=1.0, size_scale=1.25):
             # Two demes, exponential population size, no migration
             tgA = t / 2
             tgB = t / 3
             gA = 2 * g
             gB = g
             sizebottomA = size
-            sizebottomB = 1.25 * size
+            sizebottomB = size_scale * size
             sizetopA = sizebottomA * exp(-gA * tgA)
             sizetopB = sizebottomB * exp(-gB * tgB)
 
