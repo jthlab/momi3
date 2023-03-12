@@ -51,7 +51,7 @@ class Momi(object):
             sample_sizes (tuple[int]): Sample sizes.
             jitted (bool, optional): Whether jax.jit the functions or not
         """
-
+        demo = demo.in_generations()
         assert len(sampled_demes) == len(sample_sizes)
 
         self.sampled_demes = tuple(sampled_demes)

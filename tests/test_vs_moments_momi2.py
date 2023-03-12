@@ -680,9 +680,11 @@ def test_two_pop_exponential_migration(run_type="pytest", **kwargs):
     g = 0.025
     size = 1000.0
     rate = 0.01
-    t = 100.
+    t = 100.0
 
-    demo, model1 = TwoDemes.Exponential(t=t, size=size, g=g).migration(tstart=t, rate=rate)
+    demo, model1 = TwoDemes.Exponential(t=t, size=size, g=g).migration(
+        tstart=t, rate=rate
+    )
     sampled_demes = ["A", "B"]
     sample_sizes = [10, 6]
     mvm = Momi_vs_Moments(demo, model1, sampled_demes, sample_sizes)
@@ -807,9 +809,8 @@ def test_five_pops_pulses(run_type="pytest", **kwargs):
     mvm.compare("momi3", "momi2", run_type, **kwargs)
 
 
-@pytest.mark.gutenkunst
 def test_gutenkunst(run_type="pytest", **kwargs):
-    demo = demes.load("yaml_files/gutenkunst_ooa.yml")
+    demo = demes.load("tests/yaml_files/gutenkunst_ooa.yml")
     sampled_demes = ["YRI", "CEU", "CHB"]
     sample_sizes = [4, 4, 4]
     mvm = Momi_vs_Moments(demo, None, sampled_demes, sample_sizes)

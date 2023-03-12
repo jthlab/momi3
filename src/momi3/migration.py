@@ -134,8 +134,8 @@ def _lift_cm_const(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, 
         params["mig"],
         aux,
     )
-    Q_lift = Q_mig + Q_drift * 0.5
-    pl_lift = expmv(Q_lift.T, dt, pl)
+    Q_lift = (Q_mig + Q_drift * 0.5) * dt
+    pl_lift = expmv(Q_lift.T, pl)
     assert pl_lift.shape == pl.shape
     # now compute the expected branch lengths
     e0 = _e0_like(pl)
@@ -143,8 +143,8 @@ def _lift_cm_const(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, 
     def f(theta):
         # note: Q_mut * (...) has to be implemented as multiplication from the right order for it to work with traced
         # jax code
-        Q = Q_lift + Q_mut * theta
-        v = expmv(Q, dt, e0)
+        Q = Q_lift + Q_mut * theta * dt
+        v = expmv(Q, e0)
         return v
 
     etbl = jacfwd(f)(0.0).at[(0,) * pl.ndim].set(0.0)

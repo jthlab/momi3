@@ -1,3 +1,4 @@
+import jax
 import numpy as np
 from jax.experimental.sparse import BCOO
 from scipy.sparse import coo_matrix
@@ -10,8 +11,7 @@ from momi3.spexpm import expmv
 def test_spexpm(rng):
     A, B = rng.random(size=(2, 10, 10))
     Asp = BCOO.fromdense(A)
-    t = 1.0
-    P1 = expmv(Asp, t, B)
+    P1 = expmv(Asp, B)
     P2 = expm_multiply(A, B)
     np.testing.assert_allclose(P1, P2, rtol=1e-6)
 
@@ -23,8 +23,8 @@ def test_spexpm_kron(rng):
     K1 = KronProd([{i: m} for i, m in enumerate(M)], dims)
     K2 = KronProd([{i: m for i, m in enumerate(M)}], dims)
     for K in K1, K2:
-        P1 = expmv(K, 1.0, B)
-        P2 = expmv(K.materialize(), 1.0, B.reshape(-1)).reshape(dims)
+        P1 = expmv(K, B)
+        P2 = expmv(K.materialize(), B.reshape(-1)).reshape(dims)
         np.testing.assert_allclose(P1, P2, rtol=1e-6)
 
 
@@ -96,6 +96,20 @@ def test_spexpm_numerical_bug1():
             ]
         ]
     )
-    P1 = expmv(A_jax * t, 1.0, B.T)
+    P1 = expmv(A_jax * t, B.T)
     P2 = expm_multiply(A_scipy * t, B.T)
     np.testing.assert_allclose(P1, P2, rtol=1e-5)
+
+
+def test_spexpm_eq_t(rng):
+    X = rng.random(size=(10, 10))
+    X -= np.diag(np.diag(X))
+    X -= np.diag(X.sum(1))
+    v = rng.random(size=10)
+    v /= v.sum()
+    t = 1000.0
+    p0 = expm_multiply(X.T * t, v)
+    # p1 = expmv(X.T, t, v)
+    with jax.experimental.enable_x64(True):
+        p2 = expmv(X.T * t, v)
+    np.testing.assert_allclose(p0, p2)

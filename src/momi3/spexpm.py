@@ -32,18 +32,18 @@ def _(A: np.ndarray):
 
 
 @singledispatch
-def expmv(A: BCOO, t: float, B: jnp.ndarray) -> jnp.ndarray:
+def expmv(A: BCOO, B: jnp.ndarray) -> jnp.ndarray:
     "(sparse) matrix exponential times vector"
     n = A.shape[0]
     I_n = eye_like(A)
     mu = tr(A) / n
     A = A - mu * I_n
     A_1norm = sparsify(abs)(A).sum(1).todense().max()
-    return _expmv_inner(A, t, B, A_1norm, mu)
+    return _expmv_inner(A, 1.0, B, A_1norm, mu)
 
 
 @expmv.register
-def _(A: KronProd, t: float, B: jnp.ndarray) -> jnp.ndarray:
+def _(A: KronProd, B: jnp.ndarray) -> jnp.ndarray:
     A = A._replace(
         dims=B.shape
     )  # FIXME: this is a hack to prevent traced values from showing up in dims.
@@ -53,7 +53,17 @@ def _(A: KronProd, t: float, B: jnp.ndarray) -> jnp.ndarray:
     (i, Ai), *_ = A.A[0].items()
     A = A._replace(A=A.A + [{i: -mu * eye_like(Ai)}])
     A_1norm = A.bound_norm1()
-    return _expmv_inner(A, t, B, A_1norm, mu)
+    return _expmv_inner(A, 1.0, B, A_1norm, mu)
+
+
+@expmv.register
+def _(A: np.ndarray, B: jnp.ndarray) -> jnp.ndarray:
+    n = A.shape[0]
+    I_n = np.eye(n)
+    mu = A.trace() / n
+    A = A - mu * I_n
+    A_1norm = np.linalg.norm(A, 1)
+    return _expmv_inner(A, 1.0, B, A_1norm, mu)
 
 
 def _expmv_inner(A, t, B, A_1norm, mu):
@@ -80,7 +90,8 @@ def _expmv_inner(A, t, B, A_1norm, mu):
         def g1(j, tup):
             c1, F, B, br = tup
             coeff = t / (s * (j + 1))
-            B = coeff * (A @ B)
+            B1 = coeff * (A @ B)
+            B = B1.astype(B.dtype)
             c2 = _infnorm(B)
             F += B
             br = c1 + c2 <= tol * _infnorm(F)
