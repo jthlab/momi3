@@ -377,7 +377,7 @@ class Momi(object):
             self.sampled_demes, self.sample_sizes, self._T._leaves, jsfs, batch_size
         )
 
-    def _time_loglik(self, params, jsfs, batch_size=10000, repeat=25):
+    def _time_loglik(self, params, jsfs, batch_size=10000, repeat=25, average=True):
         vals = {"val": 0}
 
         def f():
@@ -385,9 +385,11 @@ class Momi(object):
 
         compilation_time = timeit.timeit(f, number=1)
         run_time = timeit.repeat(f, repeat=repeat, number=1)
-        return vals["val"], compilation_time, np.median(run_time)
+        if average:
+            run_time = np.median(run_time)
+        return vals["val"], compilation_time, run_time
 
-    def _time_loglik_with_gradient(self, params, jsfs, batch_size=10000, repeat=25):
+    def _time_loglik_with_gradient(self, params, jsfs, batch_size=10000, repeat=25, average=True):
         vals = {"val": 0}
 
         def f():
@@ -397,4 +399,6 @@ class Momi(object):
 
         compilation_time = timeit.timeit(f, number=1)
         run_time = timeit.repeat(f, repeat=repeat, number=1)
-        return vals["val"], compilation_time, np.median(run_time)
+        if average:
+            run_time = np.median(run_time)
+        return vals["val"], compilation_time, run_time
