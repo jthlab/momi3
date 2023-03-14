@@ -1,9 +1,8 @@
-# TODO: Add batch size to loglik calculation
 from copy import deepcopy
 
 import jax
 import jax.numpy as jnp
-from cached_property import cached_property
+from jax import jit, value_and_grad, hessian
 
 from momi3.utils import sum_dicts, update
 from momi3.Data import get_X_batches
@@ -17,115 +16,47 @@ def multinomial_log_likelihood(P, Q, Q_sum):
 
 
 class JAX_functions:
-    def __init__(self, demo_dict, T, jitted=False):
-        self.demo_dict = demo_dict
+    def __init__(self, demo, T, jitted=False):
+        self.demo = demo
         self._f = T.execute
         self.auxd = T._auxd
         self.leaves = T._leaves
         self._n_samples = T._num_samples
-        self.jitted = jitted
 
-    @cached_property
-    def esfs_tensor_prod(self):
-        demo_dict = self.demo_dict
-        _f = self._f
-
-        def _esfs_tensor_prod(theta_dict, X, auxd, demo_dict=demo_dict, _f=_f):
-            demo_dict = deepcopy(demo_dict)
+        def esfs_tensor_prod(theta_dict, X, auxd, demo, _f):
+            demo_dict = demo.asdict()
             for paths, val in theta_dict.items():
                 for path in paths:
                     update(demo_dict, path, val)
             return _f(demo_dict, X, auxd=auxd)
 
-        if self.jitted:
-            _esfs_tensor_prod = jax.jit(_esfs_tensor_prod)
+        if jitted:
+            esfs_tensor_prod = jit(esfs_tensor_prod, static_argnames='_f')
 
-        return _esfs_tensor_prod
-
-    @cached_property
-    def esfs(self):
-        demo_dict = self.demo_dict
-        leaves = self.leaves
-        _n_samples = self._n_samples
-        esfs_vmap = self.esfs_vmap
-
-        def _esfs(
-            theta_dict,
-            num_deriveds,
-            batch_size,
-            auxd,
-            demo_dict=demo_dict,
-            leaves=leaves,
-            _n_samples=_n_samples,
-            esfs_vmap=esfs_vmap,
-        ):
-            X_batches = get_X_batches(num_deriveds, leaves, _n_samples, batch_size, add_etbl_vecs=False)
-            f = lambda X_batch: esfs_vmap(theta_dict, X_batch, auxd)
-            V = list(map(f, X_batches))
-            return jnp.concatenate(V)
-
-        return _esfs
-
-    @cached_property
-    def esfs_vmap(self):
-        esfs_tensor_prod = self.esfs_tensor_prod
-
-        def _esfs_vmap(theta_dict, X_batch, auxd, esfs_tensor_prod=esfs_tensor_prod):
-            return jax.vmap(esfs_tensor_prod, (None, 0, None))(
-                theta_dict, X_batch, auxd
+        def esfs_vmap(theta_dict, X_batch, auxd, demo, _f, esfs_tensor_prod):
+            return jax.vmap(esfs_tensor_prod, (None, 0, None, None, None))(
+                theta_dict, X_batch, auxd, demo, _f
             )
 
-        if self.jitted:
-            _esfs_vmap = jax.jit(_esfs_vmap)
-        return _esfs_vmap
+        if jitted:
+            esfs_vmap = jit(esfs_vmap, static_argnames=('_f', 'esfs_tensor_prod'))
 
-    @cached_property
-    def etbl(self):
-        demo_dict = self.demo_dict
-        leaves = self.leaves
-        _n_samples = self._n_samples
-        esfs_tensor_prod = self.esfs_tensor_prod
-
-        def _etbl(
-            theta_dict,
-            auxd,
-            demo_dict=demo_dict,
-            leaves=leaves,
-            _n_samples=_n_samples,
-            esfs_tensor_prod=esfs_tensor_prod,
-        ):
-            X_batch = [{}, {}, {}]
-            for pop in leaves:
-                ns = _n_samples.get(pop, 0)
-                X_batch[0][pop] = jnp.ones(ns + 1, dtype="f")
-                X_batch[1][pop] = jax.nn.one_hot(jnp.array([0]), ns + 1)[0]
-                X_batch[2][pop] = jax.nn.one_hot(jnp.array([ns]), ns + 1)[0]
-
-            ret0 = esfs_tensor_prod(theta_dict, X_batch[0], auxd)
-            ret1 = esfs_tensor_prod(theta_dict, X_batch[1], auxd)
-            ret2 = esfs_tensor_prod(theta_dict, X_batch[2], auxd)
-            return (ret0 - ret1 - ret2).flatten()[0]
-
-        return _etbl
-
-    @cached_property
-    def loglik_batch(self):
-        esfs_vmap = self.esfs_vmap
-        _n_samples = self._n_samples
-
-        def _loglik_batch(
+        def loglik_batch(
             theta_train_dict,
             theta_nuisance_dict,
             X_batch,
             sfs_batch,
             auxd,
-            _n_samples=_n_samples,
-            esfs_vmap=esfs_vmap,
+            _f,
+            esfs_tensor_prod,
+            esfs_vmap,
+            _n_samples=self._n_samples,
+            leaves=self.leaves,
         ):
             theta_dict = deepcopy(theta_nuisance_dict)
             theta_dict.update(theta_train_dict)
 
-            esfs_vec = esfs_vmap(theta_dict, X_batch, auxd)
+            esfs_vec = esfs_vmap(theta_dict, X_batch, auxd, demo, _f, esfs_tensor_prod)
 
             Q = esfs_vec[3:]
             Q_sum = esfs_vec[0] - esfs_vec[1] - esfs_vec[2]
@@ -133,77 +64,135 @@ class JAX_functions:
 
             return multinomial_log_likelihood(P, Q, Q_sum)
 
-        if self.jitted:
-            _loglik_batch = jax.jit(_loglik_batch)
-        return _loglik_batch
+        if jitted:
+            loglik_static_args = ('_f', 'esfs_tensor_prod', 'esfs_vmap')
+            loglik_batch = jit(loglik_batch, static_argnames=loglik_static_args)
 
-    @cached_property
-    def loglik(self):
+        loglik_and_grad_batch = value_and_grad(loglik_batch)
+        if jitted:
+            loglik_and_grad_batch = jit(loglik_and_grad_batch, static_argnames=loglik_static_args)
+
+        hessian_batch = hessian(loglik_batch)
+        if jitted:
+            hessian_batch = jit(hessian_batch, static_argnames=loglik_static_args)
+
+        self.esfs_tensor_prod = esfs_tensor_prod
+        self.esfs_vmap = esfs_vmap
+        self.loglik_batch = loglik_batch
+        self.loglik_and_grad_batch = loglik_and_grad_batch
+        self.hessian_batch = hessian_batch
+
+    def esfs(self, theta_dict, num_deriveds, batch_size):
+        leaves = self.leaves
+        _n_samples = self._n_samples
+        auxd = self.auxd
+        demo = self.demo
+        _f = self._f
+        esfs_tensor_prod = self.esfs_tensor_prod
+        esfs_vmap = self.esfs_vmap
+
+        X_batches = get_X_batches(num_deriveds, leaves, _n_samples, batch_size, add_etbl_vecs=False)
+        f = lambda X_batch: esfs_vmap(theta_dict, X_batch, auxd, demo, _f, esfs_tensor_prod)
+        V = list(map(f, X_batches))
+        return jnp.concatenate(V)
+
+    def etbl(self, theta_dict):
+        demo = self.demo
+        leaves = self.leaves
+        _n_samples = self._n_samples
+        _f = self._f
+        auxd = self.auxd
+        esfs_tensor_prod = self.esfs_tensor_prod
+
+        X_batch = [{}, {}, {}]
+        for pop in leaves:
+            ns = _n_samples.get(pop, 0)
+            X_batch[0][pop] = jnp.ones(ns + 1, dtype="f")
+            X_batch[1][pop] = jax.nn.one_hot(jnp.array([0]), ns + 1)[0]
+            X_batch[2][pop] = jax.nn.one_hot(jnp.array([ns]), ns + 1)[0]
+
+        ret0 = esfs_tensor_prod(theta_dict, X_batch[0], auxd, demo, _f)
+        ret1 = esfs_tensor_prod(theta_dict, X_batch[1], auxd, demo, _f)
+        ret2 = esfs_tensor_prod(theta_dict, X_batch[2], auxd, demo, _f)
+        return (ret0 - ret1 - ret2).flatten()[0]
+
+    def loglik(
+        self, theta_train_dict, theta_nuisance_dict, data
+    ):
+        auxd = self.auxd
+        _f = self._f
+        esfs_tensor_prod = self.esfs_tensor_prod
+        esfs_vmap = self.esfs_vmap
         loglik_batch = self.loglik_batch
 
-        def _loglik(
-            theta_train_dict, theta_nuisance_dict, data, auxd, loglik_batch=loglik_batch
-        ):
-            X_batches, sfs_batches = data.X_batches, data.sfs_batches
+        X_batches, sfs_batches = data.X_batches, data.sfs_batches
 
-            def f(x):
-                return loglik_batch(
-                    theta_train_dict, theta_nuisance_dict, x[0], x[1], auxd
-                )
+        def f(x):
+            X_batch, sfs_batch = x
+            return loglik_batch(
+                theta_train_dict,
+                theta_nuisance_dict,
+                X_batch,
+                sfs_batch,
+                auxd,
+                _f,
+                esfs_tensor_prod,
+                esfs_vmap,
+            )
 
-            V = list(map(f, zip(X_batches, sfs_batches)))
-            return sum(V)
+        V = list(map(f, zip(X_batches, sfs_batches)))
+        return sum(V)
 
-        return _loglik
+    def loglik_and_grad(
+        self, theta_train_dict, theta_nuisance_dict, data
+    ):
+        auxd = self.auxd
+        _f = self._f
+        esfs_tensor_prod = self.esfs_tensor_prod
+        esfs_vmap = self.esfs_vmap
+        loglik_and_grad_batch = self.loglik_and_grad_batch
 
-    @cached_property
-    def loglik_and_grad(self):
-        loglik_batch = self.loglik_batch
-        _loglik_and_grad_batch = jax.value_and_grad(loglik_batch)
-        if self.jitted:
-            _loglik_and_grad_batch = jax.jit(_loglik_and_grad_batch)
+        X_batches, sfs_batches = data.X_batches, data.sfs_batches
 
-        def _loglik_and_grad(
-            theta_train_dict,
-            theta_nuisance_dict,
-            data,
-            auxd,
-            _loglik_and_grad_batch=_loglik_and_grad_batch,
-        ):
-            X_batches, sfs_batches = data.X_batches, data.sfs_batches
+        def f(x):
+            X_batch, sfs_batch = x
+            return loglik_and_grad_batch(
+                theta_train_dict,
+                theta_nuisance_dict,
+                X_batch,
+                sfs_batch,
+                auxd,
+                _f,
+                esfs_tensor_prod,
+                esfs_vmap,
+            )
 
-            def f(x):
-                return _loglik_and_grad_batch(
-                    theta_train_dict, theta_nuisance_dict, x[0], x[1], auxd
-                )
+        V, G = zip(*map(f, zip(X_batches, sfs_batches)))
+        return sum(V), sum_dicts(G)
 
-            V, G = zip(*map(f, zip(X_batches, sfs_batches)))
-            return sum(V), sum_dicts(G)
+    def hessian(
+        self, theta_train_dict, theta_nuisance_dict, data
+    ):
+        auxd = self.auxd
+        _f = self._f
+        esfs_tensor_prod = self.esfs_tensor_prod
+        esfs_vmap = self.esfs_vmap
+        hessian_batch = self.hessian_batch
 
-        return _loglik_and_grad
+        X_batches, sfs_batches = data.X_batches, data.sfs_batches
 
-    @cached_property
-    def hessian(self):
-        loglik_batch = self.loglik_batch
-        _hessian_batch = jax.hessian(loglik_batch)
-        if self.jitted:
-            _hessian_batch = jax.jit(_hessian_batch)
+        def f(x):
+            X_batch, sfs_batch = x
+            return hessian_batch(
+                theta_train_dict,
+                theta_nuisance_dict,
+                X_batch,
+                sfs_batch,
+                auxd,
+                _f,
+                esfs_tensor_prod,
+                esfs_vmap,
+            )
 
-        def _hessian(
-            theta_train_dict,
-            theta_nuisance_dict,
-            data,
-            auxd,
-            _hessian_batch=_hessian_batch,
-        ):
-            X_batches, sfs_batches = data.X_batches, data.sfs_batches
-
-            def f(x):
-                return _hessian_batch(
-                    theta_train_dict, theta_nuisance_dict, x[0], x[1], auxd
-                )
-
-            H = list(map(f, zip(X_batches, sfs_batches)))
-            return sum_dicts(H)
-
-        return _hessian
+        H = list(map(f, zip(X_batches, sfs_batches)))
+        return sum_dicts(H)

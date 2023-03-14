@@ -20,14 +20,21 @@ from jax.numpy import diag, dot, exp, log
 from jax.scipy.special import logsumexp
 from joblib import Parallel, delayed
 
-from .math_functions import expm1d, log_hypergeom
+from jax.tree_util import register_pytree_node
 
-# jax.config.update("jax_enable_x64", True)
+from .math_functions import expm1d, log_hypergeom
 
 if get_ipython() is not None:
     from tqdm.notebook import tqdm, trange
 else:
     from tqdm import tqdm, trange  # noqa: F401
+
+
+register_pytree_node(
+    demes.Graph,
+    lambda g: ((), demes.dumps(g, simplified=False)),
+    lambda aux_data, _: demes.loads(aux_data)
+)
 
 
 @lru_cache(None)

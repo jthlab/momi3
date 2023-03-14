@@ -67,7 +67,7 @@ class Momi(object):
         self._T = T
         self._auxd = T.auxd
         self._demo_dict = demo_dict
-        self._JAX_functions = JAX_functions(demo_dict=demo_dict, T=T, jitted=jitted)
+        self._JAX_functions = JAX_functions(demo=demo, T=T, jitted=jitted)
 
     @property
     def _default_params(self):
@@ -83,7 +83,7 @@ class Momi(object):
         esfs = self._JAX_functions.esfs
         for pop in num_derived:
             num_derived[pop] = np.array([num_derived[pop]])
-        return esfs(theta_dict, num_derived, 1, auxd=self._auxd)[0]
+        return esfs(theta_dict, num_derived, 1)[0]
 
     def total_branch_length(self, params="default"):
         if params == "default":
@@ -93,7 +93,7 @@ class Momi(object):
         theta_dict.update(params._theta_nuisance_dict)
 
         etbl = self._JAX_functions.etbl
-        return etbl(theta_dict, auxd=self._auxd)
+        return etbl(theta_dict)
 
     def sfs_spectrum(self, params="default", batch_size: int = 10000):
         if params == "default":
@@ -109,7 +109,7 @@ class Momi(object):
             num_deriveds[pop] = mutant_sizes[:, i]
 
         esfs = self._JAX_functions.esfs
-        esfs_vec = esfs(theta_dict, num_deriveds, batch_size, self._auxd)
+        esfs_vec = esfs(theta_dict, num_deriveds, batch_size)
 
         spectrum = np.zeros([self._n_samples[pop] + 1 for pop in self._n_samples])
         for b, val in zip(mutant_sizes[1:-1], esfs_vec[1:-1]):
@@ -140,7 +140,7 @@ class Momi(object):
         theta_nuisance_dict = params._theta_nuisance_dict
         data = self._get_data(jsfs, batch_size)
         return self._JAX_functions.loglik(
-            theta_train_dict, theta_nuisance_dict, data, self._auxd
+            theta_train_dict, theta_nuisance_dict, data
         )
 
     def loglik_with_gradient(
@@ -176,7 +176,7 @@ class Momi(object):
         theta_nuisance_dict = params._theta_nuisance_dict
         data = self._get_data(jsfs, batch_size)
         val, grad = self._JAX_functions.loglik_and_grad(
-            theta_train_dict, theta_nuisance_dict, data, self._auxd
+            theta_train_dict, theta_nuisance_dict, data
         )
         grad = {params._paths_to_params[i]: grad[i] for i in grad}
         if return_array:
@@ -281,7 +281,7 @@ class Momi(object):
         data = self._get_data(jsfs, batch_size)
 
         H_dict = self._JAX_functions.hessian(
-            theta_train_dict, theta_nuisance_dict, data, self._auxd
+            theta_train_dict, theta_nuisance_dict, data
         )
         H = []
         for i in theta_train_dict:
@@ -295,7 +295,7 @@ class Momi(object):
             return H
 
         G = self._JAX_functions.loglik_and_grad(
-            theta_train_dict, theta_nuisance_dict, data, self._auxd
+            theta_train_dict, theta_nuisance_dict, data
         )[1]
         G = jnp.array([G[i] for i in theta_train_dict])
         J = jnp.outer(G, G)
