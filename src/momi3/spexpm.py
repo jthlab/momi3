@@ -102,6 +102,7 @@ def _expmv_inner(A, t, B, A_1norm, mu):
         def g2(j, tup):
             return tup
 
+        @checkpoint
         def g(j, tup):
             c1, F, B, br = tup
             return lax.cond((j < m_star) & (~br), g1, g2, j, tup)
@@ -116,7 +117,7 @@ def _expmv_inner(A, t, B, A_1norm, mu):
     def f2(i, accum):
         return accum
 
-    # @partial(checkpoint, policy=_save_sparse_matmul)
+    @partial(checkpoint, policy=_save_sparse_matmul)
     def f(i, accum):
         return lax.cond(i < s, f1, f2, i, accum)
 

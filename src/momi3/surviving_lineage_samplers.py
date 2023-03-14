@@ -153,6 +153,7 @@ def Migration_sample(
     seed: int = None,
     quantile: float = 0.95,
 ):
+    raise NotImplementedError("No support for Migration")
     seeds = np.random.RandomState(seed).randint(
         1, 2**31 - 1, theta_train_sample.shape[0]
     )
