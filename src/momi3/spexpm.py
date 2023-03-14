@@ -1,10 +1,10 @@
 # Sparse matrix exponential
 import operator
-from functools import reduce, singledispatch
+from functools import reduce, singledispatch, partial
 
 import jax
 import numpy as np
-from jax import lax
+from jax import lax, checkpoint
 from jax import numpy as jnp
 from jax.experimental.sparse import BCOO, bcoo_dot_general_p, sparsify
 
@@ -87,6 +87,7 @@ def _expmv_inner(A, t, B, A_1norm, mu):
     eta = jnp.exp(t * mu / s)
 
     def f1(i, accum):
+        @partial(checkpoint, policy=_save_sparse_matmul)
         def g1(j, tup):
             c1, F, B, br = tup
             coeff = t / (s * (j + 1))
@@ -97,6 +98,7 @@ def _expmv_inner(A, t, B, A_1norm, mu):
             br = c1 + c2 <= tol * _infnorm(F)
             return c2, F, B, br
 
+        @checkpoint
         def g2(j, tup):
             return tup
 
