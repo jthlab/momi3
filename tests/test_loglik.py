@@ -6,7 +6,6 @@ import demes
 import jax
 import jax.numpy as jnp
 import moments
-import timeit
 import numpy as np
 import pytest
 from jax import jit, value_and_grad
@@ -41,7 +40,7 @@ def test_pulse_error():
 
 def test_gutenkunst_grad():
     n = 10
-    demo = demes.load("tests/yaml_files/gutenkunst_data/gutenkunst_ooa.yml")
+    demo = demes.load("tests/yaml_files/gutenkunst_ooa.yml")
     sampled_demes = ["YRI", "CEU", "CHB"]
     sample_sizes = 3 * [n]
     momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
@@ -50,7 +49,9 @@ def test_gutenkunst_grad():
     params.set_train_all_rhos(True)
     params.set_train_all_etas(True)
 
-    (v, g), compilation_time, runtime = momi._time_loglik_with_gradient(params, jsfs, batch_size=150, repeat=5)
+    (v, g), compilation_time, runtime = momi._time_loglik_with_gradient(
+        params, jsfs, batch_size=150, repeat=5
+    )
     print(compilation_time)
     print(runtime)
 
@@ -183,3 +184,7 @@ def test_gutenkunst_vmap(n, size):
     )
     t = np.median(times)
     print(f"momi3 grad of loglik vmap of {size=}: {t:.2g} seconds")
+
+
+if __name__ == "__main__":
+    test_gutenkunst_grad()

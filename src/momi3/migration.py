@@ -37,9 +37,9 @@ def _e0_like(pl):
 
 
 def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
-    Ne = params["Ne"]
-    const = all(not isinstance(Ne[pop], tuple) for pop in Ne)
-    if const:
+    # Ne = params["Ne"]
+    # const = all(not isinstance(Ne[pop], tuple) for pop in Ne)
+    if False:  # const:
         f = _lift_cm_const
     else:
         f = _lift_cm_exp
@@ -75,8 +75,10 @@ def _lift_cm_exp(params, t, pl, axes, aux):
         return T @ y
 
     term = dfx.ODETerm(A)
-    # solver = dfx.ImplicitEuler(nonlinear_solver=dfx.NewtonNonlinearSolver(rtol=1e-3, atol=1e-6))
-    solver = dfx.Dopri5()
+    solver = dfx.ImplicitEuler(
+        nonlinear_solver=dfx.NewtonNonlinearSolver(rtol=1e-3, atol=1e-6)
+    )
+    # solver = dfx.Dopri5()
 
     def solve(theta, y0, tr):
         return dfx.diffeqsolve(
@@ -84,12 +86,12 @@ def _lift_cm_exp(params, t, pl, axes, aux):
             solver,
             t0=t[0],
             t1=t[1],
-            dt0=(t[1] - t[0]) / 50,
+            dt0=(t[1] - t[0]) / 10.0,
             y0=y0,
             args=(theta, tr),
         ).ys[0]
 
-    eps = 1e-7
+    eps = 1e-6
     e0 = _e0_like(pl)
     res = vmap(solve, (0, 0, 0))(
         jnp.array([0.0, eps, -eps]),
