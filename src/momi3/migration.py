@@ -59,7 +59,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     )
 
     def A(s, y, args):
-        theta, tr = args
+        theta, tr, Ne = args
         coal = {}
         for pop in Ne:
             if isinstance(Ne[pop], tuple):
@@ -80,7 +80,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     )
     # solver = dfx.Dopri5()
 
-    def solve(theta, y0, tr):
+    def solve(theta, y0, tr, Ne):
         return dfx.diffeqsolve(
             term,
             solver,
@@ -88,15 +88,16 @@ def _lift_cm_exp(params, t, pl, axes, aux):
             t1=t[1],
             dt0=(t[1] - t[0]) / 10.0,
             y0=y0,
-            args=(theta, tr),
+            args=(theta, tr, Ne),
         ).ys[0]
 
     eps = 1e-6
     e0 = _e0_like(pl)
-    res = vmap(solve, (0, 0, 0))(
+    res = vmap(solve, (0, 0, 0, None))(
         jnp.array([0.0, eps, -eps]),
         jnp.array([pl, e0, e0]),
         jnp.array([True, False, False]),
+        Ne,
     )
     plp = res[0]
     # etbl = jacrev(solve)(0.)
