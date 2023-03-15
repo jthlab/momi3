@@ -619,6 +619,9 @@ class Params(dict):
         else:
             labels = ["%s" % signif(val) for val in values]
 
+        if log_time:
+            if values[0] == 0.:
+                values = np.array(values) + 1.0
         ret.set_yticks(values, labels)  # Show time parameters in yticks
 
         if show_letters | show_values:
@@ -1342,9 +1345,10 @@ def get_html_repr(params):
         eq_table.append([eq_to_html(eq)])
     eq_table = get_body(eq_table, styles=styles["table_eq"])
 
+    # FIXME: Add the actual link to paper
     return f"""
 <div style="display: inline-block; width: 30%;">
-    <a href="https://github.com/jthlab/momi3">SOURCE CODE</a> <a href="https://thumbs.gfycat.com/LastBrilliantElk-mobile.mp4">PAPER</a>
+    <a href="https://github.com/jthlab/momi3" target="_blank">SOURCE CODE</a> <a href="https://thumbs.gfycat.com/LastBrilliantElk-mobile.mp4" target="_blank">PAPER</a>
     <br>
     <img src="https://enesdilber.github.io/momilogo.png" style="width:75px;height:52px;">
     <table border="1" style="width: 100%;">
