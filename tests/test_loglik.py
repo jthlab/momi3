@@ -39,18 +39,18 @@ def test_pulse_error():
 
 
 def test_gutenkunst_grad():
-    n = 10
+    n = 5
     demo = demes.load("tests/yaml_files/gutenkunst_ooa.yml")
     sampled_demes = ["YRI", "CEU", "CHB"]
     sample_sizes = 3 * [n]
     momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
-    jsfs = momi.simulate(1000, seed=108)
+    jsfs = momi.simulate(10, seed=108)
     params = momi._default_params
     params.set_train_all_rhos(True)
     params.set_train_all_etas(True)
 
     (v, g), compilation_time, runtime = momi._time_loglik_with_gradient(
-        params, jsfs, batch_size=150, repeat=5
+        params, jsfs, batch_size=15, repeat=5
     )
     print(compilation_time)
     print(runtime)

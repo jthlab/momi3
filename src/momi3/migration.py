@@ -46,6 +46,23 @@ def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
     return f(params, t, pl, axes, aux)
 
 
+def _A(s, y, args):
+    theta, tr, Q_mig, Q_mut, dims, axes, Ne, t, aux = args
+    coal = {}
+    for pop in Ne:
+        if isinstance(Ne[pop], tuple):
+            N1, N0 = Ne[pop]
+            coal[pop] = 1.0 / Ne_t(N0, N1, t[0], t[1], s)
+        else:
+            # Ne is a float
+            coal[pop] = 1.0 / Ne[pop]
+    Qd = _Q_drift(dims, axes, coal, aux)
+    Q_lift = Q_mig + Qd * 0.5 + Q_mut * theta
+    # after passage through lax.cond dims is traced, but we need it staticially known to compute the matmul
+    T = lax.cond(tr, lambda x: x.T, lambda x: x, Q_lift)._replace(dims=Q_lift.dims)
+    return T @ y
+
+
 def _lift_cm_exp(params, t, pl, axes, aux):
     # population sizes are changing, so we have to use a differential
     # equation solver
@@ -58,37 +75,21 @@ def _lift_cm_exp(params, t, pl, axes, aux):
         aux,
     )
 
-    def A(s, y, args):
-        theta, tr, Ne = args
-        coal = {}
-        for pop in Ne:
-            if isinstance(Ne[pop], tuple):
-                N1, N0 = Ne[pop]
-                coal[pop] = 1.0 / Ne_t(N0, N1, t[0], t[1], s)
-            else:
-                # Ne is a float
-                coal[pop] = 1.0 / Ne[pop]
-        Qd = _Q_drift(dims, axes, coal, aux)
-        Q_lift = Q_mig + Qd * 0.5 + Q_mut * theta
-        # after passage through lax.cond dims is traced, but we need it staticially known to compute the matmul
-        T = lax.cond(tr, lambda x: x.T, lambda x: x, Q_lift)._replace(dims=Q_lift.dims)
-        return T @ y
+    term = dfx.ODETerm(_A)
+    # solver = dfx.ImplicitEuler(
+    #     nonlinear_solver=dfx.NewtonNonlinearSolver(rtol=1e-3, atol=1e-6)
+    # )
+    solver = dfx.Dopri5()
 
-    term = dfx.ODETerm(A)
-    solver = dfx.ImplicitEuler(
-        nonlinear_solver=dfx.NewtonNonlinearSolver(rtol=1e-3, atol=1e-6)
-    )
-    # solver = dfx.Dopri5()
-
-    def solve(theta, y0, tr, Ne):
+    def solve(theta, y0, tr, args):
         return dfx.diffeqsolve(
             term,
             solver,
             t0=t[0],
             t1=t[1],
-            dt0=(t[1] - t[0]) / 10.0,
+            dt0=(t[1] - t[0]) / 20.0,
             y0=y0,
-            args=(theta, tr, Ne),
+            args=(theta, tr) + args,
         ).ys[0]
 
     eps = 1e-6
@@ -97,7 +98,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
         jnp.array([0.0, eps, -eps]),
         jnp.array([pl, e0, e0]),
         jnp.array([True, False, False]),
-        Ne,
+        (Q_mig, Q_mut, dims, axes, Ne, t, aux),
     )
     plp = res[0]
     # etbl = jacrev(solve)(0.)
