@@ -1279,6 +1279,9 @@ def get_html_repr(params):
 
     def eq_to_html(eq):
         eq = re.sub(r"_(\d+)", r"<sub>\1</sub>", eq)
+        eq = eq.replace("<=", '≤')
+        eq = eq.replace(">=", '≥')
+        eq = eq.replace("==", '=')
         for key, value in Greek.items():
             eq = eq.replace(key, value)
         return eq
@@ -1340,114 +1343,87 @@ def get_html_repr(params):
     eq_table = get_body(eq_table, styles=styles["table_eq"])
 
     return f"""
-<html>
-<head>
-<style>
-
-.row {{
-  margin-left:-5px;
-  margin-right:-5px;
-}}
-.column1 {{
-  float: left;
-  width: 30%;
-  padding: 5px;
-}}
-.column2 {{
-  float: left;
-  width: 70%;
-  padding: 5px;
-}}
-table {{
-  border-collapse: collapse;
-  border-spacing: 0;
-  width: 100%;
-  border: 1px solid #ddd;
-}}
-</style>
-</head>
-<body>
-    <div class="row">
-        <div style="width:30%" class="column1">
-            <img src="https://enesdilber.github.io/momilogo.png" style="width:75px;height:52px;">
-            <table border="1" class="dataframe">
-            <caption><h4>Size Parameters</h4></caption>
-                <thead>
-                    <tr style="text-align: right;">
-                        <th >Parameter</th>
-                        <th >Value</th>
-                        <th >Infer</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {body['table1']['SizeParam']}
-                </tbody>
-            </table>
-            <table border="1" class="dataframe">
-            <caption><h4>Rate Parameters</h4></caption>
-                <thead>
-                    <tr style="text-align: right;">
-                        <th >Parameter</th>
-                        <th >Value</th>
-                        <th >Infer</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {body['table1']['RateParam']}
-                </tbody>
-            </table>
-            <table border="1" class="dataframe">
-                <caption><h4>Proportion Parameters</h4></caption>
-                <thead>
-                    <tr style="text-align: right;">
-                        <th >Parameter</th>
-                        <th >Value</th>
-                        <th >Infer</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {body['table1']['ProportionParam']}
-                </tbody>
-            </table>
-            <table border="1" class="dataframe">
-            <caption><h4>Time Parameters</h4></caption>
-                <thead>
-                    <tr style="text-align: right;">
-                        <th >Parameter</th>
-                        <th >Value</th>
-                        <th >Infer</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {body['table1']['TimeParam']}
-                </tbody>
-            <table border="1" class="dataframe">
-            <caption><h4>Constraints</h4></caption>
-                <thead>
-                    <tr style="text-align: left;">
-                        <th style="text-align:left;">User Constraints</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {eq_table}
-                </tbody>
-            </table>
-        </div>
-        <div style="width:50%" class="column2">
-            <table style="width: 100%">
-                <caption><h4>Parameter Locations</h4></caption>
-                <thead>
-                    <tr>
-                        <th style="text-align:left; width:80%">Demes Parameter</th>
-                        <th >Parameter</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {body['table2']}
-                </tbody>
-            </table>
-            </div>
-        </div>
-    </body>
-</html>
+<div style="display: inline-block; width: 30%;">
+    <a href="https://github.com/jthlab/momi3">SOURCE CODE</a> <a href="https://thumbs.gfycat.com/LastBrilliantElk-mobile.mp4">PAPER</a>
+    <br>
+    <img src="https://enesdilber.github.io/momilogo.png" style="width:75px;height:52px;">
+    <table border="1" style="width: 100%;">
+    <caption><h4>Size Parameters</h4></caption>
+    <thead>
+        <tr style="text-align: right;">
+            <th >Parameter</th>
+            <th >Value</th>
+            <th >Infer</th>
+        </tr>
+    </thead>
+    <tbody>
+    {body['table1']['SizeParam']}
+    </tbody>
+    </table>
+    <table border="1" style="width: 100%;">
+    <caption><h4>Rate Parameters</h4></caption>
+    <thead>
+        <tr style="text-align: right;">
+            <th >Parameter</th>
+            <th >Value</th>
+            <th >Infer</th>
+        </tr>
+    </thead>
+    <tbody>
+    {body['table1']['RateParam']}
+    </tbody>
+    </table>
+    <table border="1" style="width: 100%;">
+    <caption><h4>Proportion Parameters</h4></caption>
+    <thead>
+        <tr style="text-align: right;">
+            <th >Parameter</th>
+            <th >Value</th>
+            <th >Infer</th>
+        </tr>
+    </thead>
+    <tbody>
+    {body['table1']['ProportionParam']}
+    </tbody>
+    </table>
+    <table border="1" style="width: 100%;">
+    <caption><h4>Time Parameters</h4></caption>
+    <thead>
+        <tr style="text-align: right;">
+            <th >Parameter</th>
+            <th >Value</th>
+            <th >Infer</th>
+        </tr>
+    </thead>
+    <tbody>
+    {body['table1']['TimeParam']}
+    </tbody>
+    </table>
+    <table border="1" style="width: 100%;">
+    <caption><h4>Constraints</h4></caption>
+    <thead>
+        <tr style="text-align: left;">
+            <th style="text-align:left;">User Constraints</th>
+        </tr>
+    </thead>
+    <tbody>
+    {eq_table}
+    </tbody>
+    </table>
+</div>
+<div style="display: inline-block; width: 50%;">
+<br>
+    <table border="1" style="width: 100%;">
+    <caption><h4>Parameter Locations</h4></caption>
+    <thead>
+        <tr>
+            <th style="text-align:left; width:80%">Demes Parameter</th>
+            <th >Parameter</th>
+        </tr>
+    </thead>
+    <tbody>
+    {body['table2']}
+    </tbody>
+    </table>
+</div>
 """
