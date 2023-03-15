@@ -56,6 +56,17 @@ def test_gutenkunst_grad():
     print(runtime)
 
 
+def test_gutenkunst_nan():
+    n = 10
+    demo = demes.load("tests/yaml_files/gutenkunst_ooa.yml")
+    sampled_demes = ["YRI", "CEU", "CHB"]
+    sample_sizes = 3 * [n]
+    momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
+
+    with jax.debug_nans(True):
+        momi.sfs_entry(dict(zip(sampled_demes, [0, 0, 1])))
+
+
 def test_gutenkunst():
     demo = demes.load("tests/yaml_files/gutenkunst_ooa.yml")
     demo = demo.in_generations()
