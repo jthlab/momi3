@@ -354,6 +354,31 @@ class Params(dict):
             ret = r"$%s=%s$" % (key, val)
         return ret
 
+    def _solve_y_conflict(self, text_params, log_time):
+        positions = set([])
+        for key in text_params:
+            cur = text_params[key]
+            ymin, ymax = cur['ymin'], cur['ymax']
+            r = ymax - ymin
+            i = 2
+            cont = True
+            while cont:
+                for j in range(1, i):
+                    if log_time:
+                        position = 1 + ymin + r * (10 ** j) / (10 ** i)
+                    else:
+                        position = ymin + r * j / i
+                    if positions.issuperset({position}):
+                        pass
+                    else:
+                        cont = False
+                        positions.add(position)
+                        break
+                i += 1
+            cur['y'] = position
+            del cur['ymin']
+            del cur['ymax']
+
     def tubes(
         self,
         show_values: bool = True,
@@ -505,23 +530,27 @@ class Params(dict):
 
         rho_keys = sorted([key for key in self if (key[:3] == "rho")])
         # MIGRATIONS
+        mig_params = {}
         for key in rho_keys:
-            text_params[key] = {"inferred": self[key].train_it}
+            mig_params[key] = {"inferred": self[key].train_it}
             val = signif(self[key].num)
             mig_path = list(list(self[key].paths)[0])
             start_time = mig_path[:-1] + ["start_time"]
             end_time = mig_path[:-1] + ["end_time"]
             st_key = self._path_to_params[tuple(start_time)]
             en_key = self._path_to_params[tuple(end_time)]
-            y = 0.5 * (self[en_key].num + self[st_key].num)
-            text_params[key] = {
+            mig_params[key] = {
                 "type": "rho",
                 "x": rxlim,
-                "y": y,
+                "ymin": self[en_key].num,
+                "ymax": self[st_key].num,
                 "inferred": key in self._train_keys,
             }
-            text_params[key].update(default_kwargs)
-            text_params[key] = deepcopy(text_params[key])
+            mig_params[key].update(default_kwargs)
+            mig_params[key] = deepcopy(mig_params[key])
+
+        self._solve_y_conflict(mig_params, log_time)
+        text_params.update(mig_params)
 
         tau_keys = sorted(
             [key for key in self if (key[:3] == "tau") & (not isinf(self[key].num))]
