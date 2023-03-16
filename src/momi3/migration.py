@@ -4,7 +4,7 @@ import diffrax as dfx
 import jax
 import jax.numpy as jnp
 import scipy.sparse as sps
-from jax import jacfwd, vmap
+from jax import jacfwd
 from jax.experimental.sparse import BCOO
 
 from .common import Axes, Ne_t, Population
@@ -54,18 +54,19 @@ def _A(s, y, args):
         i = list(axes).index(pop)
         if isinstance(Ne[pop], tuple):
             N1, N0 = Ne[pop]
-            coal[i] = 1.0 / Ne_t(N0, N1, t[0], t[1], s)
+            coal[i] = 0.5 / Ne_t(N0, N1, t[0], t[1], s)
         else:
             # Ne is a float
-            coal[i] = 1.0 / Ne[pop]
+            coal[i] = 0.5 / Ne[pop]
     new_A = []
+    # multiply each entry of the drift tensor by the coalescent rate
     for Ai in Q_drift.A:
         assert len(Ai) == 1
         ((i, Aij),) = Ai.items()
         new_A.append({i: coal[i] * Aij})
     Qd = Q_drift._replace(A=new_A)
-    Q_mig + Qd * 0.5 + Q_mut * theta
-    return y
+    Q = Q_mig + Qd + Q_mut * theta
+    return Q @ y
 
 
 def _lift_cm_exp(params, t, pl, axes, aux):
@@ -81,9 +82,11 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     Q_mig_T, _ = _Q_mig_mut(dims, axes, params["mig"], aux, tr=True)
     term = dfx.ODETerm(_A)
     # solver = dfx.ImplicitEuler(
-    #     nonlinear_solver=dfx.NewtonNonlinearSolver(rtol=1e-3, atol=1e-6)
+    #     nonlinear_solver=dfx.NewtonNonlinearSolver(rtol=1e-3, atol=1e-5),
+    #     scan_stages=True
     # )
-    solver = dfx.Dopri5(scan_stages=True)
+    solver = dfx.Tsit5(scan_stages=True)
+    ssc = dfx.PIDController(rtol=1e-5, atol=1e-5)
 
     def solve(theta, y0, args):
         return dfx.diffeqsolve(
@@ -91,22 +94,19 @@ def _lift_cm_exp(params, t, pl, axes, aux):
             solver,
             t0=t[0],
             t1=t[1],
-            dt0=(t[1] - t[0]) / 20.0,
+            dt0=(t[1] - t[0]) / 50.0,
             y0=y0,
             args=(theta,) + args,
+            stepsize_controller=ssc,
         ).ys[0]
 
-    plp = solve(0.0, pl, (Q_mig, Q_mut, Q_drift, dims, axes, Ne, t, aux))
-    # etbl = jacrev(solve)(0.)
-    # got an error getting this to work with sparse matrices, so for now settle for finite diffs
-    eps = 1e-6
+    primal_args = (Q_mig_T, Q_mut.T, Q_drift.T, dims, axes, Ne, t, aux)
+    plp = solve(0.0, pl, primal_args)
+    tangent_args = (Q_mig, Q_mut, Q_drift, dims, axes, Ne, t, aux)
     e0 = _e0_like(pl)
-    res = vmap(
-        solve,
-        (0, None, None),
-    )(jnp.array([eps, -eps]), e0, (Q_mig_T, Q_mut.T, Q_drift.T, dims, axes, Ne, t, aux))
-    (res[0] - res[1]) / (2 * eps)
-    return plp, plp
+    etbl = jax.jacrev(solve)(0.0, e0, tangent_args)
+    # jax.debug.print("plp: {}\netbl: {}", plp, etbl)
+    return plp, etbl
 
 
 def _lift_cm_const(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
@@ -170,7 +170,7 @@ def _Q_drift(
 
 def _Q_mig_mut(
     dims, axes, mig_mat, aux, tr=False
-) -> tuple[GroupedKronProd, GroupedKronProd, GroupedKronProd]:
+) -> tuple[GroupedKronProd, GroupedKronProd]:
     """construct Q matrix for continuously migrating populations"""
     s = list(aux["mut"])
     i = list(axes).index
@@ -182,10 +182,8 @@ def _Q_mig_mut(
             m_ij = mig_mat[s1, s2]
             u1, u2 = aux["mig"][s1, s2]
             if tr:
-                u1 = {k: v.T for k, v in u1.items()}
-                u2 = {k: v.T for k, v in u2.items()}
-            i1 = i(s1)
-            i2 = i(s2)
+                u1, u2 = [{k: v.T for k, v in x.items()} for x in (u1, u2)]
+            i1, i2 = map(list(axes).index, (s1, s2))
             terms.append({i1: m_ij * u1[0], i2: u1[1]})
             terms.append({i2: m_ij * u2[1]})
     Q_mig = GroupedKronProd(terms, dims)
