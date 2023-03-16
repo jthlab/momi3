@@ -198,4 +198,4 @@ def test_gutenkunst_vmap(n, size):
 
 
 if __name__ == "__main__":
-    test_gutenkunst_nan()
+    test_gutenkunst_grad()
