@@ -4,7 +4,7 @@ import diffrax as dfx
 import jax
 import jax.numpy as jnp
 import scipy.sparse as sps
-from jax import jacfwd
+from jax import jacfwd, vmap
 from jax.experimental.sparse import BCOO
 
 from .common import Axes, Ne_t, Population
@@ -86,7 +86,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     #     scan_stages=True
     # )
     solver = dfx.Tsit5(scan_stages=True)
-    ssc = dfx.PIDController(rtol=1e-5, atol=1e-5)
+    ssc = dfx.PIDController(rtol=1e-3, atol=1e-5)
 
     def solve(theta, y0, args):
         return dfx.diffeqsolve(
@@ -94,7 +94,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
             solver,
             t0=t[0],
             t1=t[1],
-            dt0=(t[1] - t[0]) / 50.0,
+            dt0=(t[1] - t[0]) / 10.0,
             y0=y0,
             args=(theta,) + args,
             stepsize_controller=ssc,
@@ -104,8 +104,11 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     plp = solve(0.0, pl, primal_args)
     tangent_args = (Q_mig, Q_mut, Q_drift, dims, axes, Ne, t, aux)
     e0 = _e0_like(pl)
-    etbl = jax.jacrev(solve)(0.0, e0, tangent_args)
-    # jax.debug.print("plp: {}\netbl: {}", plp, etbl)
+    # etbl = jax.jacrev(solve)(0.0, e0, tangent_args)
+    # jacrev(solve) does not work inside grad due to limitations with diffrax. so we settle for finite differences.
+    eps = 1e-6
+    res = vmap(solve, (0, None, None))(jnp.array([eps, -eps]), e0, tangent_args)
+    etbl = (res[0] - res[1]) / (2 * eps)
     return plp, etbl
 
 
