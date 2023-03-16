@@ -129,7 +129,7 @@ class JAX_functions:
         demo = self.demo
         _f = self._f
         esfs_tensor_prod = self.esfs_tensor_prod
-        esfs_vmap = self.esfs_vmap
+        esfs_vmap = self.esfs_map
 
         X_batches = get_X_batches(num_deriveds, leaves, _n_samples, batch_size, add_etbl_vecs=False)
         f = lambda X_batch: esfs_vmap(theta_dict, X_batch, auxd, demo, _f, esfs_tensor_prod)
