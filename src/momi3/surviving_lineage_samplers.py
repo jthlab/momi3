@@ -257,7 +257,7 @@ def Lift_sample(
         Ne0s = jnp.array(Ne0s_dict[pop])
         Ne1s = jnp.array(Ne1s_dict[pop])
 
-        n0 = n[pop]
+        n0 = n.get(pop, 1)
 
         if jnp.isclose(Ne0s[0], Ne1s[1]):
             f = jax.vmap(sample_lift_constant, (0, 0, 0, None, 0))
@@ -267,6 +267,7 @@ def Lift_sample(
             ret = f(Ne0s, Ne1s, t0s, t1s, n0, seeds)
 
         n1[pop] = int(round(np.quantile(ret, quantile)))
+
     return n1
 
 
@@ -356,9 +357,10 @@ def bound_sampler(
 
             if isinstance(ev, Lift):
                 if ev.migrations:
-                    n = Migration_sample(
-                        n, ev, theta_train_sample, params, seed, quantile
-                    )
+                    pass
+                    # n = Migration_sample(
+                    #     n, ev, theta_train_sample, params, seed, quantile
+                    # )
                 else:
                     n = Lift_sample(n, ev, theta_train_sample, params, seed, quantile)
                 seed = np.random.RandomState(seed).randint(2**31 - 1)

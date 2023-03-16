@@ -28,6 +28,12 @@ def esfs_vmap(theta_dict, X_batch, auxd, demo, _f, esfs_tensor_prod):
     )
 
 
+def esfs_pmap(theta_dict, X_batch, auxd, demo, _f, esfs_tensor_prod):
+    return jax.pmap(esfs_tensor_prod, in_axes=(None, 0, None, None, None))(
+        theta_dict, X_batch, auxd, demo, _f
+    )
+
+
 def loglik_batch(
     theta_train_dict,
     theta_nuisance_dict,
@@ -37,12 +43,12 @@ def loglik_batch(
     demo,
     _f,
     esfs_tensor_prod,
-    esfs_vmap,
+    esfs_map,
 ):
     theta_dict = deepcopy(theta_nuisance_dict)
     theta_dict.update(theta_train_dict)
 
-    esfs_vec = esfs_vmap(theta_dict, X_batch, auxd, demo, _f, esfs_tensor_prod)
+    esfs_vec = esfs_map(theta_dict, X_batch, auxd, demo, _f, esfs_tensor_prod)
 
     Q = esfs_vec[3:]
     Q_sum = esfs_vec[0] - esfs_vec[1] - esfs_vec[2]
@@ -64,7 +70,7 @@ class JAX_functions:
         T,
         jitted=False,
         esfs_tensor_prod=esfs_tensor_prod,
-        esfs_vmap=esfs_vmap,
+        esfs_map=esfs_vmap,
         loglik_batch=loglik_batch,
         loglik_and_grad_batch=loglik_and_grad_batch,
         hessian_batch=hessian_batch
@@ -77,15 +83,15 @@ class JAX_functions:
 
         if jitted:
             esfs_tensor_prod = jit(esfs_tensor_prod, static_argnames='_f')
-            esfs_vmap = jit(esfs_vmap, static_argnames=('_f', 'esfs_tensor_prod'))
+            esfs_map = jit(esfs_map, static_argnames=('_f', 'esfs_tensor_prod'))
 
-            loglik_static_args = ('_f', 'esfs_tensor_prod', 'esfs_vmap')
+            loglik_static_args = ('_f', 'esfs_tensor_prod', 'esfs_map')
             loglik_batch = jit(loglik_batch, static_argnames=loglik_static_args)
             loglik_and_grad_batch = jit(loglik_and_grad_batch, static_argnames=loglik_static_args)
             hessian_batch = jit(hessian_batch, static_argnames=loglik_static_args)
 
         self.esfs_tensor_prod = esfs_tensor_prod
-        self.esfs_vmap = esfs_vmap
+        self.esfs_map = esfs_map
         self.loglik_batch = loglik_batch
         self.loglik_and_grad_batch = loglik_and_grad_batch
         self.hessian_batch = hessian_batch
@@ -167,7 +173,10 @@ class JAX_functions:
         return (ret0 - ret1 - ret2).flatten()[0]
 
     def loglik(
-        self, theta_train_dict: dict[tuple, float], theta_nuisance_dict: dict[tuple, float], data: Data
+        self,
+        theta_train_dict: dict[tuple, float],
+        theta_nuisance_dict: dict[tuple, float],
+        data: Data
     ) -> float:
         """Returns multinomial log-likelihood for the given data and theta.
             Example for The Gutenkunst et al (2009) out-of-Africa.
@@ -192,12 +201,13 @@ class JAX_functions:
             theta_train_dict (dict[tuple, float]): Training values of the parameters. Keys are the tuple of paths.
             theta_nuisance_dict (dict[tuple, float]): Values of the parameters. Keys are the tuple of paths.
             data (Data): Data object. It stores, sfs and leaf likelihoods.
+            esfs_map (str): 'vmap' or 'pmap'
         """
         auxd = self.auxd
         demo = self.demo
         _f = self._f
         esfs_tensor_prod = self.esfs_tensor_prod
-        esfs_vmap = self.esfs_vmap
+        esfs_map = self.esfs_map
         loglik_batch = self.loglik_batch
 
         X_batches, sfs_batches = data.X_batches, data.sfs_batches
@@ -213,7 +223,7 @@ class JAX_functions:
                 demo,
                 _f,
                 esfs_tensor_prod,
-                esfs_vmap,
+                esfs_map,
             )
 
         V = list(map(f, zip(X_batches, sfs_batches)))
@@ -249,7 +259,7 @@ class JAX_functions:
         demo = self.demo
         _f = self._f
         esfs_tensor_prod = self.esfs_tensor_prod
-        esfs_vmap = self.esfs_vmap
+        esfs_map = self.esfs_map
         loglik_and_grad_batch = self.loglik_and_grad_batch
 
         X_batches, sfs_batches = data.X_batches, data.sfs_batches
@@ -265,7 +275,7 @@ class JAX_functions:
                 demo,
                 _f,
                 esfs_tensor_prod,
-                esfs_vmap,
+                esfs_map,
             )
 
         V, G = zip(*map(f, zip(X_batches, sfs_batches)))
@@ -301,7 +311,7 @@ class JAX_functions:
         demo = self.demo
         _f = self._f
         esfs_tensor_prod = self.esfs_tensor_prod
-        esfs_vmap = self.esfs_vmap
+        esfs_map = self.esfs_map
         hessian_batch = self.hessian_batch
 
         X_batches, sfs_batches = data.X_batches, data.sfs_batches
@@ -317,7 +327,7 @@ class JAX_functions:
                 demo,
                 _f,
                 esfs_tensor_prod,
-                esfs_vmap,
+                esfs_map,
             )
 
         H = list(map(f, zip(X_batches, sfs_batches)))

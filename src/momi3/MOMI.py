@@ -136,6 +136,13 @@ class Momi(object):
 
         if theta_train_dict is None:
             theta_train_dict = params._theta_train_dict
+        else:
+            # Change the keys from param keys to paths
+            param_keys = sorted(list(theta_train_dict.keys()))
+            assert set(param_keys) == set(params._train_keys)
+            Paths = [params._params_to_paths[param_key] for param_key in param_keys]
+            values = [float(theta_train_dict[param_key]) for param_key in param_keys]
+            theta_train_dict = dict(zip(Paths, values))
 
         theta_nuisance_dict = params._theta_nuisance_dict
         data = self._get_data(jsfs, batch_size)

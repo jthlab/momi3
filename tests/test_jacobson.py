@@ -29,11 +29,29 @@ def test_loglik(nmuts, batch_size):
     print(f"Runtime: {r_time}")
 
 
+def test_bounds(n=20):
+    demo = demes.load("yaml_files/jacobson.yml")
+    demo_dict = demo.asdict()
+    new_zero = 100  # If a migration ends at time 0, replace it with 100
+    for mig in demo_dict['migrations']:
+        if mig['end_time'] == 0:
+            mig['end_time'] = new_zero
+    demo = demes.Builder.fromdict(demo_dict).resolve()
+
+    sampled_demes = demo.metadata["sampled_demes"]
+    sample_sizes = 9 * [n]
+    momi = Momi(demo, sampled_demes, sample_sizes, jitted=False)
+    bounds = momi.bound_sampler(momi._default_params, [], 100)
+    momi_b = Momi(demo, sampled_demes, sample_sizes, jitted=True, bounds=bounds)
+    # KeyError: Node(i=-31, block=frozenset({'Den1', 'Nea1', 'Papuan', 'Ghost', 'YRI', 'CHB'}), t=Time(1412.0))
+
+
 if __name__ == "__main__":
-    args = sys.argv[1:]
-    if args[0] == "loglik":
-        # python test_jacobson.py loglik <nmuts> <batch_size>
-        nmuts = int(args[1])
-        batch_size = int(args[2])
-        test_loglik(nmuts, batch_size)
+    test_bounds()
+    # args = sys.argv[1:]
+    # if args[0] == "loglik":
+    #     # python test_jacobson.py loglik <nmuts> <batch_size>
+    #     nmuts = int(args[1])
+    #     batch_size = int(args[2])
+    #     test_loglik(nmuts, batch_size)
     # test_branch_length()
