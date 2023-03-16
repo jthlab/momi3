@@ -4,7 +4,8 @@ import diffrax as dfx
 import jax
 import jax.numpy as jnp
 import scipy.sparse as sps
-from jax import jacfwd, lax, vmap
+from jax import jacfwd, vmap
+from jax.experimental.sparse import BCOO
 
 from .common import Axes, Ne_t, Population
 from .kronprod import GroupedKronProd
@@ -26,7 +27,7 @@ def lift_cm_aux(
     }
     # convert sparse matrices from scipy to JAX format
     tm = jax.tree_util.tree_map(
-        lambda A: _bcoo_from_sp(A) if isinstance(A, sps.spmatrix) else A, tm
+        lambda A: BCOO.from_scipy_sparse(A) if isinstance(A, sps.spmatrix) else A, tm
     )
     tm["axes"] = axes
     return tm
@@ -47,20 +48,24 @@ def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
 
 
 def _A(s, y, args):
-    theta, tr, Q_mig, Q_mut, dims, axes, Ne, t, aux = args
+    theta, Q_mig, Q_mut, Q_drift, dims, axes, Ne, t, aux = args
     coal = {}
     for pop in Ne:
+        i = list(axes).index(pop)
         if isinstance(Ne[pop], tuple):
             N1, N0 = Ne[pop]
-            coal[pop] = 1.0 / Ne_t(N0, N1, t[0], t[1], s)
+            coal[i] = 1.0 / Ne_t(N0, N1, t[0], t[1], s)
         else:
             # Ne is a float
-            coal[pop] = 1.0 / Ne[pop]
-    Qd = _Q_drift(dims, axes, coal, aux)
-    Q_lift = Q_mig + Qd * 0.5 + Q_mut * theta
-    # after passage through lax.cond dims is traced, but we need it staticially known to compute the matmul
-    T = lax.cond(tr, lambda x: x.T, lambda x: x, Q_lift)._replace(dims=Q_lift.dims)
-    return T @ y
+            coal[i] = 1.0 / Ne[pop]
+    new_A = []
+    for Ai in Q_drift.A:
+        assert len(Ai) == 1
+        ((i, Aij),) = Ai.items()
+        new_A.append({i: coal[i] * Aij})
+    Qd = Q_drift._replace(A=new_A)
+    Q_mig + Qd * 0.5 + Q_mut * theta
+    return y
 
 
 def _lift_cm_exp(params, t, pl, axes, aux):
@@ -68,20 +73,19 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     # equation solver
     dims = pl.shape
     Ne = params["Ne"]
-    Q_mig, Q_mut = _Q_mig_mut(
-        dims,
-        axes,
-        params["mig"],
-        aux,
-    )
-
+    Q_drift = _Q_drift(dims, axes, {p: 1.0 for p in axes}, aux)
+    Q_mig, Q_mut = _Q_mig_mut(dims, axes, params["mig"], aux, tr=False)
+    # WORKAROUND: calling Q_mig.T below gives me an error, impossibly deep stack trace having to do with diffrax,
+    # bcoo_sparse, vjp, etc. etc. "manually" transposing before multiplying with any traced migration params seems
+    # to be the key.
+    Q_mig_T, _ = _Q_mig_mut(dims, axes, params["mig"], aux, tr=True)
     term = dfx.ODETerm(_A)
     # solver = dfx.ImplicitEuler(
     #     nonlinear_solver=dfx.NewtonNonlinearSolver(rtol=1e-3, atol=1e-6)
     # )
-    solver = dfx.Dopri5()
+    solver = dfx.Dopri5(scan_stages=True)
 
-    def solve(theta, y0, tr, args):
+    def solve(theta, y0, args):
         return dfx.diffeqsolve(
             term,
             solver,
@@ -89,22 +93,20 @@ def _lift_cm_exp(params, t, pl, axes, aux):
             t1=t[1],
             dt0=(t[1] - t[0]) / 20.0,
             y0=y0,
-            args=(theta, tr) + args,
+            args=(theta,) + args,
         ).ys[0]
 
-    eps = 1e-6
-    e0 = _e0_like(pl)
-    res = vmap(solve, (0, 0, 0, None))(
-        jnp.array([0.0, eps, -eps]),
-        jnp.array([pl, e0, e0]),
-        jnp.array([True, False, False]),
-        (Q_mig, Q_mut, dims, axes, Ne, t, aux),
-    )
-    plp = res[0]
+    plp = solve(0.0, pl, (Q_mig, Q_mut, Q_drift, dims, axes, Ne, t, aux))
     # etbl = jacrev(solve)(0.)
     # got an error getting this to work with sparse matrices, so for now settle for finite diffs
-    etbl = (res[1] - res[2]) / (2 * eps)
-    return plp, etbl
+    eps = 1e-6
+    e0 = _e0_like(pl)
+    res = vmap(
+        solve,
+        (0, None, None),
+    )(jnp.array([eps, -eps]), e0, (Q_mig_T, Q_mut.T, Q_drift.T, dims, axes, Ne, t, aux))
+    (res[0] - res[1]) / (2 * eps)
+    return plp, plp
 
 
 def _lift_cm_const(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
@@ -167,7 +169,7 @@ def _Q_drift(
 
 
 def _Q_mig_mut(
-    dims, axes, mig_mat, aux
+    dims, axes, mig_mat, aux, tr=False
 ) -> tuple[GroupedKronProd, GroupedKronProd, GroupedKronProd]:
     """construct Q matrix for continuously migrating populations"""
     s = list(aux["mut"])
@@ -179,61 +181,12 @@ def _Q_mig_mut(
         if (s1, s2) in mig_mat:
             m_ij = mig_mat[s1, s2]
             u1, u2 = aux["mig"][s1, s2]
+            if tr:
+                u1 = {k: v.T for k, v in u1.items()}
+                u2 = {k: v.T for k, v in u2.items()}
             i1 = i(s1)
             i2 = i(s2)
             terms.append({i1: m_ij * u1[0], i2: u1[1]})
             terms.append({i2: m_ij * u2[1]})
     Q_mig = GroupedKronProd(terms, dims)
     return Q_mig, Q_mut
-
-
-def _bcoo_kron(A, B):
-    import jax.numpy as jnp
-    from jax.experimental.sparse import BCOO, empty
-
-    assert A.ndim == B.ndim == 2
-    output_shape = (A.shape[0] * B.shape[0], A.shape[1] * B.shape[1])
-
-    if A.nse == 0 or B.nse == 0:
-        return empty(output_shape)
-
-    # expand entries of a into blocks
-    A_row, A_col = A.indices.T
-    B_row, B_col = B.indices.T
-    row = A_row.repeat(B.nse)
-    col = A_col.repeat(B.nse)
-    data = A.data.repeat(B.nse)
-
-    row *= B.shape[0]
-    col *= B.shape[1]
-
-    # increment block indices
-    row, col = row.reshape(-1, B.nse), col.reshape(-1, B.nse)
-    row += B_row
-    col += B_col
-    row, col = row.reshape(-1), col.reshape(-1)
-
-    # compute block entries
-    data = data.reshape(-1, B.nse) * B.data
-    data = data.reshape(-1)
-
-    (a,) = data.nonzero()
-    inds = jnp.stack([row, col], axis=1)
-
-    return BCOO((data[a], inds[a]), shape=output_shape)
-
-
-def _bcoo_kronsum(A, B):
-    from jax.experimental.sparse import eye
-
-    I_A = eye(A.shape[0])
-    I_B = eye(B.shape[0])
-    return _bcoo_kron(A, I_B) + _bcoo_kron(I_A, B)
-
-
-def _bcoo_from_sp(A):
-    import jax.numpy as jnp
-    from jax.experimental.sparse import BCOO
-
-    A = A.tocoo()
-    return BCOO((A.data, jnp.stack([A.row, A.col], axis=1)), shape=A.shape)

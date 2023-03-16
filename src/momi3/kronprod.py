@@ -4,7 +4,7 @@ from typing import NamedTuple, Union
 
 import numpy as np
 from jax import numpy as jnp
-from jax.experimental.sparse import BCOO, bcoo_fromdense, empty, eye, sparsify
+from jax.experimental.sparse import BCOO, empty, eye, sparsify
 
 
 class KronProd(NamedTuple):
@@ -182,27 +182,8 @@ tr.register(np.ndarray, np.trace)
 def _spkron(A, B) -> BCOO:
     # sparse kronecker product of BCOO matrices. (actually just COO)
     assert A.ndim == B.ndim == 2
-    if not isinstance(A, BCOO):
-        A = bcoo_fromdense(A)
-    if not isinstance(B, BCOO):
-        B = bcoo_fromdense(B)
-
-    row, col = A.indices.repeat(B.nse, 0).T
-    data = A.data.repeat(B.nse)
-    row *= B.shape[0]
-    col *= B.shape[1]
-    row = row.reshape(-1, B.nse)
-    col = col.reshape(-1, B.nse)
-    row += B.indices[:, 0]
-    col += B.indices[:, 1]
-    row = row.reshape(-1)
-    col = col.reshape(-1)
-    # compute block entries
-    data = data.reshape(-1, B.nse) * B.data
-    data = data.reshape(-1)
-    indices = jnp.array([row, col]).T
-    return BCOO(
-        (data, indices), shape=(A.shape[0] * B.shape[0], A.shape[1] * B.shape[1])
+    return (A[:, None, :, None] * B[None, :, None, :]).reshape(
+        A.shape[0] * B.shape[0], A.shape[1] * B.shape[1]
     )
 
 
