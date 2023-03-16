@@ -103,30 +103,30 @@ class Momi_vs_Moments:
             return sfs
 
     def compare(self, method1, method2, run_type, **kwargs):
+        if "NORMALIZE_ESFS" not in kwargs:
+            kwargs["NORMALIZE_ESFS"] = NORMALIZE_ESFS
+
+        m1 = self.get_flatten_spectrum(method1, kwargs["NORMALIZE_ESFS"])
+        m2 = self.get_flatten_spectrum(method2, kwargs["NORMALIZE_ESFS"])
+        ape = absolute_percent_error(m1, m2)
+
         if run_type == "pytest":
-            m1 = self.get_flatten_spectrum(method1)
-            m2 = self.get_flatten_spectrum(method2)
-            ape = absolute_percent_error(m1, m2)
             mape = np.mean(ape)
             assert (
                 mape <= MAX_AVG_PERCENT_ERROR
             ), f"MAPE({method1}, {method2}) = {mape:0.2f}% > {MAX_AVG_PERCENT_ERROR}%"
 
         elif run_type == "mape":
-            m1 = self.get_flatten_spectrum(method1)
-            m2 = self.get_flatten_spectrum(method2)
-            ape = absolute_percent_error(m1, m2)
             mape = np.mean(ape)
             print(f"MAPE({method1}, {method2}) = {mape:0.2f}%")
 
+        elif run_type[0] == "l":
+            p = int(run_type[1:])
+            x = lnorm(m1, m2, p)
+            x = x.sum()
+            print(f"{run_type}({method1}, {method2}) = {x:0.2f}")
+
         elif run_type == "debug":
-            if "NORMALIZE_ESFS" not in kwargs:
-                kwargs["NORMALIZE_ESFS"] = NORMALIZE_ESFS
-
-            m1 = self.get_flatten_spectrum(method1, kwargs["NORMALIZE_ESFS"])
-            m2 = self.get_flatten_spectrum(method2, kwargs["NORMALIZE_ESFS"])
-            ape = absolute_percent_error(m1, m2, kwargs["NORMALIZE_ESFS"])
-
             if "order_by_error" not in kwargs:
                 kwargs["order_by_error"] = False
             if "no_entries" not in kwargs:
@@ -185,10 +185,12 @@ class Momi_vs_Moments:
             print("Cannot handle other runtypes")
 
 
+def lnorm(vec1, vec2, p=1):
+    x = np.abs(vec1 - vec2)
+    return np.power(x, p)
+
+
 def absolute_percent_error(vec1, vec2, normalize=NORMALIZE_ESFS):
-    if normalize:
-        vec1 = vec1.copy() / vec1.sum()
-        vec2 = vec2.copy() / vec2.sum()
     return 100 * np.abs(vec1 - vec2) / vec2
 
 
