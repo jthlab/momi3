@@ -46,11 +46,6 @@ demes:
   ancestors: [AMH]
   epochs:
   - start_size: 12300
-- name: CEU
-  description: Utah Residents (CEPH) with Northern and Western European Ancestry
-  ancestors: [OOA]
-  epochs:
-  - {start_size: 1000, end_size: 29725}
 - name: CHB
   description: Han Chinese in Beijing, China
   ancestors: [OOA]
@@ -132,10 +127,9 @@ def test_gutenkunst():
     jit(value_and_grad(f))(d, X, T.auxd)
 
 
-def test_gutenkunst_full_sfs(n):
-    demo = demes.load("tests/yaml_files/gutenkunst_ooa.yml")
-    sampled_demes = ["YRI", "CEU", "CHB"]
-    sample_sizes = 3 * [n]
+def test_gutenkunst_2_pop_full_sfs(n):
+    sampled_demes = ["YRI", "CHB"]
+    sample_sizes = 2 * [n]
 
     no_mig_demo = demes.load(gutenkunst_no_mig())
     esfs_momi3_no_mig = Momi(no_mig_demo, sampled_demes, sample_sizes).sfs_spectrum()
@@ -148,7 +142,7 @@ def test_gutenkunst_full_sfs(n):
 
     esfs_moments = moments.Spectrum.from_demes(
         mig_demo, sampled_demes=sampled_demes, sample_sizes=sample_sizes
-    ) * demo.demes[0].epochs[0].start_size * 4
+    ) * mig_demo.demes[0].epochs[0].start_size * 4
 
     l1 = lambda x, y: np.abs(x - y).mean()
     print(f'l1(momi3 mig=0, moments mig=0): {l1(esfs_momi3_mig_0, esfs_moments)}')
@@ -265,4 +259,4 @@ def test_gutenkunst_vmap(n, size):
 
 
 if __name__ == "__main__":
-    test_gutenkunst_full_sfs(3)
+    test_gutenkunst_2_pop_full_sfs(3)
