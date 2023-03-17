@@ -6,7 +6,7 @@ import pytest
 from momi3 import esfs
 from momi3.MOMI import Momi
 
-from .demos import TwoDemes
+from .demos import TwoDemes, ThreeDemes
 
 from momi3.utils import Parallel_runtime, update
 from scipy.optimize import approx_fprime
@@ -35,15 +35,33 @@ def test_two_pop_migration_0():
 
 @pytest.mark.rate0
 def test_two_pop_migration_exp_growth_0():
-    t = 10
-    g = 0.1
-    size = 100
+    t = 800
+    g = 0.005
+    size = 10000
     demo, _ = TwoDemes.Exponential(t=t, g=g, size=size).base()
     demo_m, _ = TwoDemes.Exponential(t=t, g=g, size=size).migration_sym(t, 0, rate=0.0)
     sampled_demes = ["A", "B"]
     sample_sizes = [4, 6]
     spec_demo = Momi(demo, sampled_demes, sample_sizes).sfs_spectrum()
     spec_demo_m = Momi(demo_m, sampled_demes, sample_sizes).sfs_spectrum()
+    assert np.allclose(spec_demo_m, spec_demo, rtol=1e-4), np.nanmean(
+        np.abs(spec_demo_m - spec_demo) / spec_demo
+    )
+
+
+@pytest.mark.rate0
+def test_three_pop_migration_exp_growth_0():
+    t = 800
+    g = 0.005
+    size = 10000
+    demo, _ = ThreeDemes.Exponential(t=t, g=g, size=size).base()
+    demo_m, _ = ThreeDemes.Exponential(t=t, g=g, size=size).migrations(rate=0.0)
+    sampled_demes = ["A", "B", "C"]
+    sample_sizes = [4, 6, 3]
+    spec_demo = Momi(demo, sampled_demes, sample_sizes).sfs_spectrum()
+    spec_demo_m = Momi(demo_m, sampled_demes, sample_sizes).sfs_spectrum()
+    l1 = lambda x, y: np.abs(x - y).mean()
+    print(l1(spec_demo, spec_demo_m))
     assert np.allclose(spec_demo_m, spec_demo, rtol=1e-4), np.nanmean(
         np.abs(spec_demo_m - spec_demo) / spec_demo
     )

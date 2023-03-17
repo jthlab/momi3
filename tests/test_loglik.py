@@ -137,17 +137,18 @@ def test_gutenkunst_full_sfs(n):
     sampled_demes = ["YRI", "CEU", "CHB"]
     sample_sizes = 3 * [n]
 
-    momi = Momi(demo, sampled_demes, sample_sizes)
-    params = Params(momi)
-    [params.set(f'rho_{i}', 0.) for i in range(4)]  # set mig rates to 0
-    esfs_momi3_mig_0 = momi.sfs_spectrum(params)
-
-    esfs_moments = moments.Spectrum.from_demes(
-        params.demo_graph, sampled_demes=sampled_demes, sample_sizes=sample_sizes
-    ) * demo.demes[0].epochs[0].start_size * 4
-
     no_mig_demo = demes.load(gutenkunst_no_mig())
     esfs_momi3_no_mig = Momi(no_mig_demo, sampled_demes, sample_sizes).sfs_spectrum()
+
+    mig_demo = demes.Builder.fromdict(no_mig_demo.asdict())
+    mig_demo.add_migration(demes=['OOA', 'YRI'], rate=0.)
+    mig_demo = mig_demo.resolve()
+
+    esfs_momi3_mig_0 = Momi(mig_demo, sampled_demes, sample_sizes).sfs_spectrum()
+
+    esfs_moments = moments.Spectrum.from_demes(
+        mig_demo, sampled_demes=sampled_demes, sample_sizes=sample_sizes
+    ) * demo.demes[0].epochs[0].start_size * 4
 
     l1 = lambda x, y: np.abs(x - y).mean()
     print(f'l1(momi3 mig=0, moments mig=0): {l1(esfs_momi3_mig_0, esfs_moments)}')
