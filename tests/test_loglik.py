@@ -9,10 +9,54 @@ import moments
 import numpy as np
 import pytest
 from jax import jit, value_and_grad
+jax.config.update('jax_platform_name', 'cpu')
 
 from momi3.event import ETBuilder
 from momi3.MOMI import Momi
 from momi3.Params import Params
+
+from io import StringIO
+
+
+def gutenkunst_no_mig():
+    return StringIO('''
+description: The Gutenkunst et al. (2009) OOA model.
+doi:
+- https://doi.org/10.1371/journal.pgen.1000695
+time_units: years
+generation_time: 25
+
+demes:
+- name: ancestral
+  description: Equilibrium/root population
+  epochs:
+  - {end_time: 220e3, start_size: 7300}
+- name: AMH
+  description: Anatomically modern humans
+  ancestors: [ancestral]
+  epochs:
+  - {end_time: 140e3, start_size: 12300}
+- name: OOA
+  description: Bottleneck out-of-Africa population
+  ancestors: [AMH]
+  epochs:
+  - {end_time: 21.2e3, start_size: 2100}
+- name: YRI
+  description: Yoruba in Ibadan, Nigeria
+  ancestors: [AMH]
+  epochs:
+  - start_size: 12300
+- name: CEU
+  description: Utah Residents (CEPH) with Northern and Western European Ancestry
+  ancestors: [OOA]
+  epochs:
+  - {start_size: 1000, end_size: 29725}
+- name: CHB
+  description: Han Chinese in Beijing, China
+  ancestors: [OOA]
+  epochs:
+  - {start_size: 510, end_size: 54090}
+''')
 
 
 def update(params, path, val):
@@ -86,6 +130,28 @@ def test_gutenkunst():
 
     d = {("demes", 0, "epochs", 0, "start_size"): 1.0}
     jit(value_and_grad(f))(d, X, T.auxd)
+
+
+def test_gutenkunst_full_sfs(n):
+    demo = demes.load("tests/yaml_files/gutenkunst_ooa.yml")
+    sampled_demes = ["YRI", "CEU", "CHB"]
+    sample_sizes = 3 * [n]
+
+    momi = Momi(demo, sampled_demes, sample_sizes)
+    params = Params(momi)
+    [params.set(f'rho_{i}', 0.) for i in range(4)]  # set mig rates to 0
+    esfs_momi3_mig_0 = momi.sfs_spectrum(params)
+
+    esfs_moments = moments.Spectrum.from_demes(
+        params.demo_graph, sampled_demes=sampled_demes, sample_sizes=sample_sizes
+    ) * demo.demes[0].epochs[0].start_size * 4
+
+    no_mig_demo = demes.load(gutenkunst_no_mig())
+    esfs_momi3_no_mig = Momi(no_mig_demo, sampled_demes, sample_sizes).sfs_spectrum()
+
+    l1 = lambda x, y: np.abs(x - y).mean()
+    print(f'l1(momi3 mig=0, moments mig=0): {l1(esfs_momi3_mig_0, esfs_moments)}')
+    print(f'l1(momi3 nomig, moments mig=0): {l1(esfs_momi3_no_mig, esfs_moments)}')
 
 
 @pytest.mark.parametrize("n,size", [(1, 1), (2, 2), (10, 10)])
@@ -198,4 +264,4 @@ def test_gutenkunst_vmap(n, size):
 
 
 if __name__ == "__main__":
-    test_gutenkunst_grad()
+    test_gutenkunst_full_sfs(3)
