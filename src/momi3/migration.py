@@ -53,13 +53,13 @@ def _A(s, y, args):
     for pop in Ne:
         i = list(axes).index(pop)
         if isinstance(Ne[pop], tuple):
-            N1, N0 = Ne[pop]
+            N0, N1 = Ne[pop]
             coal[i] = 0.5 / Ne_t(N0, N1, t[0], t[1], s)
         else:
             # Ne is a float
             coal[i] = 0.5 / Ne[pop]
-    new_A = []
     # multiply each entry of the drift tensor by the coalescent rate
+    new_A = []
     for Ai in Q_drift.A:
         assert len(Ai) == 1
         ((i, Aij),) = Ai.items()
@@ -86,7 +86,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     #     scan_stages=True
     # )
     solver = dfx.Tsit5(scan_stages=True)
-    ssc = dfx.PIDController(rtol=1e-5, atol=1e-6)
+    ssc = dfx.PIDController(rtol=1e-6, atol=1e-7)
 
     def solve(theta, y0, args):
         return dfx.diffeqsolve(
@@ -106,7 +106,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     e0 = _e0_like(pl)
     # etbl = jax.jacrev(solve)(0.0, e0, tangent_args)
     # jacrev(solve) does not work inside grad due to limitations with diffrax. so we settle for finite differences.
-    eps = 1e-4
+    eps = 1e-5
     res = vmap(solve, (0, None, None))(jnp.array([eps, -eps]), e0, tangent_args)
     etbl = (res[0] - res[1]) / (2 * eps)
     return plp.clip(0.0, 1.0), etbl.clip(0.0)
