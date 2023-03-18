@@ -78,6 +78,7 @@ class JAX_functions:
         self.auxd = T._auxd
         self.leaves = tuple(T._leaves)
         self._n_samples = T._num_samples
+        self.n_devices = jax.device_count()
 
         if jitted:
             esfs_tensor_prod = jit(esfs_tensor_prod, static_argnames='_f')
@@ -92,7 +93,7 @@ class JAX_functions:
         self.esfs_map = esfs_map
         self.loglik_batch = loglik_batch
         self.loglik_and_grad_batch = loglik_and_grad_batch
-        self.hessian_batch = hessian
+        self.hessian_batch = hessian_batch
 
     def esfs(self, theta_dict: dict[tuple, float], num_deriveds: dict[str, jnp.ndarray], batch_size: int) -> jnp.ndarray:
         """Calculate expected site frequency spectrum for the sample config in num_deriveds.
@@ -185,12 +186,64 @@ class JAX_functions:
         ret2 = esfs_tensor_prod(theta_dict, X_batch[2], auxd, demo, _f)
         return (ret0 - ret1 - ret2).flatten()[0]
 
+    def _run_fun(
+        self,
+        fun,
+        theta_train_dict: dict[tuple, float],
+        theta_nuisance_dict: dict[tuple, float],
+        data: Data
+    ):
+        # This fun is called by
+        # loglik: f(theta, data)
+        # loglik_and_grad: f(theta, data), df(theta, data)
+        # hessian d^2 f(theta, data)
+
+        auxd = self.auxd
+        demo = self.demo
+        _f = self._f
+        esfs_tensor_prod = self.esfs_tensor_prod
+        esfs_map = self.esfs_map
+
+        X_batches, sfs_batches = data.X_batches, data.sfs_batches
+
+        n_devices = self.n_devices
+
+        if n_devices == 1:
+            return fun(
+                theta_train_dict,
+                theta_nuisance_dict,
+                {pop: X_batches[pop][0] for pop in X_batches},
+                sfs_batches[0],
+                auxd,
+                demo,
+                _f,
+                esfs_tensor_prod,
+                esfs_map
+            )
+        else:
+            pmap_fun = jax.pmap(
+                fun,
+                in_axes=(None, None, 0, 0, None, None, None, None, None),
+                static_broadcasted_argnums=(6, 7, 8)
+            )
+
+            return pmap_fun(
+                theta_train_dict,
+                theta_nuisance_dict,
+                X_batches,
+                sfs_batches,
+                auxd,
+                demo,
+                _f,
+                esfs_tensor_prod,
+                esfs_map
+            )
+
     def loglik(
         self,
         theta_train_dict: dict[tuple, float],
         theta_nuisance_dict: dict[tuple, float],
-        data: Data,
-        batch=True
+        data: Data
     ) -> float:
         """Returns multinomial log-likelihood for the given data and theta.
             Example for The Gutenkunst et al (2009) out-of-Africa.
@@ -217,47 +270,20 @@ class JAX_functions:
             data (Data): Data object. It stores, sfs and leaf likelihoods.
             esfs_map (str): 'vmap' or 'pmap'
         """
-        auxd = self.auxd
-        demo = self.demo
-        _f = self._f
-        esfs_tensor_prod = self.esfs_tensor_prod
-        esfs_map = self.esfs_map
-        loglik_batch = self.loglik_batch
 
-        X_batches, sfs_batches = data.X_batches, data.sfs_batches
+        n_devices = self.n_devices
 
-        n_devices = jax.device_count()
+        V = self._run_fun(
+            self.loglik_batch,
+            theta_train_dict,
+            theta_nuisance_dict,
+            data
+        )
 
-        if n_devices == 1:
-            return loglik_batch(
-                theta_train_dict,
-                theta_nuisance_dict,
-                {pop: X_batches[pop][0] for pop in X_batches},
-                sfs_batches[0],
-                auxd,
-                demo,
-                _f,
-                esfs_tensor_prod,
-                esfs_map
-            )
-        else:
-            f = jax.pmap(
-                loglik_batch,
-                in_axes=(None, None, 0, 0, None, None, None, None, None),
-                static_broadcasted_argnums=(6, 7, 8)
-            )
+        if n_devices > 1:
+            V = V.sum()
 
-            return f(
-                theta_train_dict,
-                theta_nuisance_dict,
-                X_batches,
-                sfs_batches,
-                auxd,
-                demo,
-                _f,
-                esfs_tensor_prod,
-                esfs_map
-            ).sum()
+        return V
 
     def loglik_and_grad(
         self, theta_train_dict: dict[tuple, float], theta_nuisance_dict: dict[tuple, float], data: Data, batch=True
@@ -285,51 +311,19 @@ class JAX_functions:
             theta_nuisance_dict (dict[tuple, float]): Values of the parameters. Keys are the tuple of paths.
             data (Data): Data object. It stores, sfs and leaf likelihoods.
         """
-        auxd = self.auxd
-        demo = self.demo
-        _f = self._f
-        esfs_tensor_prod = self.esfs_tensor_prod
-        esfs_map = self.esfs_map
-        loglik_and_grad_batch = self.loglik_and_grad_batch
 
-        X_batches, sfs_batches = data.X_batches, data.sfs_batches
+        n_devices = self.n_devices
 
-        n_devices = jax.device_count()
+        V, G = self._run_fun(
+            self.loglik_and_grad_batch,
+            theta_train_dict,
+            theta_nuisance_dict,
+            data
+        )
 
-        if n_devices == 1:
-            V, G = loglik_and_grad_batch(
-                theta_train_dict,
-                theta_nuisance_dict,
-                {pop: X_batches[pop][0] for pop in X_batches},
-                sfs_batches[0],
-                auxd,
-                demo,
-                _f,
-                esfs_tensor_prod,
-                esfs_map
-            )
-
-        else:
-            f = jax.pmap(
-                loglik_and_grad_batch,
-                in_axes=(None, None, 0, 0, None, None, None, None, None),
-                static_broadcasted_argnums=(6, 7, 8)
-            )
-
-            V, G = f(
-                theta_train_dict,
-                theta_nuisance_dict,
-                X_batches,
-                sfs_batches,
-                auxd,
-                demo,
-                _f,
-                esfs_tensor_prod,
-                esfs_map
-            )
-            V = sum(V)
-            for i in G:
-                G[i] = G[i].sum()
+        if n_devices > 1:
+            V = V.sum()
+            G = {i: G[i].sum() for i in G}
 
         return V, G
 
@@ -359,23 +353,17 @@ class JAX_functions:
             theta_nuisance_dict (dict[tuple, float]): Values of the parameters. Keys are the tuple of paths.
             data (Data): Data object. It stores, sfs and leaf likelihoods.
         """
-        auxd = self.auxd
-        demo = self.demo
-        _f = self._f
-        esfs_tensor_prod = self.esfs_tensor_prod
-        esfs_map = self.esfs_map
-        _hessian = self._hessian
 
-        X_batches, sfs_batches = data.X_batches, data.sfs_batches
+        n_devices = self.n_devices
 
-        return _hessian(
+        H = self._run_fun(
+            self.hessian_batch,
             theta_train_dict,
             theta_nuisance_dict,
-            X_batches,
-            sfs_batches,
-            auxd,
-            demo,
-            _f,
-            esfs_tensor_prod,
-            esfs_map
+            data
         )
+
+        if n_devices > 1:
+            H = {i: {j: H[i][j].sum() for j in H[i]} for i in H}
+
+        return H
