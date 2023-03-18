@@ -29,6 +29,13 @@ from momi3.utils import W_matrix, moran_eigensystem
 T = TypeVar("T")
 
 
+def _aux_single(nv):
+    d, Q = moran_eigensystem(nv)
+    QQ, RR = jnp.linalg.qr(Q)
+    W = W_matrix(nv).astype(float)
+    return dict(d=d, Q=Q, W=W, QQ=QQ, RR=RR)
+
+
 @dataclass
 class Lift:
     """Lift a partial likelihood from u to v.
@@ -89,10 +96,7 @@ class Lift:
                     ns[pop].values()
                 )  # the dimension of the child axes should match what is tracked by ns
                 # without migration, the number of subtended leaf lineages does not change
-                d, Q = moran_eigensystem(nv)
-                QQ, RR = jnp.linalg.qr(Q)
-                W = W_matrix(nv).astype(float)
-                aux["mats"]["single"][s] = dict(d=d, Q=Q, W=W, QQ=QQ, RR=RR)
+                aux["mats"]["single"][s] = _aux_single(nv)
             else:
                 # lifting with multiple populations
                 cmm = lift_cm_aux(child_axes, s)

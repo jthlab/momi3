@@ -3,6 +3,7 @@ from moments import Integration, Jackknife
 from pytest import fixture
 
 from momi3.common import Axes
+from momi3.lemmas.lift import _aux_single, _lift1
 from momi3.migration import (
     _lift_cm_const,
     _lift_cm_exp,
@@ -68,3 +69,33 @@ def test_lift_eq_const_exp0(rng):
     params["Ne"] = dict(A=1.0, B=2.0)
     pl2 = _lift_cm_const(params, t, pl, axes, aux)
     np.testing.assert_allclose(pl1, pl2, atol=1e-6, rtol=1e-6)
+
+
+def test_lift_eq_exp_m0(rng):
+    "test that jointly lifting a 2-tensor with exponential population size is the same as lifting with migration=0"
+    n_A = 7
+    n_B = 4
+    t = [2.0, 4.0]
+    pl = rng.uniform(
+        size=(n_A + 1, n_B + 1)
+    )  # 5 is the minimum size for the migration matrices
+    axes = Axes(zip("AB", pl.shape))
+    aux = lift_cm_aux(axes, [("A", "B")])
+    params = {"Ne": {"A": (5.0, 1.0), "B": (10.0, 2.0)}, "mig": {("A", "B"): 0.0}}
+    plp_mig, etbl_mig = _lift_cm_exp(params, t, pl, axes, aux)
+
+    plp_nomig = pl
+    etbl_nomig = np.zeros_like(pl)
+    for pop in axes:
+        nv = axes[pop] - 1
+        aux = _aux_single(nv)
+        i = list(axes).index(pop)
+        plp_nomig, e = _lift1(
+            plp_nomig, i, params["Ne"][pop], t[1] - t[0], **aux, terminal=False
+        )
+        sl = [0] * 2
+        sl[i] = slice(None)
+        etbl_nomig[tuple(sl)] += e
+
+    np.testing.assert_allclose(plp_mig, plp_nomig, atol=1e-6, rtol=1e-6)
+    np.testing.assert_allclose(etbl_mig, etbl_nomig, atol=1e-6, rtol=1e-6)
