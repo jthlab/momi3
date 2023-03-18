@@ -135,7 +135,7 @@ def test_gutenkunst_2_pop_full_sfs(n):
     esfs_momi3_no_mig = Momi(no_mig_demo, sampled_demes, sample_sizes).sfs_spectrum()
 
     mig_demo = demes.Builder.fromdict(no_mig_demo.asdict())
-    mig_demo.add_migration(demes=['OOA', 'YRI'], rate=0.)
+    mig_demo.add_migration(demes=['CHB', 'YRI'], rate=0.)
     mig_demo = mig_demo.resolve()
 
     esfs_momi3_mig_0 = Momi(mig_demo, sampled_demes, sample_sizes).sfs_spectrum()
@@ -259,4 +259,4 @@ def test_gutenkunst_vmap(n, size):
 
 
 if __name__ == "__main__":
-    test_gutenkunst_2_pop_full_sfs(3)
+    test_gutenkunst_2_pop_full_sfs(1)

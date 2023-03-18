@@ -121,7 +121,7 @@ class Momi(object):
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
         theta_train_dict: dict[str, float] = None,
-        batch_size: int = 10000,
+        batch_size: int = 10000
     ) -> float:
         """log likelihood value for given params and data. It calls loglik_with_gradient.
 
@@ -156,7 +156,7 @@ class Momi(object):
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
         theta_train_dict: dict[str, float] = None,
         return_array: bool = False,
-        batch_size: int = 10000,
+        batch_size: int = 10000
     ) -> tuple[float, dict[str, float]]:
         """log likelihood value and the gradient for theta_train_dict for given params and jsfs
 
