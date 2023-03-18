@@ -54,10 +54,10 @@ def _A(s, y, args):
         i = list(axes).index(pop)
         if isinstance(Ne[pop], tuple):
             N0, N1 = Ne[pop]
-            coal[i] = 0.5 / Ne_t(N0, N1, t[0], t[1], s)
+            coal[i] = 1.0 / (4 * Ne_t(N0, N1, t[0], t[1], s))
         else:
-            # Ne is a float
-            coal[i] = 0.5 / Ne[pop]
+            # Ne is a float, signifying constant Ne
+            coal[i] = 1.0 / (4 * Ne[pop])
     # multiply each entry of the drift tensor by the coalescent rate
     new_A = []
     for Ai in Q_drift.A:
@@ -143,7 +143,7 @@ def _lift_cm_const(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, 
         params["mig"],
         aux,
     )
-    Q_lift = (Q_mig + Q_drift * 0.5) * dt
+    Q_lift = (Q_mig + Q_drift) * dt
     pl_lift = expmv(Q_lift.T, pl)
     assert pl_lift.shape == pl.shape
     # now compute the expected branch lengths

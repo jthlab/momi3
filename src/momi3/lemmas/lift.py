@@ -222,7 +222,7 @@ def _lift1(pl, in_axis, Ne, tau, d, Q, QQ, RR, W, terminal):
         # this should be enforced by demes anyways, but maybe check earlier in the code.
         j = jnp.arange(2, nv + 1)
         # expected time to coal with pop size N0
-        cm = Ne / (j * (j - 1) / 2)
+        cm = (2 * Ne) / (j * (j - 1) / 2)
         fn = W @ cm
         etbl = jnp.r_[0, fn, 0]
         return None, etbl
@@ -273,11 +273,11 @@ def _etbl_R(nv, Ne, tau, W):
         N1, N0 = Ne
         g = -(jnp.log(N0) - jnp.log(N1)) / tau
         f_exp = vmap(partial(exp_integralEGPS, g), (None, None, 0))
-        cm = lax.cond(jnp.isclose(g, 0.0), f_const, f_exp, 1 / N1, tau, jC2)
-        R = lax.cond(jnp.isclose(g, 0.0), _R_const, partial(_R_exp, g), N1, tau)
+        cm = lax.cond(jnp.isclose(g, 0.0), f_const, f_exp, 1 / (2 * N1), tau, jC2)
+        R = lax.cond(jnp.isclose(g, 0.0), _R_const, partial(_R_exp, g), 2 * N1, tau)
     else:
-        cm = f_const(1 / Ne, tau, jC2)
-        R = _R_const(Ne, tau)
+        cm = f_const(1 / (2 * Ne), tau, jC2)
+        R = _R_const(2 * Ne, tau)
     fn = W @ cm
     k = j - 1
     e_tmrca_min_tau = ((k / nv) * fn).sum()
@@ -301,15 +301,15 @@ def _get_size(deme, j, t):
     # time runs backwards for us
     ep = deme["epochs"][j]
     if ep["size_function"] == "constant":
-        return 2 * ep["start_size"]
-    Ne0 = 2 * ep["start_size"]
+        return ep["start_size"]
+    Ne0 = ep["start_size"]
     if j == 0:
         # this key may not exist if the epoch goes back to infinity, but then the size function would have
         # to be constant, so we would already have returned
         t1 = deme["start_time"]
     else:
         t1 = deme["epochs"][j - 1]["end_time"]
-    Ne1 = 2 * ep["end_size"]
+    Ne1 = ep["end_size"]
     t0 = ep["end_time"]
     # start_size = end_size * exp(g * (end_time - start_time)) => g = log(Ne0/Ne1) / (t0-t1)
     return Ne_t(Ne0, Ne1, t0, t1, t)
