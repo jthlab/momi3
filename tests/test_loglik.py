@@ -259,4 +259,4 @@ def test_gutenkunst_vmap(n, size):
 
 
 if __name__ == "__main__":
-    test_gutenkunst_2_pop_full_sfs(1)
+    test_gutenkunst_grad()

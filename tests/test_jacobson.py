@@ -47,7 +47,7 @@ def test_bounds(n=20):
 
 
 if __name__ == "__main__":
-    test_bounds()
+    test_branch_length()
     # args = sys.argv[1:]
     # if args[0] == "loglik":
     #     # python test_jacobson.py loglik <nmuts> <batch_size>

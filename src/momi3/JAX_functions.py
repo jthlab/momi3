@@ -34,6 +34,24 @@ def esfs_map(theta_dict, X, auxd, demo, _f, esfs_tensor_prod):
     return jax.lax.map(f, X).flatten()
 
 
+def esfs_mapX(theta_dict, X, auxd, demo, _f, esfs_tensor_prod):
+    # This is experimental fun for including pmap in map(vmap)(esfs)
+    # X[pop].shape = (A, B, C)
+    # A: jax.lax.map size
+    # B: jax.vmap size
+    # C: sample size + 1
+    def f(X_batch):
+        return jax.pmap(
+            jax.vmap(esfs_tensor_prod, (None, 0, None, None, None)),
+            in_axes=(None, 0, None, None, None),
+            static_broadcasted_argnums=(4)
+        )(
+            theta_dict, X_batch, auxd, demo, _f
+        )
+
+    return jax.lax.map(f, X).flatten()
+
+
 def loglik_batch(
     theta_train_dict,
     theta_nuisance_dict,
@@ -71,7 +89,8 @@ class JAX_functions:
         esfs_map=esfs_map,
         loglik_batch=loglik_batch,
         loglik_and_grad_batch=loglik_and_grad_batch,
-        hessian_batch=hessian_batch
+        hessian_batch=hessian_batch,
+        esfs_mapX=esfs_mapX
     ):
         self.demo = demo
         self._f = T.execute
@@ -83,6 +102,7 @@ class JAX_functions:
         if jitted:
             esfs_tensor_prod = jit(esfs_tensor_prod, static_argnames='_f')
             esfs_map = jit(esfs_map, static_argnames=('_f', 'esfs_tensor_prod'))
+            esfs_mapX = jax.jit(esfs_mapX, static_argnums=(4, 5))
 
             loglik_static_nums = (6, 7, 8)
             loglik_batch = jit(loglik_batch, static_argnums=loglik_static_nums)
@@ -94,6 +114,7 @@ class JAX_functions:
         self.loglik_batch = loglik_batch
         self.loglik_and_grad_batch = loglik_and_grad_batch
         self.hessian_batch = hessian_batch
+        self.esfs_mapX = esfs_mapX
 
     def esfs(self, theta_dict: dict[tuple, float], num_deriveds: dict[str, jnp.ndarray], batch_size: int) -> jnp.ndarray:
         """Calculate expected site frequency spectrum for the sample config in num_deriveds.
