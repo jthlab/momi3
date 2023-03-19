@@ -75,13 +75,13 @@ def test_lift_eq_exp_m0(rng):
     "test that jointly lifting a 2-tensor with exponential population size is the same as lifting with migration=0"
     n_A = 7
     n_B = 4
-    t = [2.0, 4.0]
+    t = [0.0, 21.2e3]
     pl = rng.uniform(
         size=(n_A + 1, n_B + 1)
     )  # 5 is the minimum size for the migration matrices
     axes = Axes(zip("AB", pl.shape))
     aux = lift_cm_aux(axes, [("A", "B")])
-    params = {"Ne": {"A": (5.0, 1.0), "B": (10.0, 2.0)}, "mig": {("A", "B"): 0.0}}
+    params = {"Ne": {"A": 12300, "B": (54090.0, 510.0)}, "mig": {("A", "B"): 0.0}}
     plp_mig, etbl_mig = _lift_cm_exp(params, t, pl, axes, aux)
 
     plp_nomig = pl
@@ -97,5 +97,5 @@ def test_lift_eq_exp_m0(rng):
         sl[i] = slice(None)
         etbl_nomig[tuple(sl)] += e
 
-    np.testing.assert_allclose(plp_mig, plp_nomig, atol=1e-6, rtol=1e-6)
-    np.testing.assert_allclose(etbl_mig, etbl_nomig, atol=1e-6, rtol=1e-6)
+    np.testing.assert_allclose(plp_mig, plp_nomig, rtol=1e-5)
+    np.testing.assert_allclose(etbl_mig, etbl_nomig, rtol=1e-5)

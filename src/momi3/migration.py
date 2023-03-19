@@ -4,7 +4,7 @@ import diffrax as dfx
 import jax
 import jax.numpy as jnp
 import scipy.sparse as sps
-from jax import jacfwd, vmap
+from jax import jacfwd
 from jax.experimental.sparse import BCOO
 
 from .common import Axes, Ne_t, Population
@@ -48,7 +48,7 @@ def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
 
 
 def _A(s, y, args):
-    theta, Q_mig, Q_mut, Q_drift, dims, axes, Ne, t, aux = args
+    Q_mig, Q_mut, Q_drift, dims, axes, Ne, t, aux = args
     coal = {}
     for pop in Ne:
         i = list(axes).index(pop)
@@ -65,8 +65,10 @@ def _A(s, y, args):
         ((i, Aij),) = Ai.items()
         new_A.append({i: coal[i] * Aij})
     Qd = Q_drift._replace(A=new_A)
-    Q = Q_mig + Qd + Q_mut * theta
-    return Q @ y
+    Q0 = Q_mig + Qd
+    if isinstance(y, tuple):
+        return Q0 @ y[0] + Q_mut @ y[1], Q0 @ y[1]
+    return Q0 @ y
 
 
 def _lift_cm_exp(params, t, pl, axes, aux):
@@ -88,7 +90,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     solver = dfx.Tsit5(scan_stages=True)
     ssc = dfx.PIDController(rtol=1e-6, atol=1e-7)
 
-    def solve(theta, y0, args):
+    def solve(y0, args):
         return dfx.diffeqsolve(
             term,
             solver,
@@ -96,20 +98,22 @@ def _lift_cm_exp(params, t, pl, axes, aux):
             t1=t[1],
             dt0=(t[1] - t[0]) / 50.0,
             y0=y0,
-            args=(theta,) + args,
+            args=args,
             stepsize_controller=ssc,
-        ).ys[0]
+        ).ys
 
     primal_args = (Q_mig_T, Q_mut.T, Q_drift.T, dims, axes, Ne, t, aux)
-    plp = solve(0.0, pl, primal_args)
+    plp = solve(pl, primal_args)[0]
+    # compute d/dtheta x(t,theta)|{theta=0} using the forward sensitivity method.
+    # d/dt d/dtheta x(t, theta) = d/dtheta F(x(t, theta), theta) = J_F dx/dtheta + dF/dtheta
+    # dF/dtheta = d(Q @ x)/dtheta = (Q_mut @ x)
+    # the initial condition is d/dtheta(x(0, theta)) = 0.; x(0,theta) = e0
+    z = jnp.zeros_like(pl)
+    e0 = z.at[(0,) * z.ndim].set(1.0)
     tangent_args = (Q_mig, Q_mut, Q_drift, dims, axes, Ne, t, aux)
-    e0 = _e0_like(pl)
-    # etbl = jax.jacrev(solve)(0.0, e0, tangent_args)
-    # jacrev(solve) does not work inside grad due to limitations with diffrax. so we settle for finite differences.
-    eps = 1e-5
-    res = vmap(solve, (0, None, None))(jnp.array([eps, -eps]), e0, tangent_args)
-    etbl = (res[0] - res[1]) / (2 * eps)
-    return plp.clip(0.0, 1.0), etbl.clip(0.0)
+    res = solve((z, e0), tangent_args)
+    (etbl,), _ = res
+    return plp.clip(0.0, 1.0), etbl.at[(0,) * etbl.ndim].set(0.0).clip(0.0)
 
 
 def _lift_cm_const(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
