@@ -76,7 +76,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     # equation solver
     dims = pl.shape
     Ne = params["Ne"]
-    Q_drift = _Q_drift(dims, axes, {p: 1.0 for p in axes}, aux)
+    Q_drift = _Q_drift(dims, axes, {p: 1.0 for p in Ne}, aux)
     Q_mig, Q_mut = _Q_mig_mut(dims, axes, params["mig"], aux, tr=False)
     # WORKAROUND: calling Q_mig.T below gives me an error, impossibly deep stack trace having to do with diffrax,
     # bcoo_sparse, vjp, etc. etc. "manually" transposing before multiplying with any traced migration params seems
