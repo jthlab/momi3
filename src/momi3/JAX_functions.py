@@ -165,11 +165,34 @@ class JAX_functions:
             add_etbl_vecs=False
         )
 
-        return jax.pmap(
-            esfs_map,
-            in_axes=(None, 0, None, None, None),
-            static_broadcasted_argnums=(4, 5)
-        )(theta_dict, X, auxd, demo, _f, esfs_tensor_prod).flatten()[:n_entries]
+        n_devices = self.n_devices
+
+        if n_devices == 1:
+            ret = esfs_map(
+                theta_dict,
+                {pop: X[pop][0] for pop in X},
+                auxd,
+                demo,
+                _f,
+                esfs_tensor_prod
+            )
+        else:
+            pmap_fun = jax.pmap(
+                esfs_map,
+                in_axes=(None, 0, None, None, None),
+                static_broadcasted_argnums=(4, 5)
+            )
+
+            ret = pmap_fun(
+                theta_dict,
+                X,
+                auxd,
+                demo,
+                _f,
+                esfs_tensor_prod
+            )
+
+        return ret.flatten()[:n_entries]
 
     def etbl(self, theta_dict: dict[tuple, float]) -> float:
         """Calculate the total branch length for the given values.
