@@ -24,22 +24,18 @@ def test_pulse():
 
 
 def test_non_adm_non_mig():
-    demo, _ = ThreeDemes.Exponential().base()
 
-    sampled_demes = ["A", "B", "C"]
-    sample_sizes = 3 * [50]
+    n = 30
+    d = {'A': 1, 'B': 1}
 
+    demo = demes.load("yaml_files/TwoDemes.yml")
+    sampled_demes = tuple(["A", "B"])
+    sample_sizes = (n, n)
     momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
-    d = {"A": 35, "B": 25, "C": 15}
     s1 = momi.sfs_entry(d)
-
-    params = Params(momi)
-    params.set_train("eta_0", True)
-    params.set_train("eta_1", True)
-    bounds = momi.bound_sampler(params, [0.0, 0.0], 100)
-    momi = Momi(demo, sampled_demes, sample_sizes, jitted=True, bounds=bounds)
-    s2 = momi.sfs_entry(d)
-
+    bounds = momi.bound_sampler(momi._default_params, [], 100)
+    momi_b = Momi(demo, sampled_demes, sample_sizes, jitted=True, bounds=bounds)
+    s2 = momi_b.sfs_entry(d)
     np.testing.assert_allclose(s1, s2)
 
 
