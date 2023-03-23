@@ -175,6 +175,33 @@ def exp_integralEGPS_quad(a, b, tau, j, error=False):
         return ret[0]
 
 
+def msprime_chromosome_simulator(
+    demo: demes.Graph,
+    sampled_demes: tuple[str],
+    sample_sizes: tuple[int],
+    sequence_length: int,
+    recombination_rate: float,
+    mutation_rate: float,
+    seed: int = None,
+) -> sparse.COO:
+    chr_sim = msp.sim_ancestry(
+        ploidy=1,
+        demography=msp.Demography.from_demes(demo),
+        samples=dict(zip(sampled_demes, sample_sizes)),
+        recombination_rate=recombination_rate,
+        sequence_length=int(sequence_length),
+        random_seed=seed
+    )
+    mt_chr = msp.sim_mutations(chr_sim, rate=mutation_rate)
+
+    sample_ids = [
+        [
+            list(mt_chr.samples(pop.id)) for pop in mt_chr.populations() if pop.metadata['name'] == deme
+        ][0] for deme in sampled_demes
+    ]
+    return tskit_low_memory_afs(mt_chr, sample_ids)
+
+
 def msprime_simulator(
     demo: demes.Graph,
     sampled_demes: tuple[str],
@@ -346,3 +373,4 @@ def one_hot(n, b):
 
 def ones(n):
     return n * [1]
+

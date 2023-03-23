@@ -15,7 +15,7 @@ from momi3.JAX_functions import JAX_functions
 from momi3.optimizers import ProjectedGradient_optimizer
 from momi3.Params import Params
 from momi3.surviving_lineage_samplers import bound_sampler
-from momi3.utils import msprime_simulator
+from momi3.utils import msprime_simulator, msprime_chromosome_simulator
 
 
 def esfs(g: demes.Graph, sample_sizes: dict[str, int]):
@@ -315,28 +315,30 @@ class Momi(object):
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
         return_COV_MATRIX: bool = False,
-        batch_size: int = 10000,
+        batch_size: int = 10000
     ):
         GIM = self.GIM(params, jsfs, batch_size=batch_size)
         COV = jnp.linalg.pinv(GIM)  # Calling psuedo-inverse
         if return_COV_MATRIX:
             return COV
         else:
-            return jnp.sqrt(jnp.diag(COV))
+            std = jnp.sqrt(jnp.diag(COV))
+            return {key: std[i] for i, key in enumerate(params._train_keys)}
 
     def FIM_uncert(
         self,
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
         return_COV_MATRIX: bool = False,
-        batch_size: int = 10000,
+        batch_size: int = 10000
     ):
-        FIM = self.GIM(params, jsfs, just_hess=True, batch_size=batch_size)
-        COV = jnp.linalg.pinv(FIM)  # Calling psuedo-inverse
+        H = self.GIM(params, jsfs, just_hess=True, batch_size=batch_size)
+        COV = jnp.linalg.pinv(H)  # Calling psuedo-inverse
         if return_COV_MATRIX:
             return COV
         else:
-            return jnp.sqrt(jnp.diag(COV))
+            std = jnp.sqrt(1 / jnp.abs(jnp.diag(H)))
+            return {key: std[i] for i, key in enumerate(params._train_keys)}
 
     def simulate(self, num_replicates, n_samples=None, params=None, seed=None):
         if params is None:
@@ -357,7 +359,30 @@ class Momi(object):
             sampled_demes=sampled_demes,
             sample_sizes=sample_sizes,
             num_replicates=num_replicates,
-            seed=seed,
+            seed=seed
+        )
+
+    def simulate_chromosome(self, sequence_length, recombination_rate, mutation_rate, n_samples=None, params=None, seed=None):
+        if params is None:
+            params = self._default_params
+
+        if n_samples is None:
+            sampled_demes = self.sampled_demes
+            sample_sizes = self.sample_sizes
+        else:
+            assert set(n_samples) == set(self.sampled_demes)
+            sampled_demes = list(n_samples.keys())
+            sample_sizes = list(n_samples.values())
+
+        demo = params.demo_graph
+        return msprime_chromosome_simulator(
+            demo=demo,
+            sampled_demes=sampled_demes,
+            sample_sizes=sample_sizes,
+            sequence_length=sequence_length,
+            recombination_rate=recombination_rate,
+            mutation_rate=mutation_rate,
+            seed=seed
         )
 
     def bound_sampler(

@@ -35,7 +35,7 @@ def esfs_map(theta_dict, X, auxd, demo, _f, esfs_tensor_prod):
 
 
 def esfs_mapX(theta_dict, X, auxd, demo, _f, esfs_tensor_prod):
-    # This is experimental fun for including pmap in map(vmap)(esfs)
+    # This is an experimental fun for including pmap in calc map(pmap(vmap))(esfs)
     # X[pop].shape = (A, B, C)
     # A: jax.lax.map size
     # B: jax.vmap size
@@ -63,8 +63,7 @@ def loglik_batch(
     esfs_tensor_prod,
     esfs_map,
 ):
-    theta_dict = deepcopy(theta_nuisance_dict)
-    theta_dict.update(theta_train_dict)
+    theta_dict = theta_train_dict | theta_nuisance_dict
 
     esfs_vec = esfs_map(theta_dict, X_batch, auxd, demo, _f, esfs_tensor_prod)
 
@@ -312,7 +311,6 @@ class JAX_functions:
             theta_train_dict (dict[tuple, float]): Training values of the parameters. Keys are the tuple of paths.
             theta_nuisance_dict (dict[tuple, float]): Values of the parameters. Keys are the tuple of paths.
             data (Data): Data object. It stores, sfs and leaf likelihoods.
-            esfs_map (str): 'vmap' or 'pmap'
         """
 
         n_devices = self.n_devices
