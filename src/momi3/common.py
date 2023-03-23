@@ -100,6 +100,9 @@ class Rename(Event):
     old: Population
     new: Population
 
+    def __hash__(self):
+        return hash((self.old, self.new))
+
     def setup(
         self, in_axes: Axes, ns: Counter[Population, int]
     ) -> tuple[Axes, PopCounter, T]:

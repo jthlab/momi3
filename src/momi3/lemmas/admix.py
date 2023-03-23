@@ -33,6 +33,9 @@ class Pulse:
     dest: Population
     f_p: Callable[[dict], float]
 
+    def __hash__(self):
+        return hash((self.source, self.dest, self.f_p))
+
     def __post_init__(self):
         assert self.source != self.dest
 
@@ -160,6 +163,9 @@ class Admix:
     parent1: Population
     parent2: Population
     f_p: Callable[[dict], float]
+
+    def __hash__(self):
+        return hash((self.child, self.parent1, self.parent2, self.f_p))
 
     def __post_init__(self):
         assert (

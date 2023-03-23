@@ -52,6 +52,11 @@ class Lift:
     epochs: dict[Population, int]
     migrations: dict[tuple[Population, Population], int]
 
+    def __hash__(self):
+        h_epochs = tuple(self.epochs), tuple(self.epochs.values())
+        h_migrations = tuple(self.migrations), tuple(self.migrations.values())
+        return hash((self.t0, self.t1, h_epochs, h_migrations))
+
     @property
     def terminal(self):
         return math.isinf(self.t1.t)

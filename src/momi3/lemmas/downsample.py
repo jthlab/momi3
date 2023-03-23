@@ -16,6 +16,9 @@ class Downsample:
     m: int
     n: int
 
+    def __hash__(self):
+        return hash((self.m, self.n, self.pop))
+
     def setup(self, in_axes: Axes, ns: PopCounter) -> tuple[Axes, PopCounter, dict]:
         i, j = np.ogrid[: self.m + 1, : self.n + 1]
         B = jnp.exp(log_hypergeom(M=self.m, N=self.n, n=i, k=j))

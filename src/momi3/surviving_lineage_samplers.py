@@ -345,8 +345,6 @@ def bound_sampler(
     nodes = T.nodes
     T = T._T
 
-    evs = []
-
     NS = {}
     # traverse tree starting at leaves and working up
     for u in nx.topological_sort(T):
@@ -363,21 +361,24 @@ def bound_sampler(
                     # )
                 else:
                     n = Lift_sample(n, ev, theta_train_sample, params, seed, quantile)
+                    NS[ev] = deepcopy(n)
+                    print(ev.t1, 'Lift', n)
                 seed = np.random.RandomState(seed).randint(2**31 - 1)
 
             elif isinstance(ev, Admix):
                 n = Admix_quantiles(n, ev, params, quantile)
+                NS[ev] = deepcopy(n)
+                print(u.t, 'Admix', n)
             elif isinstance(ev, Pulse):
                 n = Pulse_quantiles(n, ev, params, quantile)
+                NS[ev] = deepcopy(n)
+                print(u.t, 'Pulse', n)
             elif isinstance(ev, Rename):
                 new, old = ev.new, ev.old
                 n[new] = n[old]
                 del n[old]
             else:
                 pass
-
-            evs.append(ev)
-            NS[ch] = deepcopy(n)
 
         ev = nodes[u].get("event", NoOp())
         if isinstance(ev, (Split2, Split1)):
@@ -390,7 +391,5 @@ def bound_sampler(
 
         else:
             pass
-
-        NS[u] = deepcopy(n)
 
     return NS
