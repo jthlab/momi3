@@ -192,7 +192,7 @@ def msprime_chromosome_simulator(
         sequence_length=int(sequence_length),
         random_seed=seed
     )
-    mt_chr = msp.sim_mutations(chr_sim, rate=mutation_rate)
+    mt_chr = msp.sim_mutations(chr_sim, rate=mutation_rate, random_seed=seed)
 
     sample_ids = [
         [
