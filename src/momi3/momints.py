@@ -1,10 +1,14 @@
 "momints: moments meets momi!"
 
 import itertools as it
+from functools import cache
 
+import jax
 import jax.numpy as jnp
 import numpy as np
+import scipy.optimize as spo
 import scipy.sparse as sps
+from jax import jit, value_and_grad, vmap
 
 
 def _downsample(n) -> sps.coo_array:
@@ -131,8 +135,54 @@ def _jackknife0(n):
     return sps.coo_matrix((data, (row, col)), shape=(n, n - 1))
 
 
+@cache
+def _jackknife0_pos(n):
+    # jackknife interpolation constrained to have positive coefficients.
+    def phi(n, i, abc):
+        a, b, c = abc
+        ret = a * (n + 2) * (n + 3) + (i + 1) * (c * (i + 2) + b * (n + 3))
+        return ret / ((n + 1) * (n + 2) * (n + 3))
+
+    @jit
+    @value_and_grad
+    def f(x, i, ip):
+        alpha, beta, gamma = x
+
+        def obj(e):
+            r = phi(n + 1, i, e) - (
+                alpha * phi(n, ip - 1, e)
+                + beta * phi(n, ip, e)
+                + gamma * phi(n, ip - 1, e)
+            )
+            return r**2
+
+        return vmap(obj)(jnp.eye(3)).sum()
+
+    def shim(x, i, ip):
+        return jax.tree_util.tree_map(
+            lambda a: np.array(a, dtype=np.float64), f(x, i, ip)
+        )
+
+    inds = []
+    data = []
+    is_ = np.arange(n)
+    ips = _ibis(n).astype(int) - 1
+    J0 = _jackknife0(n)
+    for i, ip in zip(is_, ips):
+        x0 = J0.tocsr()[i].tocoo().data.clip(0.0)
+        assert len(x0) == 3
+        res = spo.minimize(
+            shim, x0, bounds=np.array([[0.0, np.inf]] * 3), jac=True, args=(i, ip)
+        )
+        inds += [[i, ip - 1], [i, ip], [i, ip + 1]]
+        data += res.x.tolist()
+    data = np.array(data)
+    row, col = np.array(inds).T
+    return sps.coo_matrix((data, (row, col)), shape=(n, n - 1))
+
+
 def _jackknife(n):
-    J0 = _jackknife0(n).tocsr()
+    J0 = _jackknife0_pos(n).tocsr()
     # from the downsampling formula, Phi[n+1,0] = Phi[n,0] - Phi[n+1,1]/(n+1)
     #                                Phi[n+1,n+1] = Phi[n,n] - Phi[n+1,n]/(n+1)
     # augment the jackknife matrix to also handle the cases i=0, i=n
