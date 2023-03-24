@@ -221,8 +221,8 @@ def msprime_simulator(
     )
 
     ancestry_reps = list(ancestry_reps)
-    tbl = ancestry_reps[0].first().total_branch_length
-    rate = 1 / tbl
+    tbl = np.mean([ts.first().total_branch_length for ts in ancestry_reps])
+    rate = 1 / tbl / 5  # A small rate for mutations
 
     x = ancestry_reps[0]
     pop_ids = {
@@ -231,31 +231,27 @@ def msprime_simulator(
     }
     sample_ids = {deme: x.samples(pop_ids[deme]) for deme in sampled_demes}
 
+    num_muts = []
     sparse_sfs = {}
-    for ts in tqdm(ancestry_reps):
-        mts = ts
-        while mts.num_mutations != 1:
-            mts = ts
-            seed = np.random.RandomState(seed).randint(2**31 - 1)
-            mts = msp.sim_mutations(mts, rate=rate, random_seed=seed)
 
-        config = []
-        for deme in sampled_demes:
-            cur_mts = mts.simplify(sample_ids[deme])
-            tree = cur_mts.first()
+    seeds = np.random.RandomState(seed).randint(2**31 - 1, size=num_replicates)
+
+    for ts, seed in zip(tqdm(ancestry_reps), seeds):
+        mts = msp.sim_mutations(ts, rate=rate, random_seed=seed)
+        num_muts.append(mts.num_mutations)
+        tree = mts.first()  # It has a single tree
+        for mut in tree.mutations():  # loop over mutations
+            config = []
+            x = set(tree.leaves(mut.node))  # set of leaves that has the mutation
+            for deme in sampled_demes:
+                nmut = len(x.intersection(sample_ids[deme]))  # size of intersection between deme and mutants
+                config.append(nmut)
+            config = tuple(config)
+
             try:
-                mutant = next(tree.mutations()).node
-                nmut = len(list(tree.leaves(mutant)))
+                sparse_sfs[config] += 1
             except Exception:
-                nmut = 0
-
-            config.append(nmut)
-
-        config = tuple(config)
-        try:
-            sparse_sfs[config] += 1
-        except Exception:
-            sparse_sfs[config] = 1
+                sparse_sfs[config] = 1
 
     sparse_sfs = sparse.COO(sparse_sfs, shape=[i + 1 for i in sample_sizes])
     return sparse_sfs
