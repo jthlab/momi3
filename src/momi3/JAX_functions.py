@@ -7,6 +7,9 @@ from jax import jit, value_and_grad, hessian
 from momi3.utils import update
 from momi3.Data import get_X_batches, Data
 
+import logging
+logging.basicConfig(level=logging.WARNING)
+
 
 def multinomial_log_likelihood(P, Q, Q_sum):
     Q /= Q_sum
@@ -76,6 +79,60 @@ def loglik_batch(
 
 loglik_and_grad_batch = value_and_grad(loglik_batch)
 hessian_batch = hessian(loglik_batch)
+
+
+def loglik_batch_transformed(
+    transformed_theta_train_dict,
+    transformed_theta_nuisance_dict,
+    X_batch,
+    sfs_batch,
+    auxd,
+    demo,
+    _f,
+    esfs_tensor_prod,
+    esfs_map,
+):
+
+    theta_dict = []
+    for i, j in zip(transformed_theta_train_dict, transformed_theta_nuisance_dict):
+        theta_dict.append(i | j)
+
+    # eta
+    for key in theta_dict[0]:
+        val = theta_dict[0][key]
+        theta_dict[0][key] = jnp.exp(val)
+
+    # rho and pi
+    for i in [1, 2]:
+        for key in theta_dict[i]:
+            val = theta_dict[i][key]
+            theta_dict[i][key] = jax.nn.sigmoid(val)
+
+    # tau
+    diff_tau_dict = theta_dict[3]
+    the_next = tuple(diff_tau_dict[(('init', ),)])[0]
+    cum_val = diff_tau_dict[(('init', ),)][the_next]
+    tau_dict = {the_next: jnp.array(cum_val, dtype='f')}
+    for i in range(len(diff_tau_dict) - 1):
+        cur_dict = diff_tau_dict[the_next]
+        the_next = tuple(cur_dict)[0]
+        cum_val += jnp.exp(cur_dict[the_next])
+        tau_dict[the_next] = cum_val
+    theta_dict[3] = tau_dict
+
+    theta_dict = theta_dict[0] | theta_dict[1] | theta_dict[2] | theta_dict[3]
+
+    esfs_vec = esfs_map(theta_dict, X_batch, auxd, demo, _f, esfs_tensor_prod)
+
+    Q = esfs_vec[3:]
+    Q_sum = esfs_vec[0] - esfs_vec[1] - esfs_vec[2]
+    P = sfs_batch
+
+    return multinomial_log_likelihood(P, Q, Q_sum)
+
+
+loglik_and_grad_batch_transformed = value_and_grad(loglik_batch_transformed)
+hessian_batch_transformed = hessian(loglik_batch_transformed)
 
 
 class JAX_functions:
@@ -251,6 +308,8 @@ class JAX_functions:
 
         n_devices = self.n_devices
 
+        logging.warning(' '.join([str(X_batches[pop].shape) for pop in X_batches]))
+
         if n_devices == 1:
             return fun(
                 theta_train_dict,
@@ -264,6 +323,18 @@ class JAX_functions:
                 esfs_map
             )
         else:
+            # return fun(
+            #     theta_train_dict,
+            #     theta_nuisance_dict,
+            #     X_batches,
+            #     sfs_batches,
+            #     auxd,
+            #     demo,
+            #     _f,
+            #     esfs_tensor_prod,
+            #     self.esfs_mapX
+            # )
+
             pmap_fun = jax.pmap(
                 fun,
                 in_axes=(None, None, 0, 0, None, None, None, None, None),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from copy import deepcopy
 from math import inf, isinf
@@ -309,6 +310,113 @@ class Params(dict):
         ]
         paths = tuple(paths_train + paths_nuisance)
         return paths
+
+    def transform_fns(self, val, ptype, inverse=False):
+        if ptype in ['tau', 'eta']:
+            # it's actually log differences of tau
+            if inverse:
+                ret = math.exp(val)
+            else:
+                ret = math.log(val)
+
+        elif ptype in ['rho', 'pi']:
+            if inverse:
+                ret = 1 / (1 + math.exp(-val))
+            else:
+                ret = math.log(val / (1 - val))
+
+        else:
+            raise ValueError(f'Unknown {ptype=}')
+
+        return ret
+
+    @property
+    def _transformed_diff_tau_dict(self) -> tuple[dict[tuple, float], dict[tuple, float]]:
+        # returns infer and no inter keys
+        # This dict stores log(tau[i] - tau[i-1])
+
+        ptype = 'tau'
+        keys = self._keys
+        tau_keys = [key for key in keys if isinstance(self[key], TimeParam)]
+        tau_keys = sorted(tau_keys, key=lambda key: self[key].num)
+        tau_vals = [self[key].num for key in tau_keys]
+        tau_infr = [self[key].train_it for key in tau_keys]
+
+        n_diff_tau = len(tau_keys) - 1
+
+        diff_tau_vals = [tau_vals[i + 1] - tau_vals[i] for i in range(n_diff_tau)]
+        diff_tau_infr = [tau_infr[i + 1] | tau_infr[i] for i in range(n_diff_tau)]
+        trans_tau_vals = [self.transform_fns(val, ptype) for val in diff_tau_vals]
+        trans_tau_paths = [
+            (
+                self._params_to_paths[tau_keys[i + 1]],
+                self._params_to_paths[tau_keys[i]]
+            ) for i in range(len(tau_keys) - 1)
+        ]
+
+        diff_tau_train_dict = {
+            trans_tau_paths[i][1]: {
+                trans_tau_paths[i][0]: trans_tau_vals[i]
+            } for i in range(n_diff_tau) if diff_tau_infr[i]
+        }
+
+        diff_tau_nuisance_dict = {
+            trans_tau_paths[i][1]: {
+                trans_tau_paths[i][0]: trans_tau_vals[i]
+            } for i in range(n_diff_tau) if not diff_tau_infr[i]
+        }
+
+        diff_tau_nuisance_dict[(('init', ),)] = {self._params_to_paths['tau_0']: tau_vals[0]}
+
+        return diff_tau_train_dict, diff_tau_nuisance_dict
+
+    @property
+    def _transformed_rho_dict(self):
+        ptype = 'rho'
+        cur_keys = [key for key in self if isinstance(self[key], RateParam)]
+        _train_dict = {tuple(self[key].paths): self.transform_fns(self[key].num, ptype) for key in cur_keys if self[key].train_it}
+        _nuisance_dict = {tuple(self[key].paths): self.transform_fns(self[key].num, ptype) for key in cur_keys if not self[key].train_it}
+        return _train_dict, _nuisance_dict
+
+    @property
+    def _transformed_pi_dict(self):
+        ptype = 'pi'
+        cur_keys = [key for key in self if isinstance(self[key], ProportionParam)]
+        _train_dict = {tuple(self[key].paths): self.transform_fns(self[key].num, ptype) for key in cur_keys if self[key].train_it}
+        _nuisance_dict = {tuple(self[key].paths): self.transform_fns(self[key].num, ptype) for key in cur_keys if not self[key].train_it}
+        return _train_dict, _nuisance_dict
+
+    @property
+    def _transformed_eta_dict(self):
+        ptype = 'eta'
+        cur_keys = [key for key in self if isinstance(self[key], SizeParam)]
+        _train_dict = {tuple(self[key].paths): self.transform_fns(self[key].num, ptype) for key in cur_keys if self[key].train_it}
+        _nuisance_dict = {tuple(self[key].paths): self.transform_fns(self[key].num, ptype) for key in cur_keys if not self[key].train_it}
+        return _train_dict, _nuisance_dict
+
+    @property
+    def _transformed_theta_train_dict(self):
+        transformed_theta_train_dict = []
+        for td, nd in [
+            self._transformed_eta_dict,
+            self._transformed_rho_dict,
+            self._transformed_pi_dict,
+            self._transformed_diff_tau_dict
+        ]:
+            transformed_theta_train_dict.append(td)
+        return tuple(transformed_theta_train_dict)
+
+    @property
+    def _transformed_theta_nuisance_dict(self):
+        transformed_theta_nuisance_dict = []
+        for td, nd in [
+            self._transformed_eta_dict,
+            self._transformed_rho_dict,
+            self._transformed_pi_dict,
+            self._transformed_diff_tau_dict
+        ]:
+            transformed_theta_nuisance_dict.append(nd)
+        return tuple(transformed_theta_nuisance_dict)
 
     def _polyhedron_hyperparams(self, htol=0.0):
         # See: https://jaxopt.github.io/stable/_autosummary/jaxopt.projection.projection_polyhedron.html

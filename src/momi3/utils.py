@@ -304,12 +304,17 @@ def tskit_low_memory_afs(
 
     sites_allele_counter = list(sites_allele_counter.values())
     AFS = {}
+    tt = sum(sample_sizes)
     for i in sites_allele_counter:
-        i = tuple(i)
-        try:
-            AFS[i] += 1
-        except Exception:
-            AFS[i] = 1
+        s_i = sum(i)
+        if (s_i == 0) | (s_i == tt):
+            pass
+        else:
+            i = tuple(i)
+            try:
+                AFS[i] += 1
+            except Exception:
+                AFS[i] = 1
 
     mutant_sizes = jnp.array(list(AFS.keys()))
     sfs = jnp.array(list(AFS.values()))
@@ -356,7 +361,7 @@ def halfsigmoid(x, scale=10):
 
 def signif(x):
     if np.isclose(x, int(x)):
-        return str(x)
+        return str(int(x))
     else:
         return f"{x:.2g}"  # 2 digit significance
 
