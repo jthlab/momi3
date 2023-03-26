@@ -308,7 +308,7 @@ class JAX_functions:
 
         n_devices = self.n_devices
 
-        logging.warning(' '.join([str(X_batches[pop].shape) for pop in X_batches]))
+        logging.debug(' '.join([str(X_batches[pop].shape) for pop in X_batches]))
 
         if n_devices == 1:
             return fun(

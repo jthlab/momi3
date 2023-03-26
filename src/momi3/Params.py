@@ -171,6 +171,7 @@ class Params(dict):
             self._params_to_paths[key] = paths
             for path in paths:
                 self._path_to_params[path] = key
+        self._init_transformed_maps()  # for transformed params
 
         self._frozen = True
 
@@ -417,6 +418,70 @@ class Params(dict):
         ]:
             transformed_theta_nuisance_dict.append(nd)
         return tuple(transformed_theta_nuisance_dict)
+
+    def _transformed_train(self, Grad=False):
+        if Grad:
+            trd = Grad
+        else:
+            trd = self._transformed_theta_train_dict
+        ret = {}
+        for i in range(3):
+            for g in trd[i]:
+                key = self._paths_to_transformed_params[g]
+                ret[key] = float(trd[i][g])
+
+        for g in trd[3]:
+            g1 = g
+            g2 = tuple(trd[3][g])[0]
+            key = self._paths_to_transformed_params[g1, g2]
+            ret[key] = float(trd[3][g][g2])
+        return ret
+
+    def _init_transformed_maps(self):
+        _transformed_params_to_paths = {}
+        _paths_to_transformed_params = {}
+
+        trd = self._transformed_rho_dict
+        trd = trd[0] | trd[1]
+        for path in trd:
+            key = self._path_to_params[path[0]]
+            new_key = f'logit({key})'
+            _transformed_params_to_paths[new_key] = self._params_to_paths[key]
+            _paths_to_transformed_params[path] = new_key
+
+        trd = self._transformed_pi_dict
+        trd = trd[0] | trd[1]
+        for path in trd:
+            key = self._path_to_params[path[0]]
+            new_key = f'logit({key})'
+            _transformed_params_to_paths[new_key] = self._params_to_paths[key]
+            _paths_to_transformed_params[path] = new_key
+
+        trd = self._transformed_eta_dict
+        trd = trd[0] | trd[1]
+        for path in trd:
+            key = self._path_to_params[path[0]]
+            new_key = f'log({key})'
+            _transformed_params_to_paths[new_key] = self._params_to_paths[key]
+            _paths_to_transformed_params[path] = new_key
+
+        trd = self._transformed_diff_tau_dict
+        trd = trd[0] | trd[1]
+        for paths in trd:
+            if paths == (('init',),):
+                pass
+            else:
+                path1 = paths
+                path2 = tuple(trd[path1])[0]
+
+                key1 = self._path_to_params[path1[0]]
+                key2 = self._path_to_params[path2[0]]
+
+                new_key = f'log({key2}-{key1})'
+                _transformed_params_to_paths[new_key] = (path1, path2)
+                _paths_to_transformed_params[path1, path2] = new_key
+        self._transformed_params_to_paths = _transformed_params_to_paths
+        self._paths_to_transformed_params = _paths_to_transformed_params
 
     def _polyhedron_hyperparams(self, htol=0.0):
         # See: https://jaxopt.github.io/stable/_autosummary/jaxopt.projection.projection_polyhedron.html

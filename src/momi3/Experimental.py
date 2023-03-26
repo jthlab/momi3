@@ -125,7 +125,7 @@ class TransformedJAX_functions:
 
         n_devices = self.n_devices
 
-        logging.warning(' '.join([str(X_batches[pop].shape) for pop in X_batches]))
+        logging.debug(' '.join([str(X_batches[pop].shape) for pop in X_batches]))
 
         if n_devices == 1:
             return fun(
@@ -159,7 +159,7 @@ class TransformedJAX_functions:
                 esfs_map
             )
 
-    def loglik(
+    def _loglik(
         self,
         theta_train_dict: dict[tuple, float],
         theta_nuisance_dict: dict[tuple, float],
@@ -204,7 +204,7 @@ class TransformedJAX_functions:
 
         return V
 
-    def loglik_and_grad(
+    def _loglik_and_grad(
         self, theta_train_dict: dict[tuple, float], theta_nuisance_dict: dict[tuple, float], data: Data, batch=True
     ) -> tuple[float, dict[tuple, float]]:
         """Returns multinomial log-likelihood and gradient of theta_train_dict for the given data and theta.
@@ -246,7 +246,7 @@ class TransformedJAX_functions:
 
         return V, G
 
-    def hessian(
+    def _hessian(
         self, theta_train_dict: dict[tuple, float], theta_nuisance_dict: dict[tuple, float], data: Data
     ) -> tuple[float, dict[tuple[tuple, tuple], float]]:
         """Returns hessian of theta_train_dict for the given data and theta.
@@ -286,5 +286,3 @@ class TransformedJAX_functions:
             H = {i: {j: H[i][j].sum() for j in H[i]} for i in H}
 
         return H
-
-
