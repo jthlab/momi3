@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import jax
 import jax.numpy as jnp
-from jax import jit, value_and_grad, hessian
+from jax import jit, value_and_grad, hessian, checkpoint
 
 from momi3.utils import update
 from momi3.Data import get_X_batches, Data
@@ -30,6 +30,7 @@ def esfs_map(theta_dict, X, auxd, demo, _f, esfs_tensor_prod):
     # A: jax.lax.map size
     # B: jax.vmap size
     # C: sample size + 1
+    @checkpoint
     def f(X_batch):
         return jax.vmap(esfs_tensor_prod, (None, 0, None, None, None))(
             theta_dict, X_batch, auxd, demo, _f

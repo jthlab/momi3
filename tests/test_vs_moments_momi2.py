@@ -13,6 +13,7 @@ import demes
 import jax
 import jax.numpy as jnp
 import moments
+import dadi
 import momi as momi2
 import numpy as np
 import pytest
@@ -29,6 +30,7 @@ from tests.demos import FiveDemes, MultiAnc, SingleDeme, ThreeDemes, TwoDemes
 MAX_AVG_PERCENT_ERROR = 1.0
 GRADIENT_RTOL = 0.05
 NORMALIZE_ESFS = True
+dadi_pts = 200
 
 jax.config.update("jax_enable_x64", False)
 
@@ -56,6 +58,16 @@ class Momi_vs_Moments:
 
         esfs = moments.Spectrum.from_demes(
             dG, sampled_demes=self.sampled_demes, sample_sizes=self.sample_sizes
+        )
+        esfs = np.array(esfs)
+        return esfs * 4 * dG.demes[0].epochs[0].start_size
+
+    @cached_property
+    def dadi_sfs(self):
+        dG = self.moments_graph
+
+        esfs = dadi.Spectrum.from_demes(
+            dG, sampled_demes=self.sampled_demes, sample_sizes=self.sample_sizes, pts=dadi_pts
         )
         esfs = np.array(esfs)
         return esfs * 4 * dG.demes[0].epochs[0].start_size
@@ -92,6 +104,8 @@ class Momi_vs_Moments:
             sfs = self.momi_sfs.flatten()[1:-1]
         elif method == "moments":
             sfs = self.moments_sfs.flatten()[1:-1]
+        elif method == "dadi":
+            sfs = self.dadi_sfs.flatten()[1:-1]
         elif method == "momi2":
             sfs = self.momi2_sfs.flatten()[1:-1]
         else:
@@ -691,6 +705,8 @@ def test_two_pop_exponential_migration(run_type="pytest", **kwargs):
     sample_sizes = [10, 6]
     mvm = Momi_vs_Moments(demo, model1, sampled_demes, sample_sizes)
     print("two-pop exp growth w/ migration")
+    # mvm.compare("moments", "dadi", run_type, **kwargs)
+    # mvm.compare("momi3", "dadi", run_type, **kwargs)
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
