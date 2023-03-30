@@ -41,6 +41,7 @@ class Momi(object):
         sample_sizes: tuple[int],
         jitted: bool = False,
         batch_size: int = None,
+        low_memory: bool = False,
         bounds: dict[Node, dict[Population, int]] = None,
     ):
         """
@@ -67,7 +68,8 @@ class Momi(object):
         self._T = T
         self._auxd = T.auxd
         self._demo_dict = demo_dict
-        self._JAX_functions = JAX_functions(demo=demo, T=T, jitted=jitted)
+        self._JAX_functions = JAX_functions(demo=demo, T=T, jitted=jitted, low_memory=low_memory)
+        self.batch_size = batch_size
 
     @property
     def _default_params(self):
@@ -95,7 +97,7 @@ class Momi(object):
         etbl = self._JAX_functions.etbl
         return etbl(theta_dict)
 
-    def sfs_spectrum(self, params="default", batch_size: int = 10000):
+    def sfs_spectrum(self, params="default"):
         if params == "default":
             params = self._default_params
         theta_dict = deepcopy(params._theta_train_dict)
@@ -109,7 +111,7 @@ class Momi(object):
             num_deriveds[pop] = mutant_sizes[:, i]
 
         esfs = self._JAX_functions.esfs
-        esfs_vec = esfs(theta_dict, num_deriveds, batch_size)
+        esfs_vec = esfs(theta_dict, num_deriveds, self.batch_size)
 
         spectrum = np.zeros([self._n_samples[pop] + 1 for pop in self._n_samples])
         for b, val in zip(mutant_sizes[1:-1], esfs_vec[1:-1]):
@@ -120,8 +122,7 @@ class Momi(object):
         self,
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
-        theta_train_dict: dict[str, float] = None,
-        batch_size: int = 10000
+        theta_train_dict: dict[str, float] = None
     ) -> float:
         """log likelihood value for given params and data. It calls loglik_with_gradient.
 
@@ -145,7 +146,7 @@ class Momi(object):
             theta_train_dict = dict(zip(Paths, values))
 
         theta_nuisance_dict = params._theta_nuisance_dict
-        data = self._get_data(jsfs, batch_size)
+        data = self._get_data(jsfs, self.batch_size)
         return self._JAX_functions.loglik(
             theta_train_dict, theta_nuisance_dict, data
         )
@@ -155,8 +156,7 @@ class Momi(object):
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
         theta_train_dict: dict[str, float] = None,
-        return_array: bool = False,
-        batch_size: int = 10000
+        return_array: bool = False
     ) -> tuple[float, dict[str, float]]:
         """log likelihood value and the gradient for theta_train_dict for given params and jsfs
 
@@ -181,7 +181,7 @@ class Momi(object):
             theta_train_dict = dict(zip(Paths, values))
 
         theta_nuisance_dict = params._theta_nuisance_dict
-        data = self._get_data(jsfs, batch_size)
+        data = self._get_data(jsfs, self.batch_size)
         val, grad = self._JAX_functions.loglik_and_grad(
             theta_train_dict, theta_nuisance_dict, data
         )
@@ -195,8 +195,7 @@ class Momi(object):
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray] = None,
         theta_train_dict: dict[str, float] = None,
-        return_array: bool = False,
-        batch_size: int = 10000,
+        return_array: bool = False
     ) -> tuple[float, dict[str, float]]:
         """Negative log likelihood value and the gradient for theta_train_dict for given params and jsfs.
         It calls loglik_with_gradient.
@@ -212,7 +211,7 @@ class Momi(object):
         """
 
         val, grad = self.loglik_with_gradient(
-            params, jsfs, theta_train_dict, return_array, batch_size
+            params, jsfs, theta_train_dict, return_array, self.batch_size
         )
 
         val = -val
@@ -280,12 +279,11 @@ class Momi(object):
         self,
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray] = None,
-        just_hess: bool = False,
-        batch_size: int = 10000,
+        just_hess: bool = False
     ):
         theta_train_dict = params._theta_train_dict
         theta_nuisance_dict = params._theta_nuisance_dict
-        data = self._get_data(jsfs, batch_size)
+        data = self._get_data(jsfs, self.batch_size)
 
         H_dict = self._JAX_functions.hessian(
             theta_train_dict, theta_nuisance_dict, data
@@ -314,10 +312,9 @@ class Momi(object):
         self,
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
-        return_COV_MATRIX: bool = False,
-        batch_size: int = 10000
+        return_COV_MATRIX: bool = False
     ):
-        GIM = self.GIM(params, jsfs, batch_size=batch_size)
+        GIM = self.GIM(params, jsfs)
         COV = jnp.linalg.pinv(GIM)  # Calling psuedo-inverse
         if return_COV_MATRIX:
             return COV
@@ -329,10 +326,9 @@ class Momi(object):
         self,
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
-        return_COV_MATRIX: bool = False,
-        batch_size: int = 10000
+        return_COV_MATRIX: bool = False
     ):
-        H = self.GIM(params, jsfs, just_hess=True, batch_size=batch_size)
+        H = self.GIM(params, jsfs, just_hess=True, batch_size=self.batch_size)
         COV = jnp.linalg.pinv(H)  # Calling psuedo-inverse
         if return_COV_MATRIX:
             return COV

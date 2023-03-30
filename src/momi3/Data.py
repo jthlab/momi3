@@ -127,14 +127,21 @@ def get_data(
 
 def get_sfs_batches(
     sfs,
-    batch_size
+    batch_size=None
 ):
     n_devices = jax.device_count()
     len_sfs = len(sfs)
     n_entries = len_sfs + n_devices * 3
+
+    n_for_device = ceil(n_entries / n_devices)
+    if batch_size is None:
+        batch_size = n_for_device
+    else:
+        pass
+
     n_for_device = ceil(n_entries / n_devices)
     n_for_map = ceil(n_for_device / batch_size)
-    n_for_vmap = ceil(n_entries / n_for_map / n_devices)
+    n_for_vmap = batch_size
     n_surplus = n_for_map * n_for_vmap * n_devices - len_sfs - n_devices * 3
     sfs = np.pad(sfs, [0, n_surplus])
     return sfs.reshape(n_devices, -1)
@@ -146,7 +153,7 @@ def get_X_batches(
     sample_sizes,
     leaves,
     deriveds,
-    batch_size,
+    batch_size=None,
     add_etbl_vecs=True
 ):
     n_devices = jax.device_count()
@@ -155,9 +162,14 @@ def get_X_batches(
         n_entries += n_devices * 3
 
     n_for_device = ceil(n_entries / n_devices)
-    batch_size = min(batch_size, n_for_device)
+    if batch_size is None:
+        batch_size = n_for_device
+    else:
+        pass
+
+    # batch_size = min(batch_size, n_for_device)
     n_for_map = ceil(n_for_device / batch_size)
-    n_for_vmap = ceil(n_entries / n_for_map / n_devices)
+    n_for_vmap = batch_size  # ceil(n_entries / n_for_map / n_devices)
 
     num_deriveds = {}
     for pop, derived in zip(sampled_demes, deriveds):
@@ -202,7 +214,7 @@ def get_data_by_jsfs(
     sample_sizes: tuple[int],
     leaves: set[str],
     jsfs: Union[COO, jnp.ndarray, np.ndarray],
-    batch_size: int,
+    batch_size: int = None,
 ):
     n_samples = dict(zip(sampled_demes, sample_sizes))
     n_jsfs = [i - 1 for i in jsfs.shape]

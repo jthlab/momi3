@@ -25,25 +25,27 @@ def esfs_tensor_prod(theta_dict, X, auxd, demo, _f):
     return _f(demo_dict, X, auxd)
 
 
-def esfs_map(theta_dict, X, auxd, demo, _f, esfs_tensor_prod):
+def esfs_map(theta_dict, X, auxd, demo, _f, esfs_tensor_prod, low_memory=False):
     # X[pop].shape = (A, B, C)
     # A: jax.lax.map size
     # B: jax.vmap size
     # C: sample size + 1
-    @checkpoint
     def f(X_batch):
         return jax.vmap(esfs_tensor_prod, (None, 0, None, None, None))(
             theta_dict, X_batch, auxd, demo, _f
         )
+    if low_memory:
+        f = checkpoint(f)
     return jax.lax.map(f, X).flatten()
 
 
 def esfs_mapX(theta_dict, X, auxd, demo, _f, esfs_tensor_prod):
     # This is an experimental fun for including pmap in calc map(pmap(vmap))(esfs)
-    # X[pop].shape = (A, B, C)
+    # X[pop].shape = (A, B, C, D)
     # A: jax.lax.map size
-    # B: jax.vmap size
-    # C: sample size + 1
+    # B: jax.pmap size
+    # C: jax.vmap size
+    # D: sample size + 1
     def f(X_batch):
         return jax.pmap(
             jax.vmap(esfs_tensor_prod, (None, 0, None, None, None)),
@@ -141,6 +143,7 @@ class JAX_functions:
         self,
         demo,
         T,
+        low_memory=False,
         jitted=False,
         esfs_tensor_prod=esfs_tensor_prod,
         esfs_map=esfs_map,
@@ -155,10 +158,11 @@ class JAX_functions:
         self.leaves = tuple(T._leaves)
         self._n_samples = T._num_samples
         self.n_devices = jax.device_count()
+        self.esfs_map = lambda theta_dict, X, auxd, demo, _f, esfs_tensor_prod: esfs_map(theta_dict, X, auxd, demo, _f, esfs_tensor_prod, low_memory=low_memory)
 
         if jitted:
             esfs_tensor_prod = jit(esfs_tensor_prod, static_argnames='_f')
-            esfs_map = jit(esfs_map, static_argnames=('_f', 'esfs_tensor_prod'))
+            self.esfs_map = jit(self.esfs_map, static_argnames=('_f', 'esfs_tensor_prod'))
             esfs_mapX = jax.jit(esfs_mapX, static_argnums=(4, 5))
 
             loglik_static_nums = (6, 7, 8)
@@ -309,7 +313,8 @@ class JAX_functions:
 
         n_devices = self.n_devices
 
-        logging.debug(' '.join([str(X_batches[pop].shape) for pop in X_batches]))
+        logging.warn('X: ' + ' '.join([str(X_batches[pop].shape) for pop in X_batches]))
+        logging.warn('sfs: ' + str(sfs_batches.shape))
 
         if n_devices == 1:
             return fun(
