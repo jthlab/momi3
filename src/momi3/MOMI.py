@@ -10,12 +10,12 @@ import numpy as np
 from sparse._coo.core import COO
 
 from momi3.Data import get_data
-from momi3.event import ETBuilder, Node, Population
+from momi3.event_tree import ETBuilder, Node, Population
 from momi3.JAX_functions import JAX_functions
+from momi3.lineage_sampler import bound_sampler
 from momi3.optimizers import ProjectedGradient_optimizer
 from momi3.Params import Params
-from momi3.surviving_lineage_samplers import bound_sampler
-from momi3.utils import msprime_simulator, msprime_chromosome_simulator
+from momi3.utils import msprime_chromosome_simulator, msprime_simulator
 
 
 def esfs(g: demes.Graph, sample_sizes: dict[str, int]):
@@ -355,10 +355,18 @@ class Momi(object):
             sampled_demes=sampled_demes,
             sample_sizes=sample_sizes,
             num_replicates=num_replicates,
-            seed=seed
+            seed=seed,
         )
 
-    def simulate_chromosome(self, sequence_length, recombination_rate, mutation_rate, n_samples=None, params=None, seed=None):
+    def simulate_chromosome(
+        self,
+        sequence_length,
+        recombination_rate,
+        mutation_rate,
+        n_samples=None,
+        params=None,
+        seed=None,
+    ):
         if params is None:
             params = self._default_params
 
@@ -378,7 +386,7 @@ class Momi(object):
             sequence_length=sequence_length,
             recombination_rate=recombination_rate,
             mutation_rate=mutation_rate,
-            seed=seed
+            seed=seed,
         )
 
     def bound_sampler(
@@ -409,7 +417,9 @@ class Momi(object):
         vals = {"val": 0}
 
         def f():
-            return vals.update({"val": self.loglik(params=params, jsfs=jsfs, batch_size=batch_size)})
+            return vals.update(
+                {"val": self.loglik(params=params, jsfs=jsfs, batch_size=batch_size)}
+            )
 
         compilation_time = timeit.timeit(f, number=1)
         run_time = timeit.repeat(f, repeat=repeat, number=1)
@@ -417,12 +427,18 @@ class Momi(object):
             run_time = np.median(run_time)
         return vals["val"], compilation_time, run_time
 
-    def _time_loglik_with_gradient(self, params, jsfs, batch_size=10000, repeat=25, average=True):
+    def _time_loglik_with_gradient(
+        self, params, jsfs, batch_size=10000, repeat=25, average=True
+    ):
         vals = {"val": 0}
 
         def f():
             return vals.update(
-                {"val": self.loglik_with_gradient(params=params, jsfs=jsfs, batch_size=batch_size)}
+                {
+                    "val": self.loglik_with_gradient(
+                        params=params, jsfs=jsfs, batch_size=batch_size
+                    )
+                }
             )
 
         compilation_time = timeit.timeit(f, number=1)

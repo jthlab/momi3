@@ -4,7 +4,7 @@ from copy import deepcopy
 from enum import Enum
 from functools import reduce, total_ordering
 from itertools import count, product
-from typing import Callable, Iterable, NamedTuple, Type
+from typing import Callable, Iterable, NamedTuple
 
 import demes
 import jax
@@ -12,15 +12,8 @@ import jax.numpy as jnp
 import networkx as nx
 import numpy as np
 
-from momi3.common import Axes, NoOp, Population, Rename, State, Time, unique_strs
-from momi3.lemmas.admix import Admix, Pulse
-from momi3.lemmas.downsample import (  # TODO rename module to something more correct
-    Downsample,
-    Upsample,
-)
-from momi3.lemmas.lift import Lift, MigrationStart
-from momi3.lemmas.split1 import Split1
-from momi3.lemmas.split2 import Split2
+from momi3 import events
+from momi3.common import Axes, Population, State, Time, unique_strs
 
 
 @total_ordering
@@ -140,7 +133,9 @@ class ETBuilder:
                 # for continuous migration, we require that there are at least four nodes. so for now we just enforce
                 # this globally. slightly wasteful if there is not any cm 🤷.
                 v = self.node_like(node)
-                self.add_edge(node, v, event=Downsample(deme.name, 4, ns))
+                self.add_edge(
+                    node, v, event=events.Downsample(pop=deme.name, m=4, n=ns)
+                )
 
         # build the event tree. relatively costly operation, but should still be fast for all the demographies we can
         # actually analyze
@@ -162,7 +157,7 @@ class ETBuilder:
                 e = self._T.edges[ch, u]
                 ax = self.nodes[ch]["axes"]
                 ns = self.nodes[ch]["ns"]
-                ev = e.get("event", NoOp())
+                ev = e.get("event", events.NoOp())
                 new_ax, new_ns, aux = ev.setup(ax, ns)
                 assert (
                     new_ax.keys() == new_ns.keys()
@@ -175,7 +170,7 @@ class ETBuilder:
                 id_ = e.get("id", f"child{i}") + "_axes"
                 child_axes[id_] = new_ax
                 e["axes"] = new_ax
-            ev = self.nodes[u].get("event", NoOp())
+            ev = self.nodes[u].get("event", events.NoOp())
             if not child_axes:
                 # if there are no children this should be a leaf node
                 assert u in leaves.values()
@@ -185,7 +180,7 @@ class ETBuilder:
                 child_axes = list(child_axes.values())[0]
             else:
                 # the event expects a dictionary indicating which axes belong to which pop
-                assert isinstance(ev, (MigrationStart, Split2))
+                assert isinstance(ev, (events.MigrationStart, events.Split2))
             (
                 new_ax,
                 new_ns,
@@ -232,7 +227,7 @@ class ETBuilder:
                 e = self._T.edges[ch, u]
                 aux = auxd["edges"].get((ch, u))
                 # execute the edge event (if any)
-                ev = e.get("event", NoOp())
+                ev = e.get("event", events.NoOp())
                 new_st = ev.execute(st, params=params, aux=aux)
                 assert isinstance(new_st, State)
                 id_ = e.get("id", f"child{i}") + "_state"
@@ -240,7 +235,7 @@ class ETBuilder:
                 # check that the returned state is consistent with the child axes
                 if new_st.pl is None:
                     # the final lifting to infinity makes the partial likelihood None
-                    assert isinstance(ev, Lift)
+                    assert isinstance(ev, events.Lift)
                     assert ev.terminal
                 else:
                     _check_shape(new_st, e["axes"])
@@ -252,12 +247,12 @@ class ETBuilder:
             # NoOp.execute accepts only a single state parameter, and returns it. However, there is no possibility of
             # passing more than one state parameter in, because the only type of event that has multiple children is a
             # Split2.
-            ev = self.nodes[u].get("event", NoOp())
+            ev = self.nodes[u].get("event", events.NoOp())
             assert len(child_state) in [1, 2]
             if len(child_state) == 1:
                 child_state = list(child_state.values())[0]
             elif len(child_state) == 2:
-                assert isinstance(ev, (MigrationStart, Split2))
+                assert isinstance(ev, (events.MigrationStart, events.Split2))
             new_st = ev.execute(child_state, params=params, aux=aux)
             assert isinstance(new_st, State)
             if new_st.pl is None:
@@ -327,7 +322,7 @@ class ETBuilder:
         assert u.t < t
         # create a new node that is the same as u, but with a different time
         v = self.node_like(u, t=t)
-        ev = Lift(
+        ev = events.Lift(
             t0=u.t,
             t1=v.t,
             epochs=self.nodes[u]["epochs"],
@@ -344,7 +339,7 @@ class ETBuilder:
         d = self._bounds[u]
         for pop in v.block:
             w = self.node_like(v, i=next(self._j))
-            ev = Upsample(pop, d[pop])
+            ev = events.Upsample(pop, d[pop])
             self._T.add_edge(v, w, event=ev)
             v = w
         return v
@@ -407,7 +402,7 @@ class ETBuilder:
                     # per the demes spec, continuous migrations cannot overlap
                     assert key not in self.nodes[nn]["migrations"]
                     self.nodes[nn]["migrations"][key] = d["i"]
-                    self.nodes[nn]["event"] = MigrationStart(
+                    self.nodes[nn]["event"] = events.MigrationStart(
                         source=d["source"], dest=d["pop"]
                     )
                     self.edges[u, nn]["id"] = "dest"
@@ -453,7 +448,7 @@ class ETBuilder:
                 u = self._lift(d["pop"], d["t"])
                 v = self._lift(s, d["t"])
                 nn = self._merge_nodes(u, v, rm=d["pop"])
-                evc: Type[Split1] | Type[Split2] = Split1 if u is v else Split2
+                evc = events.Split1 if u is v else events.Split2
                 self.nodes[nn]["event"] = evc(donor=d["pop"], recipient=s)
                 # identify which edge is which for later traversal
                 self.edges[u, nn]["id"] = "donor"
@@ -476,7 +471,7 @@ class ETBuilder:
         if u is v:
             # same block, so we perform the pulse in one tensor contraction
             w = self.node_like(u)
-            self.add_edge(u, w, event=Pulse(source=source, dest=dest, f_p=f_p))
+            self.add_edge(u, w, event=events.Pulse(source=source, dest=dest, f_p=f_p))
             if self._bounds:
                 # FIXME which node is the correct one to look at here--bottom or top of admixture?
                 assert self._bounds[u] == self._bounds[v]
@@ -490,18 +485,18 @@ class ETBuilder:
             }  # augment the blocks of u with the new transient pop
             w = self.node_like(u, block=b, t=t)
             self.add_edge(
-                u, w, event=Admix(child=dest, parent1=tr1, parent2=tr2, f_p=f_p)
+                u, w, event=events.Admix(child=dest, parent1=tr1, parent2=tr2, f_p=f_p)
             )
             # now we need to merge the transient admixed population into the source population
             x = self._merge_nodes(w, v, rm=tr1)
-            self.nodes[x]["event"] = Split2(donor=tr1, recipient=source)
+            self.nodes[x]["event"] = events.Split2(donor=tr1, recipient=source)
             # identify which edge is which for traversal
             self.edges[w, x]["id"] = "donor"
             self.edges[v, x]["id"] = "recipient"
             # finally, rename the transient population to the destination population
             assert x.block == (u.block | v.block | {tr2}) - {dest}
             y = self.node_like(x, block=u.block | v.block)
-            self.add_edge(x, y, event=Rename(old=tr2, new=dest))
+            self.add_edge(x, y, event=events.Rename(old=tr2, new=dest))
             if self._bounds:
                 self._add_bounds(y, y)
 

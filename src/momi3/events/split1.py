@@ -10,11 +10,13 @@ from jax import numpy as jnp
 from momi3.common import Axes, PopCounter, Population, State, oe_einsum, unique_str
 from momi3.math_functions import log_hypergeom
 
+from .event import Event
+
 T = TypeVar("T")
 
 
-@dataclass
-class Split1:
+@dataclass(frozen=True, kw_only=True)
+class Split1(Event):
     """Merge two populations in the same event block.
 
     Attributes:
@@ -31,7 +33,7 @@ class Split1:
     def __post_init__(self):
         assert self.donor != self.recipient
 
-    def setup(self, in_axes: Axes, ns: PopCounter) -> tuple[Axes, PopCounter, T]:
+    def _setup_impl(self, in_axes: Axes, ns: PopCounter) -> tuple[Axes, PopCounter, T]:
         """Setup for the split1 lemma.
 
         Args:
@@ -80,7 +82,7 @@ class Split1:
             aux["Q"], aux["R"] = np.linalg.qr(B)
         return out_axes, nsp, aux
 
-    def execute(self, st: State, params: dict, aux: T) -> State:
+    def _execute_impl(self, st: State, params: dict, aux: T) -> State:
         """Merge pop2 into pop1 when they are both in the same event block.
 
         Args:

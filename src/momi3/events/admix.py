@@ -12,11 +12,13 @@ from jax import lax
 from momi3.common import Axes, PopCounter, Population, State, oe_einsum, unique_strs
 from momi3.math_functions import convolve_sum, log_binom_pmf, log_hypergeom
 
+from .event import Event
+
 T = TypeVar("T")
 
 
-@dataclass
-class Pulse:
+@dataclass(frozen=True, kw_only=True)
+class Pulse(Event):
     """A pulse of admixture between two populations in the same block.
 
     Args:
@@ -33,13 +35,10 @@ class Pulse:
     dest: Population
     f_p: Callable[[dict], float]
 
-    def __hash__(self):
-        return hash((self.source, self.dest, self.f_p))
-
     def __post_init__(self):
         assert self.source != self.dest
 
-    def setup(self, in_axes: Axes, ns: PopCounter) -> tuple[Axes, PopCounter, T]:
+    def _setup_impl(self, in_axes: Axes, ns: PopCounter) -> tuple[Axes, PopCounter, T]:
         """Compute the combinatorial factors that are constant for all values of p.
 
         Args:
@@ -87,7 +86,7 @@ class Pulse:
             aux["Q"], aux["R"] = np.linalg.qr(B)
         return out_axes, new_ns, aux
 
-    def execute(self, st: State, params: dict, aux: T) -> State:
+    def _execute_impl(self, st: State, params: dict, aux: T) -> State:
         """Pulse admixture when source and donor are in the same block.
 
         Args:
@@ -149,8 +148,8 @@ class Pulse:
         return st._replace(pl=plp)
 
 
-@dataclass
-class Admix:
+@dataclass(frozen=True, kw_only=True)
+class Admix(Event):
     """Admixture event.
 
     Args:
@@ -164,15 +163,12 @@ class Admix:
     parent2: Population
     f_p: Callable[[dict], float]
 
-    def __hash__(self):
-        return hash((self.child, self.parent1, self.parent2, self.f_p))
-
     def __post_init__(self):
         assert (
             len({self.child, self.parent1, self.parent2}) == 3
         ), "admixture event must involve three populations"
 
-    def setup(self, in_axes: Axes, ns: PopCounter) -> tuple[Axes, PopCounter, T]:
+    def _setup_impl(self, in_axes: Axes, ns: PopCounter) -> tuple[Axes, PopCounter, T]:
         """Setup admixture event
 
         Args:
@@ -204,7 +200,7 @@ class Admix:
         aux["out_axes"] = out_axes
         return out_axes, nsp, aux
 
-    def execute(self, st: State, params: dict, aux: T) -> State:
+    def _execute_impl(self, st: State, params: dict, aux: T) -> State:
         """Apply admixture event.
 
         Args:

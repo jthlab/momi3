@@ -1,7 +1,5 @@
 "miscellaneous shared functions that don't fit anywhere else"
-from collections import Counter, namedtuple
-from copy import deepcopy
-from dataclasses import dataclass
+from collections import namedtuple
 from functools import partial
 from secrets import token_hex
 from typing import NamedTuple, OrderedDict, Sequence, TypeVar
@@ -76,45 +74,6 @@ class State(NamedTuple):
 
 
 T = TypeVar("T")
-
-
-@dataclass
-class Event:
-    "Base class for events."
-
-    def setup(
-        self, axes: Axes, ns: Counter[Population, int]
-    ) -> tuple[Axes, PopCounter, T]:
-        return axes, ns, None
-
-    def execute(self, st: State, params: dict, aux: T) -> State:
-        return st
-
-
-NoOp = Event
-
-
-@dataclass
-class Rename(Event):
-    "Rename a population."
-    old: Population
-    new: Population
-
-    def __hash__(self):
-        return hash((self.old, self.new))
-
-    def setup(
-        self, in_axes: Axes, ns: Counter[Population, int]
-    ) -> tuple[Axes, PopCounter, T]:
-        out_axes = deepcopy(in_axes)
-        out_axes[self.new] = out_axes.pop(self.old)
-        ns = deepcopy(ns)
-        ns[self.new] = ns.pop(self.old)
-        return out_axes, ns, None
-
-    def execute(self, st: State, params: dict, aux: T) -> State:
-        return st
-
 
 TimeTuple = namedtuple("TimeTuple", "t path")
 

@@ -8,11 +8,13 @@ import numpy as np
 from momi3.common import Axes, PopCounter, Population, State, oe_einsum, unique_str
 from momi3.math_functions import log_hypergeom
 
+from .event import Event
+
 T = TypeVar("T")
 
 
-@dataclass
-class Split2:
+@dataclass(frozen=True, kw_only=True)
+class Split2(Event):
     """Merge two populations in different event blocks.
 
     Attributes:
@@ -26,7 +28,7 @@ class Split2:
     donor: Population
     recipient: Population
 
-    def setup(
+    def _setup_impl(
         self, in_axes: dict[str, Axes], ns: PopCounter
     ) -> tuple[Axes, PopCounter, T]:
         donor_axes = in_axes["donor_axes"]
@@ -59,7 +61,7 @@ class Split2:
         del nsp[self.donor]
         return out_axes, nsp, aux
 
-    def execute(self, state: dict[str, State], params: dict, aux: T) -> State:
+    def _execute_impl(self, state: dict[str, State], params: dict, aux: T) -> State:
         """Merge two populations in different event blocks.
 
         Args:

@@ -7,26 +7,23 @@ import networkx as nx
 import numpy as np
 import scipy
 import sparse
-from jax.scipy.special import gammaln as LG
+from jax.scipy.special import gammaln as gammaln
 
-from momi3.common import NoOp, Rename, traverse
-from momi3.event import ETBuilder
-from momi3.lemmas.admix import Admix, Pulse
-from momi3.lemmas.lift import Lift
-from momi3.lemmas.split1 import Split1
-from momi3.lemmas.split2 import Split2
+from momi3 import events
+from momi3.common import traverse
+from momi3.event_tree import ETBuilder
 from momi3.Params import Params
 
 
-def logFactorial(x):
-    return LG(x + 1)
+def log_factorial(x):
+    return gammaln(x + 1)
 
 
-def logBinom(n, k):
-    return logFactorial(n) - logFactorial(k) - logFactorial(n - k)
+def log_binom(n, k):
+    return log_factorial(n) - log_factorial(k) - log_factorial(n - k)
 
 
-def down_sample_jsfs(jsfs, down_sample_to):
+def downsample_jsfs(jsfs, down_sample_to):
     down_sample_from = tuple(i - 1 for i in jsfs.shape)
     for ind, (n, m) in enumerate(zip(down_sample_from, down_sample_to)):
         j = np.arange(m + 1)[None, :]
@@ -46,7 +43,7 @@ def sample_lift_constant(Ne, t0, t1, n, seed):
     js = jnp.arange(n, 1, -1)
     rng = jax.random.PRNGKey(seed)
     Zi = jax.random.exponential(rng, (n - 1,))
-    waiting_times = Zi * Ne / jnp.exp(logBinom(js, 2))
+    waiting_times = Zi * Ne / jnp.exp(log_binom(js, 2))
     waiting_times = jnp.cumsum(waiting_times)
     ret = n - jnp.searchsorted(waiting_times, tau)
     return ret
@@ -54,7 +51,7 @@ def sample_lift_constant(Ne, t0, t1, n, seed):
 
 def exp_intercoal_sampler(Ne0, g, t, Z, k):
     # Used by sample_lift_exponential
-    return jnp.log(jnp.exp(g * t) + (g * Ne0 * Z) / jnp.exp(logBinom(k, 2))) / g - t
+    return jnp.log(jnp.exp(g * t) + (g * Ne0 * Z) / jnp.exp(log_binom(k, 2))) / g - t
 
 
 def lift_exp_growth_loop(carry, k):
@@ -87,7 +84,7 @@ def sample_lift_exponential(Ne0, Ne1, t0, t1, n, seed):
 def migration_transition(ks, mig_params, seed):
     ks = jnp.array(ks)
 
-    coal_rate = jnp.exp(logBinom(ks, 2)) * mig_params["coal"]
+    coal_rate = jnp.exp(log_binom(ks, 2)) * mig_params["coal"]
     mig_rate = ks[:, None] * mig_params["mig"]
 
     cumsum_coal_rate = jnp.cumsum(coal_rate)
@@ -145,9 +142,9 @@ def sample_migration_constant(mig_params, tau, ns, seed):
     return ks
 
 
-def Migration_sample(
+def sample_migration(
     n: dict,
-    ev: Lift,
+    ev: events.Lift,
     theta_train_sample: np.ndarray,
     params: Params,
     seed: int = None,
@@ -200,9 +197,9 @@ def Migration_sample(
     return n1
 
 
-def Lift_sample(
+def sample_lift(
     n: dict,
-    ev: Lift,
+    ev: events.Lift,
     theta_train_sample: np.ndarray,
     params: Params,
     seed: int = None,
@@ -271,7 +268,7 @@ def Lift_sample(
     return n1
 
 
-def Admix_quantiles(n: dict, ev: Admix, params: Params, quantile: float = 0.95):
+def admix_quantiles(n: dict, ev: events.Admix, params: Params, quantile: float = 0.95):
     n1 = n.copy()
     q = ev.f_p(params._demo_dict)
 
@@ -290,7 +287,7 @@ def Admix_quantiles(n: dict, ev: Admix, params: Params, quantile: float = 0.95):
     return n1
 
 
-def Pulse_quantiles(n: dict, ev: Pulse, params: Params, quantile: float = 0.95):
+def pulse_quantiles(n: dict, ev: events.Pulse, params: Params, quantile: float = 0.95):
     n1 = n.copy()
     q = ev.f_p(params._demo_dict)
 
@@ -351,37 +348,37 @@ def bound_sampler(
         for i, ch in enumerate(T.predecessors(u), 1):
             e = T.edges[ch, u]
             # execute the edge event (if any)
-            ev = e.get("event", NoOp())
+            ev = e.get("event", events.NoOp())
 
-            if isinstance(ev, Lift):
+            if isinstance(ev, events.Lift):
                 if ev.migrations:
                     pass
                     # n = Migration_sample(
                     #     n, ev, theta_train_sample, params, seed, quantile
                     # )
                 else:
-                    n = Lift_sample(n, ev, theta_train_sample, params, seed, quantile)
+                    n = sample_lift(n, ev, theta_train_sample, params, seed, quantile)
                     NS[ev] = deepcopy(n)
-                    print(ev.t1, 'Lift', n)
+                    print(ev.t1, "Lift", n)
                 seed = np.random.RandomState(seed).randint(2**31 - 1)
 
-            elif isinstance(ev, Admix):
-                n = Admix_quantiles(n, ev, params, quantile)
+            elif isinstance(ev, events.Admix):
+                n = admix_quantiles(n, ev, params, quantile)
                 NS[ev] = deepcopy(n)
-                print(u.t, 'Admix', n)
-            elif isinstance(ev, Pulse):
-                n = Pulse_quantiles(n, ev, params, quantile)
+                print(u.t, "Admix", n)
+            elif isinstance(ev, events.Pulse):
+                n = pulse_quantiles(n, ev, params, quantile)
                 NS[ev] = deepcopy(n)
-                print(u.t, 'Pulse', n)
-            elif isinstance(ev, Rename):
+                print(u.t, "Pulse", n)
+            elif isinstance(ev, events.Rename):
                 new, old = ev.new, ev.old
                 n[new] = n[old]
                 del n[old]
             else:
                 pass
 
-        ev = nodes[u].get("event", NoOp())
-        if isinstance(ev, (Split2, Split1)):
+        ev = nodes[u].get("event", events.NoOp())
+        if isinstance(ev, (events.Split2, events.Split1)):
             donor, recipient = ev.donor, ev.recipient
             if recipient not in n:
                 n[recipient] = 0

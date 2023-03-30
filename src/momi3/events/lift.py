@@ -13,7 +13,6 @@ from jax import vmap
 
 from momi3.common import (
     Axes,
-    Event,
     Ne_t,
     PopCounter,
     Population,
@@ -26,6 +25,8 @@ from momi3.math_functions import exp_integral, exp_integralEGPS, expm1d
 from momi3.migration import lift_cm, lift_cm_aux
 from momi3.utils import W_matrix, moran_eigensystem
 
+from .event import Event
+
 T = TypeVar("T")
 
 
@@ -36,8 +37,8 @@ def _aux_single(nv):
     return dict(d=d, Q=Q, W=W, QQ=QQ, RR=RR)
 
 
-@dataclass
-class Lift:
+@dataclass(frozen=True, kw_only=True)
+class Lift(Event):
     """Lift a partial likelihood from u to v.
 
     Attributes:
@@ -52,16 +53,13 @@ class Lift:
     epochs: dict[Population, int]
     migrations: dict[tuple[Population, Population], int]
 
-    def __hash__(self):
-        h_epochs = tuple(self.epochs), tuple(self.epochs.values())
-        h_migrations = tuple(self.migrations), tuple(self.migrations.values())
-        return hash((self.t0, self.t1, h_epochs, h_migrations))
-
     @property
     def terminal(self):
         return math.isinf(self.t1.t)
 
-    def setup(self, child_axes: Axes, ns: PopCounter) -> tuple[Axes, PopCounter, T]:
+    def _setup_impl(
+        self, child_axes: Axes, ns: PopCounter
+    ) -> tuple[Axes, PopCounter, T]:
         """Compute the matrices needed for lifting.
 
         Args:
@@ -108,44 +106,41 @@ class Lift:
                 aux["mats"]["multi"][s] = dict(cmm=cmm)
 
         # set up functions for computing migration rates and pop sizes at runtime
-        def migmat(
-            params: dict, s: list[tuple[Population, Population]]
-        ) -> dict[tuple[Population, Population], float]:
-            """get the migration matrix for a block"""
-            ret = {}
-            for (p1, p2), j in self.migrations.items():
-                if (p1, p2) in s:
-                    m = params["migrations"][j]
-                    assert m["source"] == p1 and m["dest"] == p2
-                    ret[(p1, p2)] = params["migrations"][j]["rate"]
-            return ret
-
-        self._migmat = migmat
-
-        def f_Ne(params: dict) -> dict[Population, tuple[float, float]]:
-            """get the population size at the start and end of the interval"""
-            deme_d = {deme["name"]: i for i, deme in enumerate(params["demes"])}
-            ret = {}
-            for pop in child_axes:
-                i = deme_d[pop]
-                j = self.epochs[pop]
-                N0, N1 = tuple(
-                    [
-                        _get_size(params["demes"][i], j, traverse(params, path))
-                        for path in (self.t0.path, self.t1.path)
-                    ]
-                )
-                if params["demes"][i]["epochs"][j]["size_function"] == "constant":
-                    ret[pop] = N0
-                else:
-                    ret[pop] = (N0, N1)
-            return ret
-
-        self._f_Ne = f_Ne
-
         return child_axes, nsp, aux
 
-    def execute(self, st: State, params: dict, aux: T) -> State:
+    def _f_Ne(self, params: dict, aux) -> dict[Population, tuple[float, float]]:
+        """get the population size at the start and end of the interval"""
+        deme_d = {deme["name"]: i for i, deme in enumerate(params["demes"])}
+        ret = {}
+        child_axes = aux["axes"]
+        for pop in child_axes:
+            i = deme_d[pop]
+            j = self.epochs[pop]
+            N0, N1 = tuple(
+                [
+                    _get_size(params["demes"][i], j, traverse(params, path))
+                    for path in (self.t0.path, self.t1.path)
+                ]
+            )
+            if params["demes"][i]["epochs"][j]["size_function"] == "constant":
+                ret[pop] = N0
+            else:
+                ret[pop] = (N0, N1)
+        return ret
+
+    def _migmat(
+        self, params: dict, s: list[tuple[Population, Population]]
+    ) -> dict[tuple[Population, Population], float]:
+        """get the migration matrix for a block"""
+        ret = {}
+        for (p1, p2), j in self.migrations.items():
+            if (p1, p2) in s:
+                m = params["migrations"][j]
+                assert m["source"] == p1 and m["dest"] == p2
+                ret[(p1, p2)] = params["migrations"][j]["rate"]
+        return ret
+
+    def _execute_impl(self, st: State, params: dict, aux: T) -> State:
         """Lift partial likelihood.
 
         Args:
@@ -160,7 +155,7 @@ class Lift:
         """
         plp = st.pl
         phip = 0.0
-        size_d = self._f_Ne(params)
+        size_d = self._f_Ne(params, aux)
         t1_val = traverse(params, self.t1.path)
         t0_val = traverse(params, self.t0.path)
         tau = t1_val - t0_val
@@ -320,13 +315,13 @@ def _get_size(deme, j, t):
     return Ne_t(Ne0, Ne1, t0, t1, t)
 
 
-@dataclass
+@dataclass(frozen=True, kw_only=True)
 class MigrationStart(Event):
     "Class marking the starting of a migration event in populations with different partial likelihoods."
     source: Population
     dest: Population
 
-    def setup(
+    def _setup_impl(
         self, in_axes: dict[str, Axes], ns: PopCounter
     ) -> tuple[Axes, PopCounter, T]:
         assert len(in_axes) == 2
@@ -336,7 +331,7 @@ class MigrationStart(Event):
         ax.update(in_axes["dest_axes"])
         return ax, ns, None
 
-    def execute(self, state: dict[str, State], params: dict, aux: T) -> State:
+    def _execute_impl(self, state: dict[str, State], params: dict, aux: T) -> State:
         st1 = state["source_state"]
         st2 = state["dest_state"]
         pl1 = st1.pl
