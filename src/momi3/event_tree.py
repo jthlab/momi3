@@ -11,6 +11,7 @@ import jax
 import jax.numpy as jnp
 import networkx as nx
 import numpy as np
+from frozendict import frozendict
 
 from momi3 import events
 from momi3.common import Axes, Population, State, Time, unique_strs
@@ -126,7 +127,11 @@ class ETBuilder:
             node = Node(i=next(self._i), block=frozenset([deme.name]), t=t)
             # attached to each node are attributes that track the population size and migration rates. (these are the
             # two model attributes that persist over time).
-            self.add_node(node, epochs={deme.name: len(deme.epochs) - 1}, migrations={})
+            self.add_node(
+                node,
+                epochs=frozendict({deme.name: len(deme.epochs) - 1}),
+                migrations=frozendict(),
+            )
             leaves[deme.name] = node
             ns = num_samples.get(deme.name, 0)
             if ns < 4:
@@ -383,7 +388,9 @@ class ETBuilder:
             # an epoch event just updates the state in that node.
             if d["ev"] == EventType.EPOCH:
                 nn = self.node_like(u)
-                self.nodes[nn]["epochs"][d["pop"]] = d["i"]
+                self.nodes[nn]["epochs"] = self.nodes[nn]["epochs"].set(
+                    d["pop"], d["i"]
+                )
                 self.add_edge(u, nn)
 
             # migrations update state, and also merge nodes in the event tree
@@ -392,7 +399,9 @@ class ETBuilder:
                 # sanity checks
                 key = (d["source"], d["pop"])
                 if v is u:
-                    self.nodes[u]["migrations"][key] = d["i"]
+                    self.nodes[u]["migrations"] = self.nodes[u]["migrations"].set(
+                        key, d["i"]
+                    )
                 else:
                     st_u, st_v = [self.nodes[x] for x in (u, v)]
                     # the nodes should be fully disjoint, otherwise they would already be in the same block
@@ -401,7 +410,9 @@ class ETBuilder:
                     nn = self._merge_nodes(u, v)  # now nn has children u and v
                     # per the demes spec, continuous migrations cannot overlap
                     assert key not in self.nodes[nn]["migrations"]
-                    self.nodes[nn]["migrations"][key] = d["i"]
+                    self.nodes[nn]["migrations"] = self.nodes[nn]["migrations"].set(
+                        key, d["i"]
+                    )
                     self.nodes[nn]["event"] = events.MigrationStart(
                         source=d["source"], dest=d["pop"]
                     )
@@ -412,7 +423,7 @@ class ETBuilder:
             elif d["ev"] == EventType.MIGRATION_END:
                 key = (d["source"], d["pop"])
                 nn = self.node_like(u)
-                del self.nodes[nn]["migrations"][key]
+                self.nodes[nn]["migrations"] = self.nodes[nn]["migrationsz"].delete(key)
                 self.add_edge(u, nn)
 
             # pulses function in a similarly to continuous migrations, but they are not recorded in the state since they
