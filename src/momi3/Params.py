@@ -15,7 +15,10 @@ import numpy as np
 import sympy
 from scipy.optimize import LinearConstraint, linprog
 
+from jax.nn import softplus
+
 from momi3.utils import signif, update
+from momi3.math_functions import softplus_inverse
 
 NoneType = type(None)
 NP_max = np.finfo(np.float32).max
@@ -50,6 +53,8 @@ class Params(dict):
         self._paths_to_params = {}
         self._path_to_params = {}
         self._params_to_paths = {}
+        self._transforms_to_params = {}
+        self._params_to_transforms = {}
 
         # Create time keys dictionary: tau_0, tau_1, ..., tau_p.
         # time_0 < time_1 < ... < time_p
@@ -171,7 +176,26 @@ class Params(dict):
             self._params_to_paths[key] = paths
             for path in paths:
                 self._path_to_params[path] = key
-        self._init_transformed_maps()  # for transformed params
+
+            if key[0] == 'e':
+                tkey = f'log({key})'
+                self._transforms_to_params[tkey] = key
+                self._params_to_transforms[key] = tkey
+            elif key[0] in ['r', 'p']:
+                tkey = f'logit({key})'
+                self._transforms_to_params[tkey] = key
+                self._params_to_transforms[key] = tkey
+            else:
+                pass
+
+        tau_keys = [key for key in self if isinstance(self[key], TimeParam)]
+        tau_keys = sorted(tau_keys, key=lambda key: self[key].num)
+        for i in range(1, len(tau_keys)):
+            tk1 = tau_keys[i]
+            tk0 = tau_keys[i - 1]
+            tkey = f'log({tk1}-{tk0})'
+            self._transforms_to_params[tkey] = (tk1, tk0)
+            self._params_to_transforms[tk1, tk0] = tkey
 
         self._frozen = True
 
@@ -245,6 +269,42 @@ class Params(dict):
         x = self._theta
         self._linear_constraints.add_constraint(expr_str, x)
 
+    def theta_train_dict(self, transformed=False):
+        if transformed:
+            return self._transformed_theta_train_dict
+        else:
+            return self._theta_train_dict
+
+    def _theta_train_path_dict(self, transformed=False):
+        ttd = self.theta_train_dict(transformed)
+        if transformed:
+            ptttd = [{}, {}, {}, {}]
+            for tkey in ttd:
+                if tkey.find('tau') == -1:
+                    # not tau
+                    key = self._transforms_to_params[tkey]
+                    paths = self._params_to_paths[key]
+
+                    if tkey.find('eta') != -1:
+                        ind = 0
+                    elif tkey.find('rho') != -1:
+                        ind = 1
+                    else:
+                        ind = 2
+                    ptttd[ind][paths] = ttd[tkey]
+                else:
+                    key1, key2 = self._transforms_to_params[tkey]
+                    paths1 = self._params_to_paths[key1]
+                    paths2 = self._params_to_paths[key2]
+                    ptttd[3][paths1, paths2] = ttd[tkey]
+            return ptttd
+        else:
+            return {self._params_to_paths[key]: ttd[key] for key in ttd}
+
+    @property
+    def _theta_path_dict(self):
+        return {self._params_to_paths[key]: self[key].num for key in self}
+
     @property
     def _keys(self):
         return sorted(list(self.keys()))
@@ -265,11 +325,11 @@ class Params(dict):
         bools = self._train_bool
         return [key for key, b in zip(keys, bools) if b]
 
-    @property
-    def _nuisance_keys(self):
-        keys = self._keys
-        bools = self._train_bool
-        return [key for key, b in zip(keys, bools) if not b]
+    # @property
+    # def _nuisance_keys(self):
+    #     keys = self._keys
+    #     bools = self._train_bool
+    #     return [key for key, b in zip(keys, bools) if not b]
 
     @property
     def _theta_train(self):
@@ -287,7 +347,7 @@ class Params(dict):
     def _theta_train_dict(self):
         keys = self._keys
         bools = self._train_bool
-        paths_train = [tuple(self[key].paths) for key, b in zip(keys, bools) if b]
+        paths_train = [key for key, b in zip(keys, bools) if b]
         theta_train = self._theta_train
         return dict(zip(paths_train, theta_train))
 
@@ -313,125 +373,88 @@ class Params(dict):
         return paths
 
     def transform_fns(self, val, ptype, inverse=False):
-        if ptype in ["tau", "eta"]:
+        if ptype in ['tau', 'eta']:
             # it's actually log differences of tau
             if inverse:
+                # ret = softplus_inverse(val)
                 ret = math.exp(val)
             else:
+                # ret = softplus(val)
                 ret = math.log(val)
 
-        elif ptype in ["rho", "pi"]:
+        elif ptype in ['rho', 'pi']:
             if inverse:
                 ret = 1 / (1 + math.exp(-val))
             else:
                 ret = math.log(val / (1 - val))
 
         else:
-            raise ValueError(f"Unknown {ptype=}")
+            raise ValueError(f'Unknown {ptype=}')
 
-        return ret
+        return float(ret)
 
     @property
-    def _transformed_diff_tau_dict(
-        self,
-    ) -> tuple[dict[tuple, float], dict[tuple, float]]:
+    def _transformed_diff_tau_dict(self) -> tuple[dict[tuple, float], dict[tuple, float]]:
         # returns infer and no inter keys
         # This dict stores log(tau[i] - tau[i-1])
 
-        ptype = "tau"
+        ptype = 'tau'
+        ptt = self._params_to_transforms
         keys = self._keys
         tau_keys = [key for key in keys if isinstance(self[key], TimeParam)]
         tau_keys = sorted(tau_keys, key=lambda key: self[key].num)
         tau_vals = [self[key].num for key in tau_keys]
-        tau_infr = [self[key].train_it for key in tau_keys]
 
         n_diff_tau = len(tau_keys) - 1
 
         diff_tau_vals = [tau_vals[i + 1] - tau_vals[i] for i in range(n_diff_tau)]
-        diff_tau_infr = [tau_infr[i + 1] | tau_infr[i] for i in range(n_diff_tau)]
         trans_tau_vals = [self.transform_fns(val, ptype) for val in diff_tau_vals]
-        trans_tau_paths = [
-            (self._params_to_paths[tau_keys[i + 1]], self._params_to_paths[tau_keys[i]])
-            for i in range(len(tau_keys) - 1)
+        trans_tau_keys = [
+            ptt[tau_keys[i + 1], tau_keys[i]] for i in range(len(tau_keys) - 1)
         ]
 
-        diff_tau_train_dict = {
-            trans_tau_paths[i][1]: {trans_tau_paths[i][0]: trans_tau_vals[i]}
-            for i in range(n_diff_tau)
-            if diff_tau_infr[i]
-        }
+        diff_tau_train_dict = {}
+        for key, val in zip(trans_tau_keys, trans_tau_vals):
+            tkeys = self._transforms_to_params[key]
+            train_it = self[tkeys[0]].train_it | self[tkeys[1]].train_it
+            if train_it:
+                diff_tau_train_dict[key] = val
 
-        diff_tau_nuisance_dict = {
-            trans_tau_paths[i][1]: {trans_tau_paths[i][0]: trans_tau_vals[i]}
-            for i in range(n_diff_tau)
-            if not diff_tau_infr[i]
-        }
-
-        diff_tau_nuisance_dict[(("init",),)] = {
-            self._params_to_paths["tau_0"]: tau_vals[0]
-        }
-
-        return diff_tau_train_dict, diff_tau_nuisance_dict
+        self['tau_0'].train_it = False
+        return diff_tau_train_dict
 
     @property
     def _transformed_rho_dict(self):
-        ptype = "rho"
+        ptype = 'rho'
+        ptt = self._params_to_transforms
         cur_keys = [key for key in self if isinstance(self[key], RateParam)]
-        _train_dict = {
-            tuple(self[key].paths): self.transform_fns(self[key].num, ptype)
-            for key in cur_keys
-            if self[key].train_it
-        }
-        _nuisance_dict = {
-            tuple(self[key].paths): self.transform_fns(self[key].num, ptype)
-            for key in cur_keys
-            if not self[key].train_it
-        }
-        return _train_dict, _nuisance_dict
+        _train_dict = {ptt[key]: self.transform_fns(self[key].num, ptype) for key in cur_keys if self[key].train_it}
+        return _train_dict
 
     @property
     def _transformed_pi_dict(self):
-        ptype = "pi"
+        ptype = 'pi'
+        ptt = self._params_to_transforms
         cur_keys = [key for key in self if isinstance(self[key], ProportionParam)]
-        _train_dict = {
-            tuple(self[key].paths): self.transform_fns(self[key].num, ptype)
-            for key in cur_keys
-            if self[key].train_it
-        }
-        _nuisance_dict = {
-            tuple(self[key].paths): self.transform_fns(self[key].num, ptype)
-            for key in cur_keys
-            if not self[key].train_it
-        }
-        return _train_dict, _nuisance_dict
+        _train_dict = {ptt[key]: self.transform_fns(self[key].num, ptype) for key in cur_keys if self[key].train_it}
+        return _train_dict
 
     @property
     def _transformed_eta_dict(self):
-        ptype = "eta"
+        ptype = 'eta'
+        ptt = self._params_to_transforms
         cur_keys = [key for key in self if isinstance(self[key], SizeParam)]
-        _train_dict = {
-            tuple(self[key].paths): self.transform_fns(self[key].num, ptype)
-            for key in cur_keys
-            if self[key].train_it
-        }
-        _nuisance_dict = {
-            tuple(self[key].paths): self.transform_fns(self[key].num, ptype)
-            for key in cur_keys
-            if not self[key].train_it
-        }
-        return _train_dict, _nuisance_dict
+        _train_dict = {ptt[key]: self.transform_fns(self[key].num, ptype) for key in cur_keys if self[key].train_it}
+        return _train_dict
 
     @property
     def _transformed_theta_train_dict(self):
-        transformed_theta_train_dict = []
-        for td, nd in [
-            self._transformed_eta_dict,
-            self._transformed_rho_dict,
-            self._transformed_pi_dict,
-            self._transformed_diff_tau_dict,
-        ]:
-            transformed_theta_train_dict.append(td)
-        return tuple(transformed_theta_train_dict)
+        e = self._transformed_eta_dict
+        r = self._transformed_rho_dict
+        p = self._transformed_pi_dict
+        dt = self._transformed_diff_tau_dict
+
+        return e | r | p | dt
 
     @property
     def _transformed_theta_nuisance_dict(self):
@@ -440,7 +463,7 @@ class Params(dict):
             self._transformed_eta_dict,
             self._transformed_rho_dict,
             self._transformed_pi_dict,
-            self._transformed_diff_tau_dict,
+            self._transformed_diff_tau_dict
         ]:
             transformed_theta_nuisance_dict.append(nd)
         return tuple(transformed_theta_nuisance_dict)
@@ -471,7 +494,7 @@ class Params(dict):
         trd = trd[0] | trd[1]
         for path in trd:
             key = self._path_to_params[path[0]]
-            new_key = f"logit({key})"
+            new_key = f'logit({key})'
             _transformed_params_to_paths[new_key] = self._params_to_paths[key]
             _paths_to_transformed_params[path] = new_key
 
@@ -479,7 +502,7 @@ class Params(dict):
         trd = trd[0] | trd[1]
         for path in trd:
             key = self._path_to_params[path[0]]
-            new_key = f"logit({key})"
+            new_key = f'logit({key})'
             _transformed_params_to_paths[new_key] = self._params_to_paths[key]
             _paths_to_transformed_params[path] = new_key
 
@@ -487,14 +510,14 @@ class Params(dict):
         trd = trd[0] | trd[1]
         for path in trd:
             key = self._path_to_params[path[0]]
-            new_key = f"log({key})"
+            new_key = f'log({key})'
             _transformed_params_to_paths[new_key] = self._params_to_paths[key]
             _paths_to_transformed_params[path] = new_key
 
         trd = self._transformed_diff_tau_dict
         trd = trd[0] | trd[1]
         for paths in trd:
-            if paths == (("init",),):
+            if paths == (('init',),):
                 pass
             else:
                 path1 = paths
@@ -503,7 +526,7 @@ class Params(dict):
                 key1 = self._path_to_params[path1[0]]
                 key2 = self._path_to_params[path2[0]]
 
-                new_key = f"log({key2}-{key1})"
+                new_key = f'log({key2}-{key1})'
                 _transformed_params_to_paths[new_key] = (path1, path2)
                 _paths_to_transformed_params[path1, path2] = new_key
         self._transformed_params_to_paths = _transformed_params_to_paths
@@ -557,14 +580,14 @@ class Params(dict):
         positions = set([])
         for key in text_params:
             cur = text_params[key]
-            ymin, ymax = cur["ymin"], cur["ymax"]
+            ymin, ymax = cur['ymin'], cur['ymax']
             r = ymax - ymin
             i = 2
             cont = True
             while cont:
                 for j in range(1, i):
                     if log_time:
-                        position = 1 + ymin + r * (10**j) / (10**i)
+                        position = 1 + ymin + r * (10 ** j) / (10 ** i)
                     else:
                         position = ymin + r * j / i
                     if positions.issuperset({position}):
@@ -574,9 +597,9 @@ class Params(dict):
                         positions.add(position)
                         break
                 i += 1
-            cur["y"] = position
-            del cur["ymin"]
-            del cur["ymax"]
+            cur['y'] = position
+            del cur['ymin']
+            del cur['ymax']
 
     def tubes(
         self,
@@ -848,7 +871,7 @@ class Params(dict):
             labels = ["%s" % signif(val) for val in values]
 
         if log_time:
-            if values[0] == 0.0:
+            if values[0] == 0.:
                 values = np.array(values) + 1.0
         ret.set_yticks(values, labels)  # Show time parameters in yticks
 
@@ -1510,9 +1533,9 @@ def get_html_repr(params):
 
     def eq_to_html(eq):
         eq = re.sub(r"_(\d+)", r"<sub>\1</sub>", eq)
-        eq = eq.replace("<=", "≤")
-        eq = eq.replace(">=", "≥")
-        eq = eq.replace("==", "=")
+        eq = eq.replace("<=", '≤')
+        eq = eq.replace(">=", '≥')
+        eq = eq.replace("==", '=')
         for key, value in Greek.items():
             eq = eq.replace(key, value)
         return eq
@@ -1576,8 +1599,7 @@ def get_html_repr(params):
     # FIXME: Add the actual link to paper
     return f"""
 <div style="display: inline-block; width: 30%;">
-    <a href="https://github.com/jthlab/momi3" target="_blank">SOURCE CODE</a>
-    <a href="https://thumbs.gfycat.com/LastBrilliantElk-mobile.mp4" target="_blank">PAPER</a>
+    <a href="https://github.com/jthlab/momi3" target="_blank">SOURCE CODE</a> <a href="https://thumbs.gfycat.com/LastBrilliantElk-mobile.mp4" target="_blank">PAPER</a>
     <br>
     <img src="https://enesdilber.github.io/momilogo.png" style="width:75px;height:52px;">
     <table border="1" style="width: 100%;">

@@ -234,3 +234,7 @@ def convolve_sum(A, B):
     f2 = vmap(f1, (None, 0))
     f3 = vmap(f2, (0, None))
     return f3(A, B)
+
+
+def softplus_inverse(tx):
+    return jnp.where(tx > 50, tx, jnp.log(jnp.expm1(tx)))
