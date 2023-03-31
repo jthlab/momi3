@@ -1,3 +1,4 @@
+import dataclasses
 import math
 import operator
 from copy import deepcopy
@@ -10,7 +11,6 @@ import demes
 import jax
 import jax.numpy as jnp
 import networkx as nx
-import numpy as np
 from frozendict import frozendict
 
 from momi3 import events
@@ -100,24 +100,18 @@ class ETBuilder:
         self,
         demo: demes.Graph,
         num_samples: dict[str, int],
-        bounds: dict[Node, dict[Population, int]] = None,
     ):
         self._demo = demo
-        self._i = count(1)
         self._T = nx.DiGraph()
         self._num_samples = num_samples
-        self._bounds = bounds
-        # self._j uses negative numbers to mark the nodes added by bounds,
-        # so that the pre-existing nodes have consistent numbering when
-        # re-running the tree construction algorithm to bounds.
-        self._j = count(-1, -1)
-        self._setup(num_samples)
+        # initialize the event tree
+        self._init_event_tree()
+        # compute aux information for each node
+        self._setup()
 
-    @property
-    def num_samples(self):
-        return self._num_samples
-
-    def _setup(self, num_samples: dict[str, int]):
+    def _init_event_tree(self):
+        # initialize the event tree
+        self._i = count(1)
         leaves = self._leaves = {}
         # Initialize leaf nodes for each population
         for j, deme in enumerate(self._demo.demes):
@@ -133,7 +127,7 @@ class ETBuilder:
                 migrations=frozendict(),
             )
             leaves[deme.name] = node
-            ns = num_samples.get(deme.name, 0)
+            ns = self.num_samples.get(deme.name, 0)
             if ns < 4:
                 # for continuous migration, we require that there are at least four nodes. so for now we just enforce
                 # this globally. slightly wasteful if there is not any cm 🤷.
@@ -141,15 +135,20 @@ class ETBuilder:
                 self.add_edge(
                     node, v, event=events.Downsample(pop=deme.name, m=4, n=ns)
                 )
-
         # build the event tree. relatively costly operation, but should still be fast for all the demographies we can
         # actually analyze
         self._build()
 
+    @property
+    def num_samples(self):
+        return self._num_samples
+
+    def _setup(self):
         # precompute auxiliary information for each event
+        leaves = self._leaves
         for deme in self._demo.demes:
             pop = deme.name
-            n = num_samples.get(pop, 0)
+            n = self.num_samples.get(pop, 0)
             self.nodes[leaves[pop]].update(
                 {"axes": Axes({pop: n + 1}), "ns": {pop: {pop: n}}}
             )
@@ -194,13 +193,6 @@ class ETBuilder:
             auxd["nodes"][u] = aux
             self.nodes[u].update({"axes": new_ax, "ns": new_ns})
 
-        # def f(obj):
-        #     if isinstance(obj, np.ndarray):
-        #         obj = jnp.array(obj)
-        #     return obj
-
-        # self._auxd = jax.tree_util.tree_map(f, self._auxd)
-
     def execute(
         self, params: dict, X: dict[Population, jnp.ndarray], auxd: dict
     ) -> jnp.ndarray:
@@ -220,7 +212,7 @@ class ETBuilder:
             XX = X[pop].astype(
                 float
             )  # int partial likelihoods causes all sorts of problems further down
-            ns = self._num_samples.get(pop, 0)
+            ns = self.num_samples.get(pop, 0)
             assert XX.shape == (ns + 1,)
             l0 = XX[0] == 1.0  # & (X[pop][1:] == 0.0).all()
             self.nodes[self._leaves[pop]]["state"] = State(pl=XX, phi=0.0, l0=l0)
@@ -334,20 +326,16 @@ class ETBuilder:
             migrations=self.nodes[u]["migrations"],
         )
         self._T.add_edge(u, v, event=ev)
-        if (
-            self._bounds and u in self._bounds and np.isfinite(v.t.t)
-        ):  # do not bound the topmost population
-            v = self._add_bounds(u, v)
         return v
 
-    def _add_bounds(self, u, v):
-        d = self._bounds[u]
-        for pop in v.block:
-            w = self.node_like(v, i=next(self._j))
-            ev = events.Upsample(pop, d[pop])
-            self._T.add_edge(v, w, event=ev)
-            v = w
-        return v
+    def bound(self, bounds):
+        for d in self.nodes, self.edges:
+            for u in d:
+                ev = d[u].get("event")
+                if ev is not None and ev in bounds:
+                    d[u]["event"] = dataclasses.replace(ev, bounds=bounds[ev])
+        self._setup()
+        return self
 
     def _merge_nodes(self, x: Node, y: Node, rm=None) -> Node:
         """merge nodes x and y, optionally removing rm from the merged block set."""
@@ -483,10 +471,6 @@ class ETBuilder:
             # same block, so we perform the pulse in one tensor contraction
             w = self.node_like(u)
             self.add_edge(u, w, event=events.Pulse(source=source, dest=dest, f_p=f_p))
-            if self._bounds:
-                # FIXME which node is the correct one to look at here--bottom or top of admixture?
-                assert self._bounds[u] == self._bounds[v]
-                self._add_bounds(v, w)
         else:
             # different blocks, so we model the pulse as an admixture followed by a split2
             tr1, tr2 = unique_strs(u.block, 2)
@@ -508,8 +492,6 @@ class ETBuilder:
             assert x.block == (u.block | v.block | {tr2}) - {dest}
             y = self.node_like(x, block=u.block | v.block)
             self.add_edge(x, y, event=events.Rename(old=tr2, new=dest))
-            if self._bounds:
-                self._add_bounds(y, y)
 
     @property
     def auxd(self):

@@ -350,7 +350,9 @@ def bound_sampler(
             # execute the edge event (if any)
             ev = e.get("event", events.NoOp())
 
-            if isinstance(ev, events.Lift):
+            if (
+                isinstance(ev, events.Lift) and not ev.terminal
+            ):  # do not bound terminal events
                 if ev.migrations:
                     pass
                     # n = Migration_sample(

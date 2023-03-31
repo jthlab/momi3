@@ -108,12 +108,11 @@ class Lift(Event):
         # set up functions for computing migration rates and pop sizes at runtime
         return child_axes, nsp, aux
 
-    def _f_Ne(self, params: dict, aux) -> dict[Population, tuple[float, float]]:
+    def _f_Ne(self, params: dict) -> dict[Population, tuple[float, float]]:
         """get the population size at the start and end of the interval"""
         deme_d = {deme["name"]: i for i, deme in enumerate(params["demes"])}
         ret = {}
-        child_axes = aux["axes"]
-        for pop in child_axes:
+        for pop in self.epochs:
             i = deme_d[pop]
             j = self.epochs[pop]
             N0, N1 = tuple(
@@ -155,7 +154,7 @@ class Lift(Event):
         """
         plp = st.pl
         phip = 0.0
-        size_d = self._f_Ne(params, aux)
+        size_d = self._f_Ne(params)
         t1_val = traverse(params, self.t1.path)
         t0_val = traverse(params, self.t0.path)
         tau = t1_val - t0_val

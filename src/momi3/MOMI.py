@@ -10,7 +10,7 @@ import numpy as np
 from sparse._coo.core import COO
 
 from momi3.Data import get_data
-from momi3.event_tree import ETBuilder, Node, Population
+from momi3.event_tree import ETBuilder
 from momi3.JAX_functions import JAX_functions
 from momi3.lineage_sampler import bound_sampler
 from momi3.optimizers import ProjectedGradient_optimizer
@@ -42,7 +42,6 @@ class Momi(object):
         jitted: bool = False,
         batch_size: int = None,
         low_memory: bool = False,
-        bounds: dict[Node, dict[Population, int]] = None,
     ):
         """
         Args:
@@ -52,28 +51,26 @@ class Momi(object):
             sample_sizes (tuple[int]): Sample sizes.
             jitted (bool, optional): Whether jax.jit the functions or not
         """
-        demo = demo.in_generations()
+        self._demo = demo.in_generations()
+        self._jitted = jitted
+        self._lowmem = low_memory
         assert len(sampled_demes) == len(sample_sizes)
-
         self.sampled_demes = tuple(sampled_demes)
         self.sample_sizes = tuple(sample_sizes)
         self._n_samples = dict(zip(sampled_demes, sample_sizes))
-
-        T = ETBuilder(demo, self._n_samples, bounds)
-        demo_dict = demo.asdict()
-
-        # assert_message = f"keys of n_samples do not match the demo {set(n_samples)} =/= {set(T._leaves)}"
-        # assert set(n_samples) == set(T._leaves), assert_message
-
-        self._T = T
-        self._auxd = T.auxd
-        self._demo_dict = demo_dict
-        self._JAX_functions = JAX_functions(demo=demo, T=T, jitted=jitted, low_memory=low_memory)
         self.batch_size = batch_size
+        self._T = ETBuilder(self._demo, self._n_samples)
+        self._JAX_functions = JAX_functions(
+            demo=self._demo, T=self._T, jitted=self._jitted, low_memory=self._lowmem
+        )
+
+    @property
+    def demo(self):
+        return self._demo
 
     @property
     def _default_params(self):
-        return Params(demo_dict=self._demo_dict, T=self._T)
+        return Params(demo_dict=self._demo.asdict(), T=self._T)
 
     def sfs_entry(self, num_derived: dict, params="default"):
         if params == "default":
@@ -122,7 +119,7 @@ class Momi(object):
         self,
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
-        theta_train_dict: dict[str, float] = None
+        theta_train_dict: dict[str, float] = None,
     ) -> float:
         """log likelihood value for given params and data. It calls loglik_with_gradient.
 
@@ -147,16 +144,14 @@ class Momi(object):
 
         theta_nuisance_dict = params._theta_nuisance_dict
         data = self._get_data(jsfs, self.batch_size)
-        return self._JAX_functions.loglik(
-            theta_train_dict, theta_nuisance_dict, data
-        )
+        return self._JAX_functions.loglik(theta_train_dict, theta_nuisance_dict, data)
 
     def loglik_with_gradient(
         self,
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
         theta_train_dict: dict[str, float] = None,
-        return_array: bool = False
+        return_array: bool = False,
     ) -> tuple[float, dict[str, float]]:
         """log likelihood value and the gradient for theta_train_dict for given params and jsfs
 
@@ -195,7 +190,7 @@ class Momi(object):
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray] = None,
         theta_train_dict: dict[str, float] = None,
-        return_array: bool = False
+        return_array: bool = False,
     ) -> tuple[float, dict[str, float]]:
         """Negative log likelihood value and the gradient for theta_train_dict for given params and jsfs.
         It calls loglik_with_gradient.
@@ -279,7 +274,7 @@ class Momi(object):
         self,
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray] = None,
-        just_hess: bool = False
+        just_hess: bool = False,
     ):
         theta_train_dict = params._theta_train_dict
         theta_nuisance_dict = params._theta_nuisance_dict
@@ -312,7 +307,7 @@ class Momi(object):
         self,
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
-        return_COV_MATRIX: bool = False
+        return_COV_MATRIX: bool = False,
     ):
         GIM = self.GIM(params, jsfs)
         COV = jnp.linalg.pinv(GIM)  # Calling psuedo-inverse
@@ -326,7 +321,7 @@ class Momi(object):
         self,
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
-        return_COV_MATRIX: bool = False
+        return_COV_MATRIX: bool = False,
     ):
         H = self.GIM(params, jsfs, just_hess=True, batch_size=self.batch_size)
         COV = jnp.linalg.pinv(H)  # Calling psuedo-inverse
@@ -407,6 +402,13 @@ class Momi(object):
             seed=seed,
             quantile=quantile,
         )
+
+    def bound(self, bounds):
+        self._T = ETBuilder(self._demo, self._n_samples).bound(bounds)
+        self._JAX_functions = JAX_functions(
+            demo=self._demo, T=self._T, jitted=self._jitted, low_memory=self._lowmem
+        )
+        return self
 
     def _get_data(self, jsfs, batch_size):
         return get_data(

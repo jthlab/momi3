@@ -42,7 +42,7 @@ class Params(dict):
     def __init__(self, momi=None, demo_dict=None, T=None):
         if momi is not None:
             T = momi._T
-            demo_dict = momi._demo_dict
+            demo_dict = momi.demo.asdict()
         demo_dict = deepcopy(demo_dict)
         self._demo_dict = demo_dict
         self._T = T
@@ -313,30 +313,32 @@ class Params(dict):
         return paths
 
     def transform_fns(self, val, ptype, inverse=False):
-        if ptype in ['tau', 'eta']:
+        if ptype in ["tau", "eta"]:
             # it's actually log differences of tau
             if inverse:
                 ret = math.exp(val)
             else:
                 ret = math.log(val)
 
-        elif ptype in ['rho', 'pi']:
+        elif ptype in ["rho", "pi"]:
             if inverse:
                 ret = 1 / (1 + math.exp(-val))
             else:
                 ret = math.log(val / (1 - val))
 
         else:
-            raise ValueError(f'Unknown {ptype=}')
+            raise ValueError(f"Unknown {ptype=}")
 
         return ret
 
     @property
-    def _transformed_diff_tau_dict(self) -> tuple[dict[tuple, float], dict[tuple, float]]:
+    def _transformed_diff_tau_dict(
+        self,
+    ) -> tuple[dict[tuple, float], dict[tuple, float]]:
         # returns infer and no inter keys
         # This dict stores log(tau[i] - tau[i-1])
 
-        ptype = 'tau'
+        ptype = "tau"
         keys = self._keys
         tau_keys = [key for key in keys if isinstance(self[key], TimeParam)]
         tau_keys = sorted(tau_keys, key=lambda key: self[key].num)
@@ -349,50 +351,74 @@ class Params(dict):
         diff_tau_infr = [tau_infr[i + 1] | tau_infr[i] for i in range(n_diff_tau)]
         trans_tau_vals = [self.transform_fns(val, ptype) for val in diff_tau_vals]
         trans_tau_paths = [
-            (
-                self._params_to_paths[tau_keys[i + 1]],
-                self._params_to_paths[tau_keys[i]]
-            ) for i in range(len(tau_keys) - 1)
+            (self._params_to_paths[tau_keys[i + 1]], self._params_to_paths[tau_keys[i]])
+            for i in range(len(tau_keys) - 1)
         ]
 
         diff_tau_train_dict = {
-            trans_tau_paths[i][1]: {
-                trans_tau_paths[i][0]: trans_tau_vals[i]
-            } for i in range(n_diff_tau) if diff_tau_infr[i]
+            trans_tau_paths[i][1]: {trans_tau_paths[i][0]: trans_tau_vals[i]}
+            for i in range(n_diff_tau)
+            if diff_tau_infr[i]
         }
 
         diff_tau_nuisance_dict = {
-            trans_tau_paths[i][1]: {
-                trans_tau_paths[i][0]: trans_tau_vals[i]
-            } for i in range(n_diff_tau) if not diff_tau_infr[i]
+            trans_tau_paths[i][1]: {trans_tau_paths[i][0]: trans_tau_vals[i]}
+            for i in range(n_diff_tau)
+            if not diff_tau_infr[i]
         }
 
-        diff_tau_nuisance_dict[(('init', ),)] = {self._params_to_paths['tau_0']: tau_vals[0]}
+        diff_tau_nuisance_dict[(("init",),)] = {
+            self._params_to_paths["tau_0"]: tau_vals[0]
+        }
 
         return diff_tau_train_dict, diff_tau_nuisance_dict
 
     @property
     def _transformed_rho_dict(self):
-        ptype = 'rho'
+        ptype = "rho"
         cur_keys = [key for key in self if isinstance(self[key], RateParam)]
-        _train_dict = {tuple(self[key].paths): self.transform_fns(self[key].num, ptype) for key in cur_keys if self[key].train_it}
-        _nuisance_dict = {tuple(self[key].paths): self.transform_fns(self[key].num, ptype) for key in cur_keys if not self[key].train_it}
+        _train_dict = {
+            tuple(self[key].paths): self.transform_fns(self[key].num, ptype)
+            for key in cur_keys
+            if self[key].train_it
+        }
+        _nuisance_dict = {
+            tuple(self[key].paths): self.transform_fns(self[key].num, ptype)
+            for key in cur_keys
+            if not self[key].train_it
+        }
         return _train_dict, _nuisance_dict
 
     @property
     def _transformed_pi_dict(self):
-        ptype = 'pi'
+        ptype = "pi"
         cur_keys = [key for key in self if isinstance(self[key], ProportionParam)]
-        _train_dict = {tuple(self[key].paths): self.transform_fns(self[key].num, ptype) for key in cur_keys if self[key].train_it}
-        _nuisance_dict = {tuple(self[key].paths): self.transform_fns(self[key].num, ptype) for key in cur_keys if not self[key].train_it}
+        _train_dict = {
+            tuple(self[key].paths): self.transform_fns(self[key].num, ptype)
+            for key in cur_keys
+            if self[key].train_it
+        }
+        _nuisance_dict = {
+            tuple(self[key].paths): self.transform_fns(self[key].num, ptype)
+            for key in cur_keys
+            if not self[key].train_it
+        }
         return _train_dict, _nuisance_dict
 
     @property
     def _transformed_eta_dict(self):
-        ptype = 'eta'
+        ptype = "eta"
         cur_keys = [key for key in self if isinstance(self[key], SizeParam)]
-        _train_dict = {tuple(self[key].paths): self.transform_fns(self[key].num, ptype) for key in cur_keys if self[key].train_it}
-        _nuisance_dict = {tuple(self[key].paths): self.transform_fns(self[key].num, ptype) for key in cur_keys if not self[key].train_it}
+        _train_dict = {
+            tuple(self[key].paths): self.transform_fns(self[key].num, ptype)
+            for key in cur_keys
+            if self[key].train_it
+        }
+        _nuisance_dict = {
+            tuple(self[key].paths): self.transform_fns(self[key].num, ptype)
+            for key in cur_keys
+            if not self[key].train_it
+        }
         return _train_dict, _nuisance_dict
 
     @property
@@ -402,7 +428,7 @@ class Params(dict):
             self._transformed_eta_dict,
             self._transformed_rho_dict,
             self._transformed_pi_dict,
-            self._transformed_diff_tau_dict
+            self._transformed_diff_tau_dict,
         ]:
             transformed_theta_train_dict.append(td)
         return tuple(transformed_theta_train_dict)
@@ -414,7 +440,7 @@ class Params(dict):
             self._transformed_eta_dict,
             self._transformed_rho_dict,
             self._transformed_pi_dict,
-            self._transformed_diff_tau_dict
+            self._transformed_diff_tau_dict,
         ]:
             transformed_theta_nuisance_dict.append(nd)
         return tuple(transformed_theta_nuisance_dict)
@@ -445,7 +471,7 @@ class Params(dict):
         trd = trd[0] | trd[1]
         for path in trd:
             key = self._path_to_params[path[0]]
-            new_key = f'logit({key})'
+            new_key = f"logit({key})"
             _transformed_params_to_paths[new_key] = self._params_to_paths[key]
             _paths_to_transformed_params[path] = new_key
 
@@ -453,7 +479,7 @@ class Params(dict):
         trd = trd[0] | trd[1]
         for path in trd:
             key = self._path_to_params[path[0]]
-            new_key = f'logit({key})'
+            new_key = f"logit({key})"
             _transformed_params_to_paths[new_key] = self._params_to_paths[key]
             _paths_to_transformed_params[path] = new_key
 
@@ -461,14 +487,14 @@ class Params(dict):
         trd = trd[0] | trd[1]
         for path in trd:
             key = self._path_to_params[path[0]]
-            new_key = f'log({key})'
+            new_key = f"log({key})"
             _transformed_params_to_paths[new_key] = self._params_to_paths[key]
             _paths_to_transformed_params[path] = new_key
 
         trd = self._transformed_diff_tau_dict
         trd = trd[0] | trd[1]
         for paths in trd:
-            if paths == (('init',),):
+            if paths == (("init",),):
                 pass
             else:
                 path1 = paths
@@ -477,7 +503,7 @@ class Params(dict):
                 key1 = self._path_to_params[path1[0]]
                 key2 = self._path_to_params[path2[0]]
 
-                new_key = f'log({key2}-{key1})'
+                new_key = f"log({key2}-{key1})"
                 _transformed_params_to_paths[new_key] = (path1, path2)
                 _paths_to_transformed_params[path1, path2] = new_key
         self._transformed_params_to_paths = _transformed_params_to_paths
@@ -531,14 +557,14 @@ class Params(dict):
         positions = set([])
         for key in text_params:
             cur = text_params[key]
-            ymin, ymax = cur['ymin'], cur['ymax']
+            ymin, ymax = cur["ymin"], cur["ymax"]
             r = ymax - ymin
             i = 2
             cont = True
             while cont:
                 for j in range(1, i):
                     if log_time:
-                        position = 1 + ymin + r * (10 ** j) / (10 ** i)
+                        position = 1 + ymin + r * (10**j) / (10**i)
                     else:
                         position = ymin + r * j / i
                     if positions.issuperset({position}):
@@ -548,9 +574,9 @@ class Params(dict):
                         positions.add(position)
                         break
                 i += 1
-            cur['y'] = position
-            del cur['ymin']
-            del cur['ymax']
+            cur["y"] = position
+            del cur["ymin"]
+            del cur["ymax"]
 
     def tubes(
         self,
@@ -822,7 +848,7 @@ class Params(dict):
             labels = ["%s" % signif(val) for val in values]
 
         if log_time:
-            if values[0] == 0.:
+            if values[0] == 0.0:
                 values = np.array(values) + 1.0
         ret.set_yticks(values, labels)  # Show time parameters in yticks
 
@@ -1484,9 +1510,9 @@ def get_html_repr(params):
 
     def eq_to_html(eq):
         eq = re.sub(r"_(\d+)", r"<sub>\1</sub>", eq)
-        eq = eq.replace("<=", '≤')
-        eq = eq.replace(">=", '≥')
-        eq = eq.replace("==", '=')
+        eq = eq.replace("<=", "≤")
+        eq = eq.replace(">=", "≥")
+        eq = eq.replace("==", "=")
         for key, value in Greek.items():
             eq = eq.replace(key, value)
         return eq
@@ -1550,7 +1576,8 @@ def get_html_repr(params):
     # FIXME: Add the actual link to paper
     return f"""
 <div style="display: inline-block; width: 30%;">
-    <a href="https://github.com/jthlab/momi3" target="_blank">SOURCE CODE</a> <a href="https://thumbs.gfycat.com/LastBrilliantElk-mobile.mp4" target="_blank">PAPER</a>
+    <a href="https://github.com/jthlab/momi3" target="_blank">SOURCE CODE</a>
+    <a href="https://thumbs.gfycat.com/LastBrilliantElk-mobile.mp4" target="_blank">PAPER</a>
     <br>
     <img src="https://enesdilber.github.io/momilogo.png" style="width:75px;height:52px;">
     <table border="1" style="width: 100%;">
