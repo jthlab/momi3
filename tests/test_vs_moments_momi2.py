@@ -479,10 +479,26 @@ def test_two_pop_two_pulses(run_type="pytest", **kwargs):
     mvm.compare("momi3", "moments", run_type, **kwargs)
 
 
-def test_two_pop_two_pulses_large_n(run_type="pytest", **kwargs):
-    demo, model1 = TwoDemes.Constant().two_pulses()
+def test_two_pop_large_n(run_type="pytest", **kwargs):
+    demo, model1 = TwoDemes.Constant().base()
     sampled_demes = ["A", "B"]
-    sample_sizes = [30, 31]
+    sample_sizes = [50, 51]
+    mvm = Momi_vs_Moments(demo, model1, sampled_demes, sample_sizes)
+    mvm.compare("momi3", "momi2", run_type, **kwargs)
+
+
+def test_two_pop_one_pulse_large_n(run_type="pytest", **kwargs):
+    demo, model1 = TwoDemes.Constant().pulse(tp=1e-32, p=0)
+    sampled_demes = ["A", "B"]
+    sample_sizes = [50, 51]
+    mvm = Momi_vs_Moments(demo, model1, sampled_demes, sample_sizes)
+    mvm.compare("momi3", "momi2", run_type, **kwargs)
+
+
+def test_two_pop_two_pulses_large_n(run_type="pytest", **kwargs):
+    demo, model1 = TwoDemes.Constant().two_pulses(tp1=1e-32, tp2=2e-32, p1=0, p2=0)
+    sampled_demes = ["A", "B"]
+    sample_sizes = [50, 51]
     mvm = Momi_vs_Moments(demo, model1, sampled_demes, sample_sizes)
     mvm.compare("momi3", "momi2", run_type, **kwargs)
 
