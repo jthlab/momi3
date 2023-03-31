@@ -23,7 +23,7 @@ from momi3.common import (
 )
 from momi3.math_functions import exp_integral, exp_integralEGPS, expm1d
 from momi3.migration import lift_cm, lift_cm_aux
-from momi3.utils import W_matrix, moran_eigensystem
+from momi3.utils import W_matrix, moran_eigensystem, rate_matrix
 
 from .event import Event
 
@@ -32,9 +32,10 @@ T = TypeVar("T")
 
 def _aux_single(nv):
     d, Q = moran_eigensystem(nv)
+    M = rate_matrix(nv).toarray()
     QQ, RR = jnp.linalg.qr(Q)
     W = W_matrix(nv).astype(float)
-    return dict(d=d, Q=Q, W=W, QQ=QQ, RR=RR)
+    return dict(d=d, Q=Q, M=M, W=W, QQ=QQ, RR=RR)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -176,6 +177,7 @@ class Lift(Event):
                         tau,
                         mats["d"],
                         mats["Q"],
+                        mats["M"],
                         mats["QQ"],
                         mats["RR"],
                         mats["W"],
@@ -198,7 +200,7 @@ class Lift(Event):
         return st._replace(pl=plp, phi=st.phi + phip)
 
 
-def _lift1(pl, in_axis, Ne, tau, d, Q, QQ, RR, W, terminal):
+def _lift1(pl, in_axis, Ne, tau, d, Q, M, QQ, RR, W, terminal):
     """
     Lift a partial likelihood along a single axis.
     Args:
@@ -239,7 +241,6 @@ def _lift1(pl, in_axis, Ne, tau, d, Q, QQ, RR, W, terminal):
 
     # the next two lines push the lifted axis to the end and apply a batched solve
     # equivalent to tensordot(Ql, Qinv, axes=(in_axis, 1)) but without forming Qinv
-    # TODO change from repeated solve to QR and triangular solve
     def f(x):
         return lax.linalg.triangular_solve(RR, QQ.T @ x, left_side=True, lower=False)
 

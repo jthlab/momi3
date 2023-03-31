@@ -9,11 +9,11 @@ import sys
 from copy import deepcopy
 from itertools import product
 
+import dadi
 import demes
 import jax
 import jax.numpy as jnp
 import moments
-import dadi
 import momi as momi2
 import numpy as np
 import pytest
@@ -67,7 +67,10 @@ class Momi_vs_Moments:
         dG = self.moments_graph
 
         esfs = dadi.Spectrum.from_demes(
-            dG, sampled_demes=self.sampled_demes, sample_sizes=self.sample_sizes, pts=dadi_pts
+            dG,
+            sampled_demes=self.sampled_demes,
+            sample_sizes=self.sample_sizes,
+            pts=dadi_pts,
         )
         esfs = np.array(esfs)
         return esfs * 4 * dG.demes[0].epochs[0].start_size
@@ -474,6 +477,14 @@ def test_two_pop_two_pulses(run_type="pytest", **kwargs):
     print("two-pop w/ two pulses")
     mvm.compare("momi3", "momi2", run_type, **kwargs)
     mvm.compare("momi3", "moments", run_type, **kwargs)
+
+
+def test_two_pop_two_pulses_large_n(run_type="pytest", **kwargs):
+    demo, model1 = TwoDemes.Constant().two_pulses()
+    sampled_demes = ["A", "B"]
+    sample_sizes = [30, 31]
+    mvm = Momi_vs_Moments(demo, model1, sampled_demes, sample_sizes)
+    mvm.compare("momi3", "momi2", run_type, **kwargs)
 
 
 def test_two_pop_pulse_sym(run_type="pytest", **kwargs):
