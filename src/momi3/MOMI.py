@@ -10,12 +10,12 @@ import numpy as np
 from sparse._coo.core import COO
 
 from momi3.Data import get_data
-from momi3.event import ETBuilder, Node, Population
+from momi3.event_tree import ETBuilder
 from momi3.JAX_functions import JAX_functions
+from momi3.lineage_sampler import bound_sampler
 from momi3.optimizers import ProjectedGradient_optimizer
 from momi3.Params import Params
-from momi3.surviving_lineage_samplers import bound_sampler
-from momi3.utils import msprime_simulator, msprime_chromosome_simulator
+from momi3.utils import msprime_chromosome_simulator, msprime_simulator
 
 
 def esfs(g: demes.Graph, sample_sizes: dict[str, int]):
