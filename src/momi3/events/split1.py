@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import TypeVar
 
 import numpy as np
-from jax import lax
 from jax import numpy as jnp
 
 from momi3.common import Axes, PopCounter, Population, State, oe_einsum, unique_str
@@ -79,7 +78,8 @@ class Split1(Event):
                     M=nw1 + nw2, N=i[..., 0], n=n, k=jnp.arange(n + 1)[None, :]
                 )
             )  # [nw1+nw2+1, n + 1]
-            aux["Q"], aux["R"] = np.linalg.qr(B)
+            aux["Bplus"] = np.linalg.pinv(B, rcond=1e-5)
+
         return out_axes, nsp, aux
 
     def _execute_impl(self, st: State, params: dict, aux: T) -> State:
@@ -102,23 +102,15 @@ class Split1(Event):
         assert (
             i == len(out_inds) - 1
         )  # this axis should be innermost for doing the quasi-inverse below
-        if "Q" in aux:
+        if "Bplus" in aux:
             # B = QR so B+X = solve(R, Q.T B)
             # hypergeometrically upsample (forwards in time) to go from n to nw1 + nw2
             b = unique_str(out_inds)
-            Q_inds = [b, a]
+            B_inds = [a, b]
             H_inds = [b, self.donor, self.recipient]
-            y = oe_einsum(aux["Q"], Q_inds, aux["H"], H_inds, st.pl, pl_inds, out_inds)
-
-            # assert y.shape == tuple(aux["out_axes"].values())
-            # triangular_solve wants y to come as a column vector, so we have to add and strip off a trailing axis
-            def f(yi):
-                return lax.linalg.triangular_solve(
-                    aux["R"], yi[:, None], left_side=True, lower=False
-                )[:, 0]
-
-            # clip because inverting R can lead to small negative values
-            plp = jnp.apply_along_axis(f, i, y).clip(1e-20)
+            plp = oe_einsum(
+                aux["Bplus"], B_inds, aux["H"], H_inds, st.pl, pl_inds, out_inds
+            )
         else:
             H_inds = [a, self.donor, self.recipient]
             plp = oe_einsum(aux["H"], H_inds, st.pl, pl_inds, out_inds)

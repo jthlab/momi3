@@ -4,10 +4,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Callable, TypeVar
 
-import jax
 import jax.numpy as jnp
 import numpy as np
-from jax import lax
 
 from momi3.common import Axes, PopCounter, Population, State, oe_einsum, unique_strs
 from momi3.math_functions import convolve_sum, log_binom_pmf, log_hypergeom
@@ -83,7 +81,7 @@ class Pulse(Event):
                     M=nw1 + nw2, N=i[..., 0], n=n, k=jnp.arange(n + 1)[None, :]
                 )
             )  # [nw1+nw2+1, n + 1]
-            aux["Q"], aux["R"] = np.linalg.qr(B)
+            aux["Bplus"] = np.linalg.pinv(B, rcond=1e-5)
         return out_axes, new_ns, aux
 
     def _execute_impl(self, st: State, params: dict, aux: T) -> State:
@@ -124,27 +122,14 @@ class Pulse(Event):
         # C splits dest into a and b, and then b merges with source via H3
         ein_args = (st.pl, pl_inds, C, C_inds, aux["H3"], H3_inds)
         i = out_inds.index(self.source)
-        if "Q" in aux:  # and finally we hypergeom downsample
+        if "Bplus" in aux:  # and finally we hypergeom downsample
             out_inds[i] = d
-            Q_inds = [c, d]
-            ein_args += (aux["Q"], Q_inds)
-            y = oe_einsum(*ein_args, out_inds)
-            try:
-                assert y.shape == tuple(aux["out_axes"].values())
-            except jax.errors.ConcretizationTypeError:
-                # this fails if we are tracing auxd
-                pass
-
-            def f(yi):
-                return lax.linalg.triangular_solve(
-                    aux["R"], yi, left_side=True, lower=False
-                )
-
-            plp = jnp.apply_along_axis(f, i, y)
+            B_inds = [d, c]
+            ein_args += (aux["Bplus"], B_inds)
+            plp = oe_einsum(*ein_args, out_inds)
         else:
             out_inds[i] = c
             plp = oe_einsum(*ein_args, out_inds)
-        plp = jnp.clip(plp, 1e-20)
         return st._replace(pl=plp)
 
 
