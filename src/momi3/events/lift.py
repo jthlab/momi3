@@ -241,10 +241,11 @@ def _lift1(pl, in_axis, Ne, tau, d, Q, M, QQ, RR, W, terminal):
 
     # the next two lines push the lifted axis to the end and apply a batched solve
     # equivalent to tensordot(Ql, Qinv, axes=(in_axis, 1)) but without forming Qinv
-    def f(x):
-        return lax.linalg.triangular_solve(RR, QQ.T @ x, left_side=True, lower=False)
+    # def f(x):
+    #     # return lax.linalg.triangular_solve(RR, QQ.T @ x, left_side=True, lower=False)
+    #     return jnp.linalg.solve(Q, x)
 
-    plp = jnp.apply_along_axis(f, in_axis, Ql)
+    plp = jnp.apply_along_axis(lambda x: jnp.linalg.solve(Q, x), in_axis, Ql)
     return plp, etbl
 
 

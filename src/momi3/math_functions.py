@@ -211,7 +211,6 @@ def log_binom_pmf(k, n, p):
     n: sample size
     p: success probability
     """
-    p = jnp.clip(p, a_min=1e-5, a_max=1 - 1e-5)
     return logBinom(n, k) + xlogy(k, p) + xlog1py(n - k, -p)
 
 

@@ -1,6 +1,7 @@
 from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
+import os
 
 import numpy as np
 from jax import numpy as jnp
@@ -32,6 +33,8 @@ class Event:
 
     def execute(self, st: State, params: dict, aux: T) -> State:
         st = self._execute_impl(st, params, aux)
+        if os.environ.get('MOMI_PRINT_EVENTS'):
+            print(self)
         if self.bounds:
             for pop in aux["bounds"]:
                 st = Upsample(pop=pop, m=self.bounds[pop]).execute(

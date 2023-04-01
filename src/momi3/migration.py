@@ -112,8 +112,8 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     e0 = z.at[(0,) * z.ndim].set(1.0)
     tangent_args = (Q_mig, Q_mut, Q_drift, dims, axes, Ne, t, aux)
     res = solve((z, e0), tangent_args)
-    (etbl,), _ = res
-    return plp.clip(0.0, 1.0), etbl.clip(0.0)
+    etbls, _ = res
+    return plp, etbls[0]
 
 
 def _lift_cm_const(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
