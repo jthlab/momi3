@@ -219,8 +219,15 @@ class Params(dict):
         ]
 
     def set_train_all_taus(self, value: bool):
+        # will apply all but tau_0
         keys = self._keys
-        [self[key].train(value) for key in keys if isinstance(self[key], TimeParam)]
+        [self[key].train(value) for key in keys if (isinstance(self[key], TimeParam)) & (key != 'tau_0')]
+
+    def set_train_all(self, value: bool):
+        self.set_train_all_etas(value)
+        self.set_train_all_rhos(value)
+        self.set_train_all_pis(value)
+        self.set_train_all_taus(value)
 
     def set(self, key: str, value: float):
         value = float(value)
@@ -244,26 +251,51 @@ class Params(dict):
         b2 = jnp.allclose(A @ theta_train_hat, b)
         return b1 & b2
 
-    def set_optimization_results(self, theta_train_hat: dict | jnp.ndarray):
-        keys = self._train_keys
-        if isinstance(theta_train_hat, dict):
-            theta_train_hat = jnp.array(
-                [theta_train_hat[key] for key in keys], dtype="f"
-            )
+    def set_optimization_results(self, theta_train_hat: dict):
 
-        assert len(keys) == len(theta_train_hat)
+        if set(theta_train_hat) == set(self.theta_train_dict(True)):
+            # Transformed
+            for tkey in self._transformed_diff_tau_dict:
+                key1, key0 = self._transforms_to_params[tkey]
+                value = self[key0].num + self.transform_fns(
+                    theta_train_hat[tkey], ptype='tau', inverse=True
+                )
+                self[key1].set(value)
+                for path in self[key1].paths:
+                    # change the values in demo_dict too
+                    self._demo_dict = update(self._demo_dict, path, value)
+            for tkey in set(theta_train_hat).difference(set(self._transformed_diff_tau_dict)):
+                ptype = re.findall("\w+_", tkey)[0][:-1]
+                key = self._transforms_to_params[tkey]
+                value = self.transform_fns(
+                    theta_train_hat[tkey], ptype=ptype, inverse=True
+                )
+                self[key].set(value)
+                for path in self[key].paths:
+                    # change the values in demo_dict too
+                    self._demo_dict = update(self._demo_dict, path, value)
 
-        if self._is_theta_train_valid(theta_train_hat):
-            pass
+        elif set(theta_train_hat) == set(self.theta_train_dict(False)):
+            keys = self._train_keys
+            if isinstance(theta_train_hat, dict):
+                theta_train_hat = jnp.array(
+                    [theta_train_hat[key] for key in keys], dtype="f"
+                )
+
+            if self._is_theta_train_valid(theta_train_hat):
+                pass
+            else:
+                raise ValueError("Invalid theta_train_hat")
+
+            for key, value in zip(keys, theta_train_hat):
+                value = float(value)
+                self[key].set(value)
+                for path in self[key].paths:
+                    # change the values in demo_dict too
+                    self._demo_dict = update(self._demo_dict, path, value)
+
         else:
-            raise ValueError("Invalid theta_train_hat")
-
-        for key, value in zip(keys, theta_train_hat):
-            value = float(value)
-            self[key].set(value)
-            for path in self[key].paths:
-                # change the values in demo_dict too
-                self._demo_dict = update(self._demo_dict, path, value)
+            raise ValueError('Wrong theta_train_hat')
 
     def add_linear_constraint(self, expr_str):
         x = self._theta

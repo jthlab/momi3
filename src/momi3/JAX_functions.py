@@ -7,7 +7,7 @@ from jax import checkpoint, hessian, jit, value_and_grad
 from momi3.utils import update
 from momi3.Data import get_X_batches, Data
 
-logging.basicConfig(level=logging.WARN)
+logging.basicConfig(level=logging.CRITICAL)
 
 
 def multinomial_log_likelihood(P, Q, Q_sum):
@@ -46,7 +46,7 @@ def inverse_transform(transformed_ttpd, tpd):
         tpath1, tpath0 = tpaths
         tpd[tpath1] = tpd[tpath0] + val
 
-    return tpd 
+    return tpd
 
 
 def esfs_tensor_prod(theta_dict, X, auxd, demo, _f):
@@ -68,7 +68,7 @@ def esfs_map(theta_dict, X, auxd, demo, _f, esfs_tensor_prod, low_memory=False):
         )
     if low_memory:
         f = checkpoint(f)
-
+    # return jax.vmap(f)(X).flatten()
     return jax.lax.map(f, X).flatten()
 
 
