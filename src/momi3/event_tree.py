@@ -411,7 +411,7 @@ class ETBuilder:
             elif d["ev"] == EventType.MIGRATION_END:
                 key = (d["source"], d["pop"])
                 nn = self.node_like(u)
-                self.nodes[nn]["migrations"] = self.nodes[nn]["migrationsz"].delete(key)
+                self.nodes[nn]["migrations"] = self.nodes[nn]["migrations"].delete(key)
                 self.add_edge(u, nn)
 
             # pulses function in a similarly to continuous migrations, but they are not recorded in the state since they
