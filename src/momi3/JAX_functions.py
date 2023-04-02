@@ -7,7 +7,7 @@ from jax import checkpoint, hessian, jit, value_and_grad
 from momi3.utils import update
 from momi3.Data import get_X_batches, Data
 
-logging.basicConfig(level=logging.CRITICAL)
+logging.basicConfig(level=logging.WARN)
 
 
 def multinomial_log_likelihood(P, Q, Q_sum):

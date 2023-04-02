@@ -142,8 +142,13 @@ class Momi(object):
         else:
             assert set(theta_train_dict) == set(ttd)
 
-        data = self._get_data(jsfs, self.batch_size)
-        v = self._JAX_functions.loglik(theta_train_dict, tpd, data)
+        theta_train_path_dict = {
+            self._key_to_paths(
+                key, params, False
+            ): theta_train_dict[key] for key in theta_train_dict}
+
+        data = self._get_data(jsfs)
+        v = self._JAX_functions.loglik(theta_train_path_dict, tpd, data)
         return float(v)
 
     def loglik_with_gradient(
