@@ -1,12 +1,11 @@
+import os
 from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
-import os
 
 import numpy as np
-from jax import numpy as jnp
 
-from momi3.common import Axes, PopCounter, Population, State, T
+from momi3.common import Axes, PopCounter, Population, State, T, oe_einsum
 from momi3.math_functions import log_hypergeom
 
 
@@ -33,7 +32,7 @@ class Event:
 
     def execute(self, st: State, params: dict, aux: T) -> State:
         st = self._execute_impl(st, params, aux)
-        if os.environ.get('MOMI_PRINT_EVENTS'):
+        if os.environ.get("MOMI_PRINT_EVENTS"):
             print(self)
         if self.bounds:
             for pop in aux["bounds"]:
@@ -70,9 +69,10 @@ class Upsample(Event):
             # no bounding was possible/necessary, so setup set aux to None.
             return st
         ((i, Bplus),) = aux.items()
-        pl_inds = list(range(st.ndim))
+        d = st.pl.ndim
+        pl_inds = list(range(d))
         out_inds = list(pl_inds)
-        j = st.ndim
-        out_inds[i] = j
-        plp = jnp.tensordot(st.pl, tuple(pl_inds), Bplus, (j, i), tuple(out_inds))
+        assert d not in out_inds
+        out_inds[i] = d
+        plp = oe_einsum(st.pl, tuple(pl_inds), Bplus, (d, i), tuple(out_inds))
         return st._replace(pl=plp)
