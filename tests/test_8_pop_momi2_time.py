@@ -1,6 +1,14 @@
 import jax
 jax.config.update('jax_platform_name', 'cpu')
 
+import os
+os.environ["OMP_NUM_THREADS"] = "1" # export OMP_NUM_THREADS=4
+os.environ["OPENBLAS_NUM_THREADS"] = "1" # export OPENBLAS_NUM_THREADS=4 
+os.environ["MKL_NUM_THREADS"] = "1" # export MKL_NUM_THREADS=6
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1" # export VECLIB_MAXIMUM_THREADS=4
+os.environ["NUMEXPR_NUM_THREADS"] = "1" # export NUMEXPR_NUM_THREADS=6
+
+
 import numpy as np
 
 from momi3.utils import update
@@ -16,7 +24,53 @@ import momi as momi2
 from copy import deepcopy
 
 
-def model(theta_train, train_keys, PD):
+def model5(theta_train, train_keys, PD):
+    PD.update(dict(zip(train_keys, theta_train)))
+    g_chb = np.log(PD['eta_8'] / PD['eta_7']) / (PD['tau_2'])
+    g_ceu = np.log(PD['eta_6'] / PD['eta_5']) / (PD['tau_2'])
+
+    # Momi 2 model building
+    model1 = momi2.DemographicModel(N_e=PD["eta_0"], muts_per_gen=None)
+
+    for i in range(9):
+        if i in [5, 7]:
+            pass
+        else:
+            eta = f"eta_{i}"
+            model1.add_size_param(eta, PD[eta])
+
+    for i in range(8):
+        tau = f"tau_{i}"
+        model1.add_size_param(tau, PD[tau])
+
+    model1.add_growth_param("g_chb", g_chb)
+    model1.add_growth_param("g_ceu", g_ceu)
+
+    model1.add_pulse_param("pi_1", PD["pi_1"])
+    model1.add_pulse_param("pi_0", PD["pi_0"])
+
+    model1.add_leaf('YRI', N='eta_1')
+    model1.add_leaf('CEU', N='eta_6', g='g_ceu')
+    model1.add_leaf('CHB', N='eta_8', g='g_chb')
+    model1.add_leaf('ArchaicAFR', N="eta_3")
+    model1.add_leaf('Neanderthal', N='eta_2')
+
+    model1.move_lineages("CEU", "Neanderthal", t="tau_1", p='pi_1')
+    model1.move_lineages("CHB", "CEU", t='tau_2', N="eta_4")
+    model1.move_lineages("CEU", "YRI", t='tau_3', N="eta_1")
+    model1.move_lineages("Neanderthal", "YRI", t="tau_4", p='pi_0')
+    model1.set_size('YRI', N='eta_0', t='tau_5')
+    model1.move_lineages("ArchaicAFR", "YRI", t="tau_6", N="eta_0")
+    model1.move_lineages("Neanderthal", "YRI", t="tau_7", N="eta_0")
+
+    # momi2.DemographyPlot(model1, ['p1', 'p2', 'p3', 'p4', 'p5'])
+
+    model1._mem_chunk_size = 10000
+
+    return model1
+
+
+def model8(theta_train, train_keys, PD):
     PD.update(dict(zip(train_keys, theta_train)))
     g_NEA = np.log(PD['eta_6'] / PD['eta_5']) / (PD['tau_11'] - PD['tau_6'])
 
@@ -85,14 +139,18 @@ def model(theta_train, train_keys, PD):
     return model1
 
 
-def get_demo():
+def get_demo8():
 	return demes.load('yaml_files/8_pop_3_admix.yaml')
+
+
+def get_demo5():
+    return demes.load('yaml_files/5_pop_2_admix.yaml')
 
 
 if __name__ == "__main__":
     # python tests/time_5_pop_admixture.py <method> <sample size> <number of positions> <number of replications> <save folder>
     # e.g. python tests/time_8_pop_admixture.py momi2 4 100 10 /tmp/
-    demo = get_demo()
+    demo = get_demo8()
     sampled_demes = demo.metadata['sampled_demes']
     sample_sizes = demo.metadata['sample_sizes']
     momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
@@ -119,7 +177,7 @@ if __name__ == "__main__":
         return jax.vmap(esfs_tensor_prod, 0)(X)
     esfs_map = jax.jit(esfs_map, static_argnames=('_f'))
 
-    SEQLEN = [1e5, 5e5, 1e6, 5e6, 1e7, 5e7, 1e8]  # seqlen for chromosome sim
+    SEQLEN = [1e5, 1e6, 1e7, 1e8]  # seqlen for chromosome sim
     JSFS = {}
     for seqlen in SEQLEN:
         jsfs = momi.simulate_chromosome(int(seqlen), 1e-8, 1e-8, seed=100)
@@ -145,9 +203,14 @@ if __name__ == "__main__":
         t = timeit.repeat(f, number=1, repeat=10)
         momitimes[seqlen] = np.median(t)
 
+    for seqlen in SEQLEN:
+        print(f'non zero entries={int(JSFS[seqlen].nnz)}')
+        print(f'momi3 runtime: {momitimes[seqlen]:.3g}')
+        print(10 * '==')
+
     # momi 2 times
     PD = dict(zip(params._keys, params._theta))
-    momi2_model = lambda theta_train: model(params._theta_train, train_keys=params._train_keys, PD=PD)
+    momi2_model = lambda theta_train: model8(params._theta_train, train_keys=params._train_keys, PD=PD)
     num_sample = dict(zip(sampled_demes, sample_sizes))
 
     def momi2_model_func(x):
@@ -182,5 +245,4 @@ if __name__ == "__main__":
     for seqlen in SEQLEN:
         print(f'non zero entries={int(JSFS[seqlen].nnz)}')
         print(f'momi2 runtime: {momi2times[seqlen]:.3g}')
-        print(f'momi3 runtime: {momitimes[seqlen]:.3g}')
         print(10 * '==')

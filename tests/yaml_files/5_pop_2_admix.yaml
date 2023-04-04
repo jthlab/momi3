@@ -1,0 +1,50 @@
+description: 5 pop no migration, 2 admixtures
+time_units: generations
+metadata: {
+  sampled_demes: ['YRI', 'CEU', 'CHB', 'ArchaicAFR', 'Neanderthal'],
+  sample_sizes: [7, 7, 7, 7, 7]
+}
+doi:
+- https://doi.org/10.1371/journal.pgen.1008204
+demes:
+- name: YRI
+  epochs:
+  - end_time: 10344.827586206897
+    start_size: 3600.0
+  - end_time: 0
+    start_size: 13900.0
+- name: Neanderthal
+  start_time: 19275.862068965518
+  ancestors:
+  - YRI
+  epochs:
+  - end_time: 0
+    start_size: 3600.0
+- name: ArchaicAFR
+  start_time: 17206.896551724138
+  ancestors:
+  - YRI
+  epochs:
+  - end_time: 0
+    start_size: 3600.0
+- name: CEU
+  start_time: 2093.103448275862
+  ancestors:
+  - YRI
+  epochs:
+  - end_time: 1241.3793103448277
+    start_size: 880.0
+  - end_time: 0
+    start_size: 2300.0
+    end_size: 10855.080951853866
+- name: CHB
+  start_time: 1241.3793103448277
+  ancestors:
+  - CEU
+  epochs:
+  - end_time: 0
+    start_size: 650.0
+    end_size: 65834.77001122756
+pulses:
+- {sources: [Neanderthal], dest: CEU, proportions: [0.1], time: 1000} 
+- {sources: [YRI], dest: Neanderthal, proportions: [0.1], time: 5000} 

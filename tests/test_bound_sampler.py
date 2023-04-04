@@ -6,6 +6,15 @@ from momi3.MOMI import Momi
 from .demos import ThreeDemes
 
 
+def test_momi2_model():
+    demo = demes.load('tests/yaml_files/8_pop_3_admix.yaml')
+    sampled_demes = demo.metadata['sampled_demes']
+    sample_sizes = demo.metadata['sample_sizes']
+    momi = Momi(demo, sampled_demes, sample_sizes, jitted=False)
+    bounds = momi.bound_sampler(momi._default_params, [], 100)
+    momi_b = momi.bound(bounds)
+
+
 def test_onepop():
     b = demes.Builder(description="demo")
     b.add_deme("A", epochs=[dict(start_size=1, end_time=10), dict(start_size=10)])
