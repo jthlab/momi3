@@ -254,8 +254,9 @@ class Params(dict):
     def set_optimization_results(self, theta_train_hat: dict):
 
         if set(theta_train_hat) == set(self.theta_train_dict(True)):
+            tdtd = self._transformed_diff_tau_dict
             # Transformed
-            for tkey in self._transformed_diff_tau_dict:
+            for tkey in tdtd:
                 key1, key0 = self._transforms_to_params[tkey]
                 value = self[key0].num + self.transform_fns(
                     theta_train_hat[tkey], ptype='tau', inverse=True
@@ -264,7 +265,7 @@ class Params(dict):
                 for path in self[key1].paths:
                     # change the values in demo_dict too
                     self._demo_dict = update(self._demo_dict, path, value)
-            for tkey in set(theta_train_hat).difference(set(self._transformed_diff_tau_dict)):
+            for tkey in set(theta_train_hat).difference(set(tdtd)):
                 ptype = re.findall("\w+_", tkey)[0][:-1]
                 key = self._transforms_to_params[tkey]
                 value = self.transform_fns(
@@ -639,6 +640,8 @@ class Params(dict):
         show_letters: bool = False,
         USER_DICT: dict[str, float] = None,
         color_intensity_function: Callable = lambda x: x,
+        hide_non_inferreds: bool = False,
+        tau_font_size: float = None,
         **kwargs,
     ):
         """Customized demesdraw.tubes function. If USER_DICT is none, parameter boxes will be
@@ -653,6 +656,7 @@ class Params(dict):
                 Redness of the box of the parameter = color_intensity_function(USER_DICT[param_key])
             **kwargs: kwargs for demesdraw.tubes
         """
+        show_all = not hide_non_inferreds
         dG = self.demo_graph
         ret = demesdraw.tubes(dG, **kwargs)
 
@@ -864,14 +868,15 @@ class Params(dict):
                 else:
                     text = "%s" % val
 
-                plt.text(
-                    cur["x"],
-                    cur["y"],
-                    text,
-                    bbox=prms_box_current,
-                    color=cur["color"],
-                    **kwargs,
-                )
+                if show_all | text_params[key]["inferred"]:
+                    plt.text(
+                        cur["x"],
+                        cur["y"],
+                        text,
+                        bbox=prms_box_current,
+                        color=cur["color"],
+                        **kwargs,
+                    )
             else:
                 pass
 
@@ -905,14 +910,16 @@ class Params(dict):
         if log_time:
             if values[0] == 0.:
                 values = np.array(values) + 1.0
-        ret.set_yticks(values, labels)  # Show time parameters in yticks
+        ret.set_yticks(values, labels, fontsize=tau_font_size)  # Show time parameters in yticks
 
         if show_letters | show_values:
             for i, key in enumerate(tau_keys):
-                prms_box_current = deepcopy(prms_box)
-                prms_box_current["fc"] = text_params[key]["box_color"]
-                ret.get_yticklabels()[i].set_color(text_params[key]["color"])
-                ret.get_yticklabels()[i].set_bbox(prms_box_current)
+                if show_all | text_params[key]["inferred"]:
+                    prms_box_current = deepcopy(prms_box)
+                    prms_box_current["fc"] = text_params[key]["box_color"]
+                    ret.get_yticklabels()[i].set_color(text_params[key]["color"])
+                    ret.get_yticklabels()[i].set_bbox(prms_box_current)
+                    ret.get_yticklabels()[i].set_fontsize(None)
 
     def _init_Theta(
         self,

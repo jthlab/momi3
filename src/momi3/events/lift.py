@@ -100,6 +100,7 @@ class Lift(Event):
                     ns[pop].values()
                 )  # the dimension of the child axes should match what is tracked by ns
                 # without migration, the number of subtended leaf lineages does not change
+                # print(pop, nv)
                 aux["mats"]["single"][s] = _aux_single(nv)
             else:
                 # lifting with multiple populations

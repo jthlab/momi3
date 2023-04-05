@@ -398,12 +398,16 @@ class Momi(object):
     def bound_sampler(
         self,
         params: Params,
-        scale: np.ndarray,
         size: int,
+        scale: dict[str, float] = None,
         seed: int = None,
         quantile: float = 0.95,
     ):
         loc = params._theta_train
+        if scale is None:
+            scale = []
+        else:
+            scale = [scale[i] for i in params._train_keys]
         return bound_sampler(
             T=self._T,
             params=params,

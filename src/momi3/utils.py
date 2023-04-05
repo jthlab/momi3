@@ -67,6 +67,8 @@ def admix_hyp(nw, nv1, nv2):
 def W_matrix(n: int) -> np.ndarray:
     # returns W matrix as calculated as eq 13:15 @ Polanski 2013
     # n: sample size
+    if n == 1:
+        return np.array([[]])
     W = np.zeros(
         [n - 1, n - 1], dtype=object
     )  # indices are [b, j] offset by 1 and 2 respectively
