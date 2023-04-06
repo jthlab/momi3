@@ -154,6 +154,7 @@ class GroupedKronProd(KronProd):
                         Qij += _spkron(f * Ai[i], eye(self.dims[j]))
                     elif Ai.keys() == {j}:
                         Qij += _spkron(eye(self.dims[i]), f * Ai[j])
+                Qij = Qij.sort_indices()
                 r1 = other.swapaxes(i, 0).swapaxes(j, 1)
                 ret += (
                     (Qij @ r1.reshape(n, -1))
