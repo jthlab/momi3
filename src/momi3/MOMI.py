@@ -405,7 +405,7 @@ class Momi(object):
     ):
         loc = params._theta_train
         if scale is None:
-            scale = []
+            scale = len(loc) * [0]
         else:
             scale = [scale[i] for i in params._train_keys]
         return bound_sampler(

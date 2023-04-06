@@ -14,6 +14,8 @@ from momi3.common import traverse
 from momi3.event_tree import ETBuilder
 from momi3.Params import Params
 
+MIN_lineages = 2
+
 
 def log_factorial(x):
     return gammaln(x + 1)
@@ -263,7 +265,8 @@ def sample_lift(
             f = jax.vmap(sample_lift_exponential, (0, 0, 0, 0, None, 0))
             ret = f(Ne0s, Ne1s, t0s, t1s, n0, seeds)
 
-        n1[pop] = int(round(np.quantile(ret, quantile)))
+        n1pop = int(round(np.quantile(ret, quantile)))
+        n1[pop] = max(n1pop, MIN_lineages)
 
     return n1
 
@@ -280,8 +283,8 @@ def admix_quantiles(n: dict, ev: events.Admix, params: Params, quantile: float =
     np1 = int(scipy.stats.binom(n0, q).ppf(quantile))
     np2 = int(scipy.stats.binom(n0, 1 - q).ppf(quantile))
 
-    n1[parent1] = max(np1, 1)
-    n1[parent2] = max(np2, 1)
+    n1[parent1] = max(np1, MIN_lineages)
+    n1[parent2] = max(np2, MIN_lineages)
     n1[child] = 0
 
     return n1
@@ -295,7 +298,7 @@ def pulse_quantiles(n: dict, ev: events.Pulse, params: Params, quantile: float =
 
     n0 = n[dest]
     n1d = int(scipy.stats.binom(n0, 1 - q).ppf(quantile))
-    n1[dest] = max(n1d, 1)
+    n1[dest] = max(n1d, MIN_lineages)
     n1[source] += int(scipy.stats.binom(n0, q).ppf(quantile))
 
     return n1
