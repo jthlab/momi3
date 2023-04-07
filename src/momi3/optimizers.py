@@ -6,13 +6,11 @@ import cvxpy
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-import tqdm.notebook as tqdm_notebook
-from IPython import get_ipython
 from jaxopt import ProjectedGradient
-from sparse._coo.core import COO
+from sparse import COO
+from tqdm.autonotebook import tqdm, trange
 
 from momi3.Params import Params
-from momi3.utils import tqdm
 
 
 def is_theta_valid(theta, A, b, G, h, atol=1e-8, rtol=1e-5):
@@ -84,17 +82,10 @@ def ProjectedGradient_optimizer(
         obj0, grad0 = FwG(theta_train_0)
         elapsed = time() - st
         print(f"First run took {elapsed:.2f} seconds")
-
-        if get_ipython() is not None:
-            iter_range = tqdm_notebook.trange
-        else:
-            iter_range = tqdm.trange
-        tqdm_write = tqdm.write
-
         pg_state = pg.init_state(theta_train_0)
         loss = []
         theta_train_hat = theta_train_0.copy()
-        for i in iter_range(maxiter):
+        for i in trange(maxiter):
             theta_train_hat, pg_state = pg.update(
                 theta_train_hat, pg_state, hyperparams_proj=(A, b, G, h)
             )
@@ -103,19 +94,19 @@ def ProjectedGradient_optimizer(
             if show_boundry_message:
                 if jnp.any(jnp.isclose(G @ theta_train_hat, h)):
                     # logging.warn("Try running it with smaller a step_size")
-                    tqdm_write(
+                    tqdm.write(
                         "theta + step * gradient has hit a boundry. Try running it with a smaller step_size"
                     )
 
                     show_boundry_message = False
 
             # Messages:
-            tqdm_write(f"loglik={-neg_log_lik:.5g}")
+            tqdm.write(f"loglik={-neg_log_lik:.5g}")
             params_message = ", ".join(
                 [f"{i}={j:.2g}" for i, j in zip(theta_train_keys, theta_train_hat)]
             )
-            tqdm_write(f"Values: {params_message}")
-            tqdm_write(10 * "=")
+            tqdm.write(f"Values: {params_message}")
+            tqdm.write(10 * "=")
 
             loss.append(pg_state.error)
 

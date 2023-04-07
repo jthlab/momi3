@@ -15,25 +15,18 @@ import scipy
 import sparse
 import tskit
 from gmpy2 import mpq
-from IPython import get_ipython
 from jax.numpy import diag, dot, exp, log
 from jax.scipy.special import logsumexp
-from joblib import Parallel, delayed
-
 from jax.tree_util import register_pytree_node
+from joblib import Parallel, delayed
+from tqdm.autonotebook import tqdm
 
 from .math_functions import expm1d, log_hypergeom
-
-if get_ipython() is not None:
-    from tqdm.notebook import tqdm, trange
-else:
-    from tqdm import tqdm, trange  # noqa: F401
-
 
 register_pytree_node(
     demes.Graph,
     lambda g: ((), demes.dumps(g, simplified=False)),
-    lambda aux_data, _: demes.loads(aux_data)
+    lambda aux_data, _: demes.loads(aux_data),
 )
 
 
@@ -192,14 +185,17 @@ def msprime_chromosome_simulator(
         samples=dict(zip(sampled_demes, sample_sizes)),
         recombination_rate=recombination_rate,
         sequence_length=int(sequence_length),
-        random_seed=seed
+        random_seed=seed,
     )
     mt_chr = msp.sim_mutations(chr_sim, rate=mutation_rate, random_seed=seed)
 
     sample_ids = [
         [
-            list(mt_chr.samples(pop.id)) for pop in mt_chr.populations() if pop.metadata['name'] == deme
-        ][0] for deme in sampled_demes
+            list(mt_chr.samples(pop.id))
+            for pop in mt_chr.populations()
+            if pop.metadata["name"] == deme
+        ][0]
+        for deme in sampled_demes
     ]
     return tskit_low_memory_afs(mt_chr, sample_ids)
 
@@ -246,7 +242,9 @@ def msprime_simulator(
             config = []
             x = set(tree.leaves(mut.node))  # set of leaves that has the mutation
             for deme in sampled_demes:
-                nmut = len(x.intersection(sample_ids[deme]))  # size of intersection between deme and mutants
+                nmut = len(
+                    x.intersection(sample_ids[deme])
+                )  # size of intersection between deme and mutants
                 config.append(nmut)
             config = tuple(config)
 
@@ -376,4 +374,3 @@ def one_hot(n, b):
 
 def ones(n):
     return n * [1]
-
