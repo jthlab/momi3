@@ -12,8 +12,6 @@ from .kronprod import GroupedKronProd
 from .momints import _drift, _migration, _mutation
 from .spexpm import expmv
 
-jax.config.update("jax_bcoo_cusparse_lowering", True)
-
 
 def lift_cm_aux(
     axes: Axes, migration_pairs: list[tuple[Population, Population]]
@@ -29,10 +27,7 @@ def lift_cm_aux(
     }
     # convert sparse matrices from scipy to JAX format
     tm = jax.tree_util.tree_map(
-        lambda A: BCOO.from_scipy_sparse(A).sort_indices()
-        if isinstance(A, sps.spmatrix)
-        else A,
-        tm,
+        lambda A: BCOO.from_scipy_sparse(A) if isinstance(A, sps.spmatrix) else A, tm
     )
     tm["axes"] = axes
     return tm
