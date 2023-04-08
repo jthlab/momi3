@@ -210,7 +210,7 @@ def msprime_simulator(
     sampled_demes: tuple[str],
     sample_sizes: tuple[int],
     num_replicates: int,
-    seed: int = None
+    seed: int = None,
 ) -> sparse.COO:
     # msprime sampler. Returns sparse Joint SFS array
     # TODO: Add parellel mode
@@ -379,3 +379,29 @@ def one_hot(n, b):
 
 def ones(n):
     return n * [1]
+
+
+def downsample_jsfs(jsfs: np.ndarray, down_sample_to: list[int]):
+    """Returns downsampled jsfs
+    
+    Parameters
+    ----------
+    jsfs : np.ndarray
+        joint-sfs
+    down_sample_to : list[int]
+        new shape of the jsfs will be down_sample_to + 1.
+        If you don't want to sample some dimensions give Nones.    
+    Returns
+    -------
+    np.ndarray
+        downsampled jsfs
+    """
+    down_sample_from = tuple(i - 1 for i in jsfs.shape)
+    for ind, (n, m) in enumerate(zip(down_sample_from, down_sample_to)):
+        j = np.arange(m + 1)[None, :]
+        i = np.arange(n + 1)[:, None]
+        H = scipy.stats.hypergeom(n, i, m).pmf(j)
+        jsfs = sparse.moveaxis(
+            sparse.tensordot(jsfs, H, axes=(ind, 0), return_type=np.ndarray), -1, ind
+        )
+    return jsfs

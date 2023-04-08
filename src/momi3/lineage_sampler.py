@@ -25,18 +25,6 @@ def log_binom(n, k):
     return log_factorial(n) - log_factorial(k) - log_factorial(n - k)
 
 
-def downsample_jsfs(jsfs, down_sample_to):
-    down_sample_from = tuple(i - 1 for i in jsfs.shape)
-    for ind, (n, m) in enumerate(zip(down_sample_from, down_sample_to)):
-        j = np.arange(m + 1)[None, :]
-        i = np.arange(n + 1)[:, None]
-        H = scipy.stats.hypergeom(n, i, m).pmf(j)
-        jsfs = sparse.moveaxis(
-            sparse.tensordot(jsfs, H, axes=(ind, 0), return_type=np.ndarray), -1, ind
-        )
-    return jsfs
-
-
 @partial(jax.jit, static_argnums=3)
 def sample_lift_constant(Ne, t0, t1, n, seed):
     # Constant growth surviving lineages sampler

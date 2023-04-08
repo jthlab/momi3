@@ -396,7 +396,7 @@ class Momi(object):
             low_memory=low_memory
         )
 
-    def simulate_human_genome(self, recombination_rate=1e-8, mutation_rate=1e-8):
+    def simulate_human_genome(self, recombination_rate=1e-8, mutation_rate=1e-8, seed=None):
         chr_lengths = [
             248956422,
             242193529,
@@ -423,7 +423,6 @@ class Momi(object):
         ]
 
         jsfs = np.zeros([i + 1 for i in self.sample_sizes])
-        seed = 108
         for chr_length in tqdm(chr_lengths):
             seed = np.random.default_rng(seed).integers(2**32)
             jsfs += self.simulate_chromosome(
