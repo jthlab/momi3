@@ -453,12 +453,16 @@ class Momi(object):
             quantile=quantile,
         )
 
-    def _bootstrap_sample(self, jsfs, seed=None):
+    def _bootstrap_sample(self, jsfs: Union[COO, jnp.ndarray, np.ndarray], seed=None):
         np.random.seed(seed)
-        nmuts = jsfs.sum()
-        nonzeros = [tuple(i) for i in np.array(jsfs.nonzero()).T]
-        p = jsfs.data
-        p = p / p.sum()
+        nmuts = int(round(jsfs.sum()))
+        jsfs_nonzero = jsfs.nonzero()
+        nonzeros = [tuple(i) for i in np.array(jsfs_nonzero).T]
+        if isinstance(jsfs, COO):
+            p = jsfs.data
+        else:
+            p = jsfs[jsfs_nonzero]
+        p = p / nmuts
         new_inds = np.random.choice(range(len(nonzeros)), p=p, size=nmuts)
         sfs = {}
         for new_ind in new_inds:

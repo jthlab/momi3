@@ -381,7 +381,7 @@ def ones(n):
     return n * [1]
 
 
-def downsample_jsfs(jsfs: np.ndarray, down_sample_to: list[int]):
+def downsample_jsfs(jsfs: np.ndarray, down_sample_to: list[int]) -> np.ndarray:
     """Returns downsampled jsfs
     
     Parameters
