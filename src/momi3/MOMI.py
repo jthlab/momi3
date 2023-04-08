@@ -15,7 +15,7 @@ from momi3.JAX_functions import JAX_functions
 from momi3.lineage_sampler import bound_sampler
 from momi3.optimizers import ProjectedGradient_optimizer
 from momi3.Params import Params
-from momi3.utils import msprime_chromosome_simulator, msprime_simulator
+from momi3.utils import msprime_chromosome_simulator, msprime_simulator, tqdm
 
 
 def esfs(g: demes.Graph, sample_sizes: dict[str, int]):
@@ -372,7 +372,7 @@ class Momi(object):
             seed=seed
         )
 
-    def simulate_chromosome(self, sequence_length, recombination_rate, mutation_rate, n_samples=None, params=None, seed=None):
+    def simulate_chromosome(self, sequence_length, recombination_rate, mutation_rate, n_samples=None, params=None, seed=None, low_memory=True):
         if params is None:
             params = self._default_params
 
@@ -392,8 +392,44 @@ class Momi(object):
             sequence_length=sequence_length,
             recombination_rate=recombination_rate,
             mutation_rate=mutation_rate,
-            seed=seed
+            seed=seed,
+            low_memory=low_memory
         )
+
+    def simulate_human_genome(self, recombination_rate=1e-8, mutation_rate=1e-8):
+        chr_lengths = [
+            248956422,
+            242193529,
+            198295559,
+            190214555,
+            181538259,
+            170805979,
+            159345973,
+            145138636,
+            138394717,
+            133797422,
+            135086622,
+            133275309,
+            114364328,
+            107043718,
+            101991189,
+            90338345,
+            83257441,
+            80373285,
+            58617616,
+            64444167,
+            46709983,
+            50818468
+        ]
+
+        jsfs = np.zeros([i + 1 for i in self.sample_sizes])
+        seed = 108
+        for chr_length in tqdm(chr_lengths):
+            seed = np.random.default_rng(seed).integers(2**32)
+            jsfs += self.simulate_chromosome(
+                chr_length, 1e-8, 1e-8, seed=seed, low_memory=False
+            )
+        return jsfs
 
     def bound_sampler(
         self,

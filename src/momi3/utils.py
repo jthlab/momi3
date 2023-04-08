@@ -4,7 +4,7 @@ import re
 import subprocess
 import timeit
 from functools import lru_cache, partial
-from typing import Callable
+from typing import Callable, Union
 
 import demes
 import jax
@@ -178,7 +178,8 @@ def msprime_chromosome_simulator(
     recombination_rate: float,
     mutation_rate: float,
     seed: int = None,
-) -> sparse.COO:
+    low_memory: bool = True
+) -> Union[sparse.COO, np.ndarray]:
     chr_sim = msp.sim_ancestry(
         ploidy=1,
         demography=msp.Demography.from_demes(demo),
@@ -197,7 +198,11 @@ def msprime_chromosome_simulator(
         ][0]
         for deme in sampled_demes
     ]
-    return tskit_low_memory_afs(mt_chr, sample_ids)
+    if low_memory:
+        jsfs = tskit_low_memory_afs(mt_chr, sample_ids)
+    else:
+        jsfs = mt_chr.allele_frequency_spectrum(sample_sets=sample_ids, polarised=True, span_normalise=False)
+    return jsfs
 
 
 def msprime_simulator(
@@ -205,7 +210,7 @@ def msprime_simulator(
     sampled_demes: tuple[str],
     sample_sizes: tuple[int],
     num_replicates: int,
-    seed: int = None,
+    seed: int = None
 ) -> sparse.COO:
     # msprime sampler. Returns sparse Joint SFS array
     # TODO: Add parellel mode
