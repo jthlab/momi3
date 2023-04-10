@@ -20,6 +20,7 @@ from jax.scipy.special import logsumexp
 from jax.tree_util import register_pytree_node
 from joblib import Parallel, delayed
 from tqdm.autonotebook import tqdm
+from sparse._coo.core import COO
 
 from .math_functions import expm1d, log_hypergeom
 
@@ -405,3 +406,25 @@ def downsample_jsfs(jsfs: np.ndarray, down_sample_to: list[int]) -> np.ndarray:
             sparse.tensordot(jsfs, H, axes=(ind, 0), return_type=np.ndarray), -1, ind
         )
     return jsfs
+
+
+def bootstrap_sample(
+        jsfs: Union[COO, jnp.ndarray, np.ndarray], n_SNPs: int = None, seed=None
+) -> COO:
+        np.random.seed(seed)
+        nmuts = int(round(jsfs.sum()))
+        jsfs_nonzero = jsfs.nonzero()
+        nonzeros = [tuple(i) for i in np.array(jsfs_nonzero).T]
+        if isinstance(jsfs, COO):
+            p = jsfs.data
+        else:
+            p = jsfs[jsfs_nonzero]
+        p = p / nmuts
+        if n_SNPs is not None:
+            nmuts = n_SNPs
+        new_inds = np.random.choice(range(len(nonzeros)), p=p, size=nmuts)
+        sfs = {}
+        for new_ind in new_inds:
+            config = nonzeros[new_ind]
+            sfs[config] = sfs.get(config, 0) + 1
+        return COO(sfs)

@@ -15,7 +15,7 @@ from momi3.JAX_functions import JAX_functions
 from momi3.lineage_sampler import bound_sampler
 from momi3.optimizers import ProjectedGradient_optimizer
 from momi3.Params import Params
-from momi3.utils import msprime_chromosome_simulator, msprime_simulator, tqdm
+from momi3.utils import msprime_chromosome_simulator, msprime_simulator, tqdm, bootstrap_sample
 
 
 def esfs(g: demes.Graph, sample_sizes: dict[str, int]):
@@ -453,22 +453,11 @@ class Momi(object):
             quantile=quantile,
         )
 
-    def _bootstrap_sample(self, jsfs: Union[COO, jnp.ndarray, np.ndarray], seed=None):
-        np.random.seed(seed)
-        nmuts = int(round(jsfs.sum()))
-        jsfs_nonzero = jsfs.nonzero()
-        nonzeros = [tuple(i) for i in np.array(jsfs_nonzero).T]
-        if isinstance(jsfs, COO):
-            p = jsfs.data
-        else:
-            p = jsfs[jsfs_nonzero]
-        p = p / nmuts
-        new_inds = np.random.choice(range(len(nonzeros)), p=p, size=nmuts)
-        sfs = {}
-        for new_ind in new_inds:
-            config = nonzeros[new_ind]
-            sfs[config] = sfs.get(config, 0) + 1
-        return COO(sfs)
+    def _bootstrap_sample(
+        self, jsfs: Union[COO, jnp.ndarray, np.ndarray], n_SNPs: int = None, seed=None
+    ):
+
+        return bootstrap_sample(jsfs, n_SNPs, seed)
 
     def _key_to_paths(self, key, params, transformed):
         if transformed:
