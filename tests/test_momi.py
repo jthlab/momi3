@@ -3,10 +3,10 @@ import moments
 import demes
 import pytest
 
-from momi3 import esfs
+# from momi3 import esfs
 from momi3.MOMI import Momi
 
-from .demos import TwoDemes, ThreeDemes
+#from .demos import TwoDemes, ThreeDemes
 
 from momi3.utils import Parallel_runtime, update
 from scipy.optimize import approx_fprime
@@ -128,3 +128,52 @@ def test_grad_speed_momi_moments_gutenkunst():
     print(f"Single grad iter by moments takes {moments_times:.2f} secs")
     print(f"Single grad iter by momi3 takes {runtime:.2f} secs")
     print(f"Compilation takes {compilation_time:.2f} secs")
+
+
+def test_pop_shrink_w_mig():
+    demo = demes.load('yaml_files/3_pop_mig.yaml')
+    sampled_demes = ['YRI', 'CEU', 'CHB']
+    sample_sizes = 3 * [20]
+
+    new_vals = {
+        'log(eta_1)': 9.421890194466682,
+        'log(eta_2)': 6.759644478755238,
+        'log(eta_3)': 11.588151254546482,
+        'log(eta_4)': 10.913100751770104,
+        'log(eta_5)': 12.011600865606297,
+        'log(eta_6)': 12.362115232659324,
+        'logit(rho_0)': -2.260751721723769,
+        'logit(rho_1)': -8.455725492291322,
+        'logit(rho_2)': -6.074292717977304
+    }
+
+    momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
+    params = momi._default_params
+    params.set_train_all_rhos(True)
+    params.set_train_all_etas(True)
+    params.set_train('eta_0', False)
+    params.set_optimization_results(new_vals)
+
+    demo = params.demo_graph
+    momi_m = Momi(demo, sampled_demes, sample_sizes, jitted=True)
+
+    ddict = params.demo_dict
+    ddict['migrations'] = []
+    demo_non_mig = demes.Builder.fromdict(ddict).resolve()
+    momi_v = Momi(demo_non_mig, sampled_demes, sample_sizes, jitted=True)
+
+    jsfs = momi_v.simulate(100, seed=108)
+
+    for momi in momi_v, momi_m:
+        params = momi._default_params
+        params.set_train_all_etas(True)
+
+        x = momi.loglik_with_gradient(params, jsfs)
+        print('loglik:', x[0])
+        print('grad:')
+        for i in x[1]:
+            print(i, x[1][i])
+
+
+if __name__ == '__main__':
+    test_pop_shrink_w_mig()

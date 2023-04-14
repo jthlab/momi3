@@ -641,6 +641,7 @@ class Params(dict):
         USER_DICT: dict[str, float] = None,
         color_intensity_function: Callable = lambda x: x,
         hide_non_inferreds: bool = False,
+        fontsize: float = None,
         tau_font_size: float = None,
         **kwargs,
     ):
@@ -670,7 +671,7 @@ class Params(dict):
         else:
             box_color_by = "train"
 
-        default_kwargs = {"kwargs": {"va": "bottom", "ha": "center"}}
+        default_kwargs = {"kwargs": {"va": "bottom", "ha": "center", "fontsize": fontsize}}
 
         text_params = {}
 
@@ -910,16 +911,16 @@ class Params(dict):
         if log_time:
             if values[0] == 0.:
                 values = np.array(values) + 1.0
-        ret.set_yticks(values, labels, fontsize=tau_font_size)  # Show time parameters in yticks
 
         if show_letters | show_values:
+            ret.set_yticks(values, labels, fontsize=tau_font_size)  # Show time parameters in yticks
             for i, key in enumerate(tau_keys):
                 if show_all | text_params[key]["inferred"]:
                     prms_box_current = deepcopy(prms_box)
                     prms_box_current["fc"] = text_params[key]["box_color"]
                     ret.get_yticklabels()[i].set_color(text_params[key]["color"])
                     ret.get_yticklabels()[i].set_bbox(prms_box_current)
-                    ret.get_yticklabels()[i].set_fontsize(None)
+                    ret.get_yticklabels()[i].set_fontsize(tau_font_size)
 
     def _init_Theta(
         self,

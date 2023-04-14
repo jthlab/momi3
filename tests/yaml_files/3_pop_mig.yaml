@@ -1,0 +1,55 @@
+description: 3 pop with migration
+time_units: generations
+metadata: {
+  sampled_demes: ['YRI', 'CEU', 'CHB']
+}
+doi:
+- https://doi.org/10.1371/journal.pgen.1008204
+demes:
+- name: YRI
+  epochs:
+  - end_time: 10344.827586206897
+    start_size: 3600.0
+  - end_time: 0
+    start_size: 13900.0
+- name: CEU
+  start_time: 2093.103448275862
+  ancestors:
+  - YRI
+  epochs:
+  - end_time: 1241.3793103448277
+    start_size: 880.0
+  - end_time: 0
+    start_size: 2300.0
+    end_size: 10855.080951853866
+- name: CHB
+  start_time: 1241.3793103448277
+  ancestors:
+  - CEU
+  epochs:
+  - end_time: 0
+    start_size: 650.0
+    end_size: 65834.77001122756
+migrations:
+- end_time: 1241.3793103448277
+  rate: 0.000522
+  source: YRI
+  dest: CEU
+- start_time: 1241.3793103448277
+  rate: 2.48e-05
+  source: YRI
+  dest: CEU
+- end_time: 1241.3793103448277
+  rate: 0.000522
+  source: CEU
+  dest: YRI
+- start_time: 1241.3793103448277
+  rate: 2.48e-05
+  source: CEU
+  dest: YRI
+- rate: 0.000113
+  source: CEU
+  dest: CHB
+- rate: 0.000113
+  source: CHB
+  dest: CEU
