@@ -1,7 +1,12 @@
+import jax
+jax.config.update("jax_enable_x64", True)
+
 import numpy as np
 import moments
 import demes
 import pytest
+
+
 
 # from momi3 import esfs
 from momi3.MOMI import Momi

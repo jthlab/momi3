@@ -60,7 +60,7 @@ def sample_lift_exponential(Ne0, Ne1, t0, t1, n, seed):
     # Exponential growth surviving lineages sampler
     # Given n lineages, simulate the number of lineages t1 - t0 generations later. Coal rate = R(Ne0, Ne1, t1, t0)
     tau = t1 - t0
-    g = (jnp.log(Ne1) - jnp.log(Ne0)) / tau
+    g = (jnp.log(Ne0) - jnp.log(Ne1)) / tau
     rng = jax.random.PRNGKey(seed)
     carry = [rng, 0.0, n, Ne0, g, tau]
     carry, waiting_times = jax.lax.scan(
@@ -250,8 +250,11 @@ def sample_lift(
             f = jax.vmap(sample_lift_constant, (0, 0, 0, None, 0))
             ret = f(Ne0s, t0s, t1s, n0, seeds)
         else:
+            print(Ne0s[0], Ne1s[0], t0s[0], t1s[0], n0)
             f = jax.vmap(sample_lift_exponential, (0, 0, 0, 0, None, 0))
             ret = f(Ne0s, Ne1s, t0s, t1s, n0, seeds)
+            print(int(round(np.quantile(ret, quantile))))
+            print('-'*10)
 
         n1pop = int(round(np.quantile(ret, quantile)))
         n1[pop] = max(n1pop, MIN_lineages)
@@ -352,17 +355,17 @@ def bound_sampler(
                 else:
                     n = sample_lift(n, ev, theta_train_sample, params, seed, quantile)
                     NS[ev] = deepcopy(n)
-                    print(ev.t1, "Lift", n)
+                    #print(ev.t1, "Lift", n)
                 seed = np.random.RandomState(seed).randint(2**31 - 1)
 
             elif isinstance(ev, events.Admix):
                 n = admix_quantiles(n, ev, params, quantile)
                 NS[ev] = deepcopy(n)
-                print(u.t, "Admix", n)
+                #print(u.t, "Admix", n)
             elif isinstance(ev, events.Pulse):
                 n = pulse_quantiles(n, ev, params, quantile)
                 NS[ev] = deepcopy(n)
-                print(u.t, "Pulse", n)
+                #print(u.t, "Pulse", n)
             elif isinstance(ev, events.Rename):
                 new, old = ev.new, ev.old
                 n[new] = n[old]
