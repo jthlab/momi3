@@ -365,9 +365,9 @@ def halfsigmoid(x, scale=10):
     return 2 * (1 / (1 + np.exp(-x / scale)) - 0.5)
 
 
-def signif(x):
-    if np.isclose(x, int(x)):
-        return str(int(x))
+def signif(x, ptype):
+    if ptype in ['eta', 'tau']:
+        ret = str(int(x))
     else:
         return f"{x:.2g}"  # 2 digit significance
 

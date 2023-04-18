@@ -19,7 +19,7 @@ def multinomial_log_likelihood(P, Q, Q_sum):
 def inverse_transform(transformed_ttpd, tpd):
 
     # inverse transform functions
-    eta_fn = jnp.exp
+    eta_fn = jax.nn.softplus
     rho_fn = jax.nn.sigmoid
     pi_fn = jax.nn.sigmoid
     tau_diff_fn = jnp.exp

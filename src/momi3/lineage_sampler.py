@@ -250,11 +250,11 @@ def sample_lift(
             f = jax.vmap(sample_lift_constant, (0, 0, 0, None, 0))
             ret = f(Ne0s, t0s, t1s, n0, seeds)
         else:
-            print(Ne0s[0], Ne1s[0], t0s[0], t1s[0], n0)
+            # print(Ne0s[0], Ne1s[0], t0s[0], t1s[0], n0)
             f = jax.vmap(sample_lift_exponential, (0, 0, 0, 0, None, 0))
             ret = f(Ne0s, Ne1s, t0s, t1s, n0, seeds)
-            print(int(round(np.quantile(ret, quantile))))
-            print('-'*10)
+            # print(int(round(np.quantile(ret, quantile))))
+            # print('-'*10)
 
         n1pop = int(round(np.quantile(ret, quantile)))
         n1[pop] = max(n1pop, MIN_lineages)

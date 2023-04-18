@@ -178,7 +178,7 @@ class Params(dict):
                 self._path_to_params[path] = key
 
             if key[0] == 'e':
-                tkey = f'log({key})'
+                tkey = f'softplus({key})'
                 self._transforms_to_params[tkey] = key
                 self._params_to_transforms[key] = tkey
             elif key[0] in ['r', 'p']:
@@ -406,7 +406,10 @@ class Params(dict):
         return paths
 
     def transform_fns(self, val, ptype, inverse=False):
-        if ptype in ['tau', 'eta']:
+        if ptype == 'eta':
+            return val
+
+        elif ptype == 'tau':
             # it's actually log differences of tau
             if inverse:
                 # ret = softplus_inverse(val)
@@ -606,6 +609,9 @@ class Params(dict):
         if val is None:
             ret = r"$%s$" % key
         else:
+            if letter == 'pi':
+                val += '\%'
+                print(val)
             ret = r"$%s=%s$" % (key, val)
         return ret
 
@@ -643,6 +649,7 @@ class Params(dict):
         hide_non_inferreds: bool = False,
         fontsize: float = None,
         tau_font_size: float = None,
+        pformats: dict[str, Callable] = None,
         **kwargs,
     ):
         """Customized demesdraw.tubes function. If USER_DICT is none, parameter boxes will be
@@ -660,6 +667,16 @@ class Params(dict):
         show_all = not hide_non_inferreds
         dG = self.demo_graph
         ret = demesdraw.tubes(dG, **kwargs)
+
+        # print format for vars
+        if pformats is None:
+            pformats = {
+                'eta': lambda x: f"{int(x):d}",
+                'tau': lambda x: f"{int(x):d}",
+                'rho': lambda x: f"{x:.2g}",
+                'pi': lambda x: f"{(int(100*x)):d}",
+            }
+
 
         lxlim, rxlim = ret.get_xlim()
         min_time, max_time = ret.get_ylim()
@@ -700,36 +717,36 @@ class Params(dict):
                         }
                         text_params[key].update(default_kwargs)
 
-                        text = signif(dG.pulses[j].proportions[0])
+                        text = pformats['pi'](dG.pulses[j].proportions[0])
                         pulse_text.append({"x": x, "y": y, "text": text})
                         break
 
-        # MIGRATIONS
-        times = [i.time for i in dG.pulses]
-        pulse_text = []
-        for i, line in enumerate(ret.get_lines()):
-            x = line._x
-            y = line._y
-            if len(y) == 2:
-                for j, t in enumerate(times):
-                    if jnp.isclose(t, y[0]):
-                        x = (x[0] + x[1]) / 2
-                        y = y[0]
-                        y = np.where((y < 1) & log_time, 1 + y, y)
+        # # MIGRATIONS
+        # times = [i.time for i in dG.pulses]
+        # pulse_text = []
+        # for i, line in enumerate(ret.get_lines()):
+        #     x = line._x
+        #     y = line._y
+        #     if len(y) == 2:
+        #         for j, t in enumerate(times):
+        #             if jnp.isclose(t, y[0]):
+        #                 x = (x[0] + x[1]) / 2
+        #                 y = y[0]
+        #                 y = np.where((y < 1) & log_time, 1 + y, y)
 
-                        path = ("pulses", j, "proportions", 0)
-                        key = self._path_to_params[path]
-                        text_params[key] = {
-                            "type": "pi",
-                            "x": x,
-                            "y": y,
-                            "inferred": key in self._train_keys,
-                        }
-                        text_params[key].update(default_kwargs)
+        #                 path = ("pulses", j, "proportions", 0)
+        #                 key = self._path_to_params[path]
+        #                 text_params[key] = {
+        #                     "type": "pi",
+        #                     "x": x,
+        #                     "y": y,
+        #                     "inferred": key in self._train_keys,
+        #                 }
+        #                 text_params[key].update(default_kwargs)
 
-                        text = signif(dG.pulses[j].proportions[0])
-                        pulse_text.append({"x": x, "y": y, "text": text})
-                        break
+        #                 text = signif(dG.pulses[j].proportions[0])
+        #                 pulse_text.append({"x": x, "y": y, "text": text})
+        #                 break
 
         # DEMES
         demes_x_locs = {}
@@ -747,7 +764,7 @@ class Params(dict):
                 texts = [epoch.start_size, epoch.end_size]
 
                 if texts[0] == texts[1]:
-                    text = signif(texts[1])
+                    text = pformats['eta'](texts[1])
                     y = ys[1]
                     y = np.where((y < 1) & log_time, 1 + y, y)
 
@@ -766,7 +783,7 @@ class Params(dict):
                     var_type = iter(["start_size", "end_size"])
                     if not ys[0] > max_time:
                         for k in range(2):
-                            text = signif(texts[k])
+                            text = pformats['eta'](texts[k])
                             y = ys[k]
                             y = np.where((y < 1) & log_time, 1 + y, y)
                             # y = np.clip(y, a_min=step, a_max=max_time)
@@ -792,7 +809,7 @@ class Params(dict):
         mig_params = {}
         for key in rho_keys:
             mig_params[key] = {"inferred": self[key].train_it}
-            val = signif(self[key].num)
+            val = pformats['rho'](self[key].num)
             mig_path = list(list(self[key].paths)[0])
             start_time = mig_path[:-1] + ["start_time"]
             end_time = mig_path[:-1] + ["end_time"]
@@ -854,7 +871,7 @@ class Params(dict):
         # PLOTTING FOR ETA, RHO AND PI
         for key in non_tau_keys:
             cur = text_params[key]
-            val = signif(self[key].num)
+            val = pformats[cur['type']](self[key].num)
             kwargs = cur["kwargs"]
             prms_box_current = deepcopy(prms_box)
 
@@ -867,6 +884,8 @@ class Params(dict):
                 elif show_letters:
                     text = self.key_to_tex(key)
                 else:
+                    if cur['type'] == 'pi':
+                        val += '%'
                     text = "%s" % val
 
                 if show_all | text_params[key]["inferred"]:
@@ -898,15 +917,16 @@ class Params(dict):
 
         # PLOTTING FOR TIME PARAMS
         values = [self[key].num for key in tau_keys]
+        formatted = [pformats['tau'](x) for x in values]
 
         if show_letters & show_values:
             labels = [
-                self.key_to_tex(key, signif(val)) for key, val in zip(tau_keys, values)
+                self.key_to_tex(key, val) for key, val in zip(tau_keys, formatted)
             ]
         elif show_letters:
             labels = [self.key_to_tex(key) for key in tau_keys]
         else:
-            labels = ["%s" % signif(val) for val in values]
+            labels = ["%s" % val for val in formatted]
 
         if log_time:
             if values[0] == 0.:
