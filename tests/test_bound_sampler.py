@@ -70,5 +70,22 @@ def jacobson_bound_sampler():
     Momi(demo, sampled_demes, sample_sizes, jitted=True, bounds=bounds)
 
 
+def test_archaic_mig_bug():
+    demo = demes.load('tests/yaml_files/arc5_pulse_inferred.yaml')
+    dd = demo.asdict()
+    dd['pulses'].pop(0)
+    b = demes.Builder.fromdict(dd)
+    b.add_migration(source='OOA', dest='NeanderthalGHOST', rate=0.01)
+    b.add_migration(source='NeanderthalGHOST', dest='OOA', rate=0.01)
+    demo = b.resolve()
+    sampled_demes = ('Yoruba', 'French', 'Papuan', 'Vindija', 'Denisovan')
+    sample_sizes = [214, 56, 30, 2, 2]
+    momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
+    params = momi._default_params
+    bounds = momi.bound_sampler(params, 1000, seed=108)
+    momi = momi.bound(bounds)
+    momi.total_branch_length()
+
+
 if __name__ == '__main__':
-    test_momi2_model()
+    test_archaic_mig_bug()

@@ -269,7 +269,7 @@ def test_archaic_mig_bug():
     sampled_demes = ('Yoruba', 'French', 'Papuan', 'Vindija', 'Denisovan')
     sample_sizes = [214, 56, 30, 2, 2]
     momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
-    momi.total_branch_length()    
+    momi.total_branch_length()
 
 
 if __name__ == "__main__":
