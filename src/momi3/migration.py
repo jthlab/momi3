@@ -108,12 +108,24 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     # d/dt d/dtheta x(t, theta) = d/dtheta F(x(t, theta), theta) = J_F dx/dtheta + dF/dtheta
     # dF/dtheta = d(Q @ x)/dtheta = (Q_mut @ x)
     # the initial condition is d/dtheta(x(0, theta)) = 0.; x(0,theta) = e0
-    z = jnp.zeros_like(pl)
+
+    # for computing branch length, we only need to track the populations that are involved in the migration
+    involved = list(params["Ne"].keys())
+    sh = tuple([pl.shape[i] if pop in involved else 1 for i, pop in enumerate(axes)])
+    z = jnp.zeros(sh)
     e0 = z.at[(0,) * z.ndim].set(1.0)
-    tangent_args = (Q_mig, Q_mut, Q_drift, dims, axes, Ne, t, aux)
+    tangent_args = tuple([X._replace(dims=sh) for X in (Q_mig, Q_mut, Q_drift)]) + (
+        sh,
+        axes,
+        Ne,
+        t,
+        aux,
+    )
     res = solve((z, e0), tangent_args)
     etbls, _ = res
-    return plp, etbls[0]
+    etbl = etbls[0]
+    inds = tuple([slice(None) if pop in involved else 0 for pop in axes])
+    return plp, etbl[inds]
 
 
 def _lift_cm_const(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
