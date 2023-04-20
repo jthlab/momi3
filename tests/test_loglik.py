@@ -11,7 +11,7 @@ import pytest
 from jax import jit, value_and_grad
 jax.config.update('jax_platform_name', 'cpu')
 
-from momi3.event import ETBuilder
+#from momi3.event import ETBuilder
 from momi3.MOMI import Momi
 from momi3.Params import Params
 
@@ -258,5 +258,19 @@ def test_gutenkunst_vmap(n, size):
     print(f"momi3 grad of loglik vmap of {size=}: {t:.2g} seconds")
 
 
+def test_archaic_mig_bug():
+    demo = demes.load('tests/yaml_files/arc5_pulse_inferred.yaml')
+    dd = demo.asdict()
+    dd['pulses'].pop(0)
+    b = demes.Builder.fromdict(dd)
+    b.add_migration(source='OOA', dest='NeanderthalGHOST', rate=0.01, end_time=2500, start_time=2750)
+    b.add_migration(source='NeanderthalGHOST', dest='OOA', rate=0.01, end_time=2500, start_time=2750)
+    demo = b.resolve()
+    sampled_demes = ('Yoruba', 'French', 'Papuan', 'Vindija', 'Denisovan')
+    sample_sizes = [214, 56, 30, 2, 2]
+    momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
+    momi.total_branch_length()    
+
+
 if __name__ == "__main__":
-    test_gutenkunst_grad()
+    test_archaic_mig_bug()
