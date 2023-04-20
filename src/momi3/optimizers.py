@@ -137,17 +137,22 @@ def ProjectedGradient_optimizer(
     return ret_tuple
 
 
-def step(optimizer, f, theta_train_dict, opt_state):
+def optax_step(optimizer, f, theta_train_dict, opt_state):
     loss_value, grads = f(theta_train_dict)
     updates, opt_state = optimizer.update(grads, opt_state, theta_train_dict)
     theta_train_dict = optax.apply_updates(theta_train_dict, updates)
     return theta_train_dict, opt_state, loss_value
 
 
-def optax_for_momi(optimizer, momi, params, jsfs, niter, transformed=True, theta_train_dict=None, opt_state=None):
+def optax_for_momi(
+    optimizer, momi, params, jsfs, niter, transformed=True, theta_train_dict=None, opt_state=None, history=None
+):
 
     if theta_train_dict is None:
         theta_train_dict = params.theta_train_dict(transformed)
+
+    if history is None:
+        history = dict(LLs=[], ttds=[])
 
     if opt_state is None:
         opt_state = optimizer.init(theta_train_dict)
@@ -156,9 +161,9 @@ def optax_for_momi(optimizer, momi, params, jsfs, niter, transformed=True, theta
         params, jsfs, theta_train_dict, transformed=transformed
     )
 
-    LL = []
     for i in trange(niter):
-        theta_train_dict, opt_state, loss_value = step(optimizer, f, theta_train_dict, opt_state)
-        LL.append(loss_value)
+        history['ttds'].append(theta_train_dict.copy())
+        theta_train_dict, opt_state, loss_value = optax_step(optimizer, f, theta_train_dict, opt_state)
+        history['LLs'].append(loss_value)
 
-    return theta_train_dict, opt_state, LL
+    return theta_train_dict, opt_state, history

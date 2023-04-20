@@ -19,9 +19,10 @@ def multinomial_log_likelihood(P, Q, Q_sum):
 def inverse_transform(transformed_ttpd, tpd):
 
     # inverse transform functions
+    bias = 1e-10  # stability bias for the small values of rho and pi
     eta_fn = jax.nn.softplus
-    rho_fn = jax.nn.sigmoid
-    pi_fn = jax.nn.sigmoid
+    rho_fn = lambda x: jax.nn.sigmoid(x) * (1 - bias) + bias
+    pi_fn = lambda x: jax.nn.sigmoid(x) * (1 - bias) + bias
     tau_diff_fn = jnp.exp
 
     # eta

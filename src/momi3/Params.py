@@ -611,7 +611,6 @@ class Params(dict):
         else:
             if letter == 'pi':
                 val += '\%'
-                print(val)
             ret = r"$%s=%s$" % (key, val)
         return ret
 
@@ -674,7 +673,7 @@ class Params(dict):
                 'eta': lambda x: f"{int(x):d}",
                 'tau': lambda x: f"{int(x):d}",
                 'rho': lambda x: f"{x:.2g}",
-                'pi': lambda x: f"{(int(100*x)):d}",
+                'pi': lambda x: f"{(100*x):.2f}",
             }
 
 
