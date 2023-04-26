@@ -649,6 +649,8 @@ class Params(dict):
         fontsize: float = None,
         tau_font_size: float = None,
         pformats: dict[str, Callable] = None,
+        tau_keys: list = None,
+        nudge_text_pos: dict = {},
         **kwargs,
     ):
         """Customized demesdraw.tubes function. If USER_DICT is none, parameter boxes will be
@@ -827,9 +829,12 @@ class Params(dict):
         self._solve_y_conflict(mig_params, log_time)
         text_params.update(mig_params)
 
-        tau_keys = sorted(
-            [key for key in self if (key[:3] == "tau") & (not isinf(self[key].num))]
-        )
+        if tau_keys == None:
+            tau_keys = sorted(
+                [key for key in self if (key[:3] == "tau") & (not isinf(self[key].num))]
+            )
+        else:
+            pass
 
         non_tau_keys = sorted([key for key in self if key[:3] != "tau"])
 
@@ -888,9 +893,19 @@ class Params(dict):
                     text = "%s" % val
 
                 if show_all | text_params[key]["inferred"]:
+
+                    cur_x = cur["x"]
+                    cur_y = cur["y"]
+
+                    if key in nudge_text_pos:
+                        if 'x' in nudge_text_pos[key]:
+                            cur_x += nudge_text_pos[key]['x']
+                        if 'y' in nudge_text_pos[key]:
+                            cur_y += nudge_text_pos[key]['y']
+
                     plt.text(
-                        cur["x"],
-                        cur["y"],
+                        cur_x,
+                        cur_y,
                         text,
                         bbox=prms_box_current,
                         color=cur["color"],

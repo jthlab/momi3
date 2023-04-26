@@ -154,16 +154,22 @@ def optax_for_momi(
     if history is None:
         history = dict(LLs=[], ttds=[])
 
-    if opt_state is None:
-        opt_state = optimizer.init(theta_train_dict)
+    train_keys = list(theta_train_dict)
+    theta_train = jnp.array(list(theta_train_dict.values()))
 
-    f = lambda theta_train_dict: momi.negative_loglik_with_gradient(
-        params, jsfs, theta_train_dict, transformed=transformed
-    )
+    if opt_state is None:
+        opt_state = optimizer.init(theta_train)
+
+    def f(theta_train, train_keys=train_keys):
+        v, g = momi.negative_loglik_with_gradient(
+            params, jsfs, dict(zip(train_keys, theta_train)), transformed=transformed
+        )
+        g = jnp.array([g[i] for i in train_keys])
+        return v, g
 
     for i in trange(niter):
-        history['ttds'].append(theta_train_dict.copy())
-        theta_train_dict, opt_state, loss_value = optax_step(optimizer, f, theta_train_dict, opt_state)
+        history['ttds'].append(dict(zip(train_keys, theta_train)))
+        theta_train, opt_state, loss_value = optax_step(optimizer, f, theta_train, opt_state)
         history['LLs'].append(loss_value)
 
-    return theta_train_dict, opt_state, history
+    return dict(zip(train_keys, theta_train)), opt_state, history

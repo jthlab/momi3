@@ -437,6 +437,7 @@ class Momi(object):
         scale: dict[str, float] = None,
         seed: int = None,
         quantile: float = 0.95,
+        min_lineages: int = 4
     ):
         loc = params._theta_train
         if scale is None:
@@ -451,6 +452,7 @@ class Momi(object):
             scale=scale,
             seed=seed,
             quantile=quantile,
+            min_lineages=min_lineages
         )
 
     def _bootstrap_sample(

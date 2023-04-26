@@ -14,7 +14,7 @@ from momi3.common import traverse
 from momi3.event_tree import ETBuilder
 from momi3.Params import Params
 
-MIN_lineages = 2
+MIN_lineages = 4
 
 
 def log_factorial(x):
@@ -194,6 +194,7 @@ def sample_lift(
     params: Params,
     seed: int = None,
     quantile: float = 0.95,
+    min_lineages=4
 ):
     """Samples surviving lineages and returns its user given quantile
 
@@ -257,12 +258,14 @@ def sample_lift(
             # print('-'*10)
 
         n1pop = int(round(np.quantile(ret, quantile)))
-        n1[pop] = max(n1pop, MIN_lineages)
+        n1[pop] = max(n1pop, min_lineages)
 
     return n1
 
 
-def admix_quantiles(n: dict, ev: events.Admix, params: Params, quantile: float = 0.95):
+def admix_quantiles(
+    n: dict, ev: events.Admix, params: Params, quantile: float = 0.95, min_lineages=4
+):
     n1 = n.copy()
     q = ev.f_p(params._demo_dict)
 
@@ -274,14 +277,16 @@ def admix_quantiles(n: dict, ev: events.Admix, params: Params, quantile: float =
     np1 = int(scipy.stats.binom(n0, q).ppf(quantile))
     np2 = int(scipy.stats.binom(n0, 1 - q).ppf(quantile))
 
-    n1[parent1] = max(np1, MIN_lineages)
-    n1[parent2] = max(np2, MIN_lineages)
+    n1[parent1] = max(np1, min_lineages)
+    n1[parent2] = max(np2, min_lineages)
     n1[child] = 0
 
     return n1
 
 
-def pulse_quantiles(n: dict, ev: events.Pulse, params: Params, quantile: float = 0.95):
+def pulse_quantiles(
+    n: dict, ev: events.Pulse, params: Params, quantile: float = 0.95, min_lineages=4
+):
     n1 = n.copy()
     q = ev.f_p(params._demo_dict)
 
@@ -289,7 +294,7 @@ def pulse_quantiles(n: dict, ev: events.Pulse, params: Params, quantile: float =
 
     n0 = n[dest]
     n1d = int(scipy.stats.binom(n0, 1 - q).ppf(quantile))
-    n1[dest] = max(n1d, MIN_lineages)
+    n1[dest] = max(n1d, min_lineages)
     n1[source] += int(scipy.stats.binom(n0, q).ppf(quantile))
 
     return n1
@@ -313,6 +318,7 @@ def bound_sampler(
     scale: jnp.ndarray,
     seed: int = None,
     quantile: float = 0.95,
+    min_lineages: int = 4
 ):
     """Bound sampler for event tree
 
@@ -353,17 +359,17 @@ def bound_sampler(
                     #     n, ev, theta_train_sample, params, seed, quantile
                     # )
                 else:
-                    n = sample_lift(n, ev, theta_train_sample, params, seed, quantile)
+                    n = sample_lift(n, ev, theta_train_sample, params, seed, quantile, min_lineages)
                     NS[ev] = deepcopy(n)
                     #print(ev.t1, "Lift", n)
                 seed = np.random.RandomState(seed).randint(2**31 - 1)
 
             elif isinstance(ev, events.Admix):
-                n = admix_quantiles(n, ev, params, quantile)
+                n = admix_quantiles(n, ev, params, quantile, min_lineages)
                 NS[ev] = deepcopy(n)
                 #print(u.t, "Admix", n)
             elif isinstance(ev, events.Pulse):
-                n = pulse_quantiles(n, ev, params, quantile)
+                n = pulse_quantiles(n, ev, params, quantile, min_lineages)
                 NS[ev] = deepcopy(n)
                 #print(u.t, "Pulse", n)
             elif isinstance(ev, events.Rename):

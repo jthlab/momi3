@@ -399,6 +399,8 @@ def downsample_jsfs(jsfs: np.ndarray, down_sample_to: list[int]) -> np.ndarray:
     """
     down_sample_from = tuple(i - 1 for i in jsfs.shape)
     for ind, (n, m) in enumerate(zip(down_sample_from, down_sample_to)):
+        if m is None:
+            continue
         j = np.arange(m + 1)[None, :]
         i = np.arange(n + 1)[:, None]
         H = scipy.stats.hypergeom(n, i, m).pmf(j)
