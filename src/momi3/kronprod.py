@@ -145,7 +145,7 @@ class GroupedKronProd(KronProd):
         for i in range(d):
             for j in range(i + 1, d):
                 n = self.dims[i] * self.dims[j]
-                Qij = empty((n, n))
+                Qij: BCOO = empty((n, n))
                 for Ai in self.A:
                     assert len(Ai) <= 2
                     if Ai.keys() == {i, j}:
@@ -154,6 +154,8 @@ class GroupedKronProd(KronProd):
                         Qij += _spkron(f * Ai[i], eye(self.dims[j]))
                     elif Ai.keys() == {j}:
                         Qij += _spkron(eye(self.dims[i]), f * Ai[j])
+                Qij = Qij.sort_indices()
+                assert Qij.indices_sorted
                 r1 = other.swapaxes(i, 0).swapaxes(j, 1)
                 ret += (
                     (Qij @ r1.reshape(n, -1))
@@ -182,8 +184,10 @@ tr.register(np.ndarray, np.trace)
 def _spkron(A, B) -> BCOO:
     # sparse kronecker product of BCOO matrices. (actually just COO)
     assert A.ndim == B.ndim == 2
-    return (A[:, None, :, None] * B[None, :, None, :]).reshape(
-        A.shape[0] * B.shape[0], A.shape[1] * B.shape[1]
+    return (
+        (A[:, None, :, None] * B[None, :, None, :])
+        .reshape(A.shape[0] * B.shape[0], A.shape[1] * B.shape[1])
+        .sort_indices()
     )
 
 
@@ -196,10 +200,3 @@ def norm1(A: BCOO):
 @norm1.register
 def _(A: np.ndarray):
     return np.linalg.norm(A, 1)
-
-
-def _bcoo_to_sp(A):
-    from scipy.sparse import coo_matrix
-
-    assert A.ndim == 2
-    return coo_matrix((A.data, A.indices.T), shape=A.shape)
