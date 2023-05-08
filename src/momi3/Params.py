@@ -914,20 +914,20 @@ class Params(dict):
             else:
                 pass
 
-        if self.demo_graph.migrations != []:
-            plt.text(
-                rxlim,
-                max_time,
-                "Rate\nParameters",
-                bbox=dict(
-                    boxstyle="round", fc="black", ec="black", alpha=1.0, pad=0.15
-                ),
-                color="white",
-                va="center",
-                ha="center",
-            )
+        # if self.demo_graph.migrations != []:
+        #     plt.text(
+        #         rxlim,
+        #         max_time,
+        #         "Rate\nParameters",
+        #         bbox=dict(
+        #             boxstyle="round", fc="black", ec="black", alpha=1.0, pad=0.15
+        #         ),
+        #         color="white",
+        #         va="center",
+        #         ha="center",
+        #     )
 
-            plt.axvline(rxlim, linestyle="--", color="black")
+        #     plt.axvline(rxlim, linestyle="--", color="black")
 
         # PLOTTING FOR TIME PARAMS
         values = [self[key].num for key in tau_keys]

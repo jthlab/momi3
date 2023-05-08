@@ -429,4 +429,4 @@ def bootstrap_sample(
         for new_ind in new_inds:
             config = nonzeros[new_ind]
             sfs[config] = sfs.get(config, 0) + 1
-        return COO(sfs)
+        return COO(sfs, shape=jsfs.shape)
