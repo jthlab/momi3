@@ -1673,7 +1673,7 @@ def get_html_repr(params):
     # FIXME: Add the actual link to paper
     return f"""
 <div style="display: inline-block; width: 30%;">
-    <a href="https://github.com/jthlab/momi3" target="_blank">SOURCE CODE</a> <a href="https://thumbs.gfycat.com/LastBrilliantElk-mobile.mp4" target="_blank">PAPER</a>
+    <a href="https://github.com/jthlab/momi3" target="_blank">SOURCE CODE</a> <a href="https://www.biorxiv.org/content/10.1101/2024.03.26.586844v1" target="_blank">PAPER</a>
     <br>
     <img src="https://enesdilber.github.io/momilogo.png" style="width:75px;height:52px;">
     <table border="1" style="width: 100%;">
