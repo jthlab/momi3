@@ -91,11 +91,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     # to be the key.
     Q_mig_T, _ = _Q_mig_mut(dims, axes, params["mig"], aux, tr=True)
     term = dfx.ODETerm(_A)
-    # solver = dfx.Kvaerno4(
-    #     nonlinear_solver=dfx.NewtonNonlinearSolver(rtol=1e-5, atol=1e-6),
-    #     scan_stages=True
-    # )
-    solver = dfx.Tsit5(scan_stages=True)
+    solver = dfx.Tsit5()
     ssc = dfx.PIDController(rtol=1e-6, atol=1e-7)
 
     def solve(y0, args):
