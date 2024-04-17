@@ -1,3 +1,5 @@
+from functools import lru_cache
+from math import ceil
 from typing import NamedTuple, Union
 
 import jax
@@ -7,9 +9,6 @@ from sparse import COO
 
 from momi3.Params import get_body
 from momi3.utils import one_hot, ones
-
-from functools import lru_cache
-from math import ceil
 
 
 class Data(NamedTuple):
@@ -122,13 +121,50 @@ def get_data(
     jsfs: Union[COO, jnp.ndarray, np.ndarray],
     batch_size: int,
 ):
-    return get_data_by_jsfs(sampled_demes, sample_sizes, leaves, jsfs, batch_size)
+    n_samples = dict(zip(sampled_demes, sample_sizes))
+    n_jsfs = [i - 1 for i in jsfs.shape]
+
+    assert all(
+        [i == j for i, j in zip(n_jsfs, sample_sizes)]
+    ), f"dimensions of jsfs({jsfs.shape}) != sample sizes({sample_sizes})"
+
+    non_zero_indices = [tuple(a.tolist()) for a in jsfs.nonzero()]
+    index_tuples = list(zip(*non_zero_indices))
+    # remove all ancestral and all deriveds, if they are present.
+    for k in [(0,) * len(n_jsfs), tuple(n_jsfs)]:
+        if k in index_tuples:
+            index_tuples.remove(k)
+    # then transpose back to list of tuples
+    non_zero_indices = tuple(zip(*index_tuples))
+
+    if isinstance(jsfs, COO):
+        sfs = jsfs[non_zero_indices].todense()
+    elif isinstance(jsfs, jnp.ndarray):
+        sfs = jsfs[non_zero_indices]
+    elif isinstance(jsfs, np.ndarray):
+        sfs = jsfs[non_zero_indices]
+    else:
+        raise TypeError("Supported Types: sparse.COO, jax.numpy.ndarray, numpy.ndarray")
+
+    sfs = np.array(sfs, dtype="f")
+    num_deriveds = dict(zip(sampled_demes, non_zero_indices))
+
+    n_entries = len(sfs)
+    sfs_batches = get_sfs_batches(sfs, batch_size)
+    deriveds = tuple([tuple(num_deriveds[pop]) for pop in sampled_demes])
+    X_batches = get_X_batches(
+        sampled_demes,
+        sample_sizes,
+        tuple(leaves),
+        deriveds,
+        batch_size,
+        add_etbl_vecs=True,
+    )
+
+    return Data(sfs_batches, X_batches, n_samples, n_entries, freqs_matrix=None)
 
 
-def get_sfs_batches(
-    sfs,
-    batch_size=None
-):
+def get_sfs_batches(sfs, batch_size=None):
     n_devices = jax.device_count()
     len_sfs = len(sfs)
     n_entries = len_sfs + n_devices * 3
@@ -149,12 +185,7 @@ def get_sfs_batches(
 
 @lru_cache(None)
 def get_X_batches(
-    sampled_demes,
-    sample_sizes,
-    leaves,
-    deriveds,
-    batch_size=None,
-    add_etbl_vecs=True
+    sampled_demes, sample_sizes, leaves, deriveds, batch_size=None, add_etbl_vecs=True
 ):
     n_devices = jax.device_count()
     n_entries = len(deriveds[0])
@@ -194,7 +225,6 @@ def get_X_batches(
                 next_loop = device_load
 
             for _ in range(next_loop):
-
                 if n == 0:
                     X[pop].append([1.0])
                 else:
@@ -202,62 +232,8 @@ def get_X_batches(
                     d = next(num_deriveds[pop], 0)
                     X[pop].append(one_hot(n + 1, d))
 
-        X[pop] = np.array(X[pop]).astype(float).reshape(
-            n_devices, n_for_map, n_for_vmap, -1
+        X[pop] = (
+            np.array(X[pop]).astype(float).reshape(n_devices, n_for_map, n_for_vmap, -1)
         )
 
     return X
-
-
-def get_data_by_jsfs(
-    sampled_demes: tuple[str],
-    sample_sizes: tuple[int],
-    leaves: set[str],
-    jsfs: Union[COO, jnp.ndarray, np.ndarray],
-    batch_size: int = None,
-):
-    n_samples = dict(zip(sampled_demes, sample_sizes))
-    n_jsfs = [i - 1 for i in jsfs.shape]
-
-    assert all(
-        [i == j for i, j in zip(n_jsfs, sample_sizes)]
-    ), f"dimensions of jsfs({jsfs.shape}) != sample sizes({sample_sizes})"
-
-    non_zero_indeces = jsfs.nonzero()
-
-    # Remove all deriveds and all ancestral
-    # sfs[0, 0, ..., 0] = sfs[-1, -1, ..., -1] = 0
-    remove_first = True
-    remove_last = True
-    for i, n in zip(non_zero_indeces, n_jsfs):
-        remove_first &= i[0] == 0
-        remove_last &= i[-1] == n
-
-    new_non_zero_indeces = []
-    for i in non_zero_indeces:
-        j = list(i)
-        if remove_first:
-            j = j[1:]
-        if remove_last:
-            j = j[:-1]
-        new_non_zero_indeces.append(tuple(j))
-    non_zero_indeces = tuple(new_non_zero_indeces)
-
-    if isinstance(jsfs, COO):
-        sfs = jsfs[non_zero_indeces].todense()
-    elif isinstance(jsfs, jnp.ndarray):
-        sfs = jsfs[non_zero_indeces]
-    elif isinstance(jsfs, np.ndarray):
-        sfs = jsfs[non_zero_indeces]
-    else:
-        raise TypeError("Supported Types: sparse.COO, jax.numpy.ndarray, numpy.ndarray")
-
-    sfs = np.array(sfs, dtype="f")
-    num_deriveds = dict(zip(sampled_demes, non_zero_indeces))
-
-    n_entries = len(sfs)
-    sfs_batches = get_sfs_batches(sfs, batch_size)
-    deriveds = tuple([tuple(num_deriveds[pop]) for pop in sampled_demes])
-    X_batches = get_X_batches(sampled_demes, sample_sizes, tuple(leaves), deriveds, batch_size, add_etbl_vecs=True)
-
-    return Data(sfs_batches, X_batches, n_samples, n_entries, freqs_matrix=None)
