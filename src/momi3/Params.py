@@ -1,8 +1,7 @@
-from __future__ import annotations
-
 import math
 import re
 from copy import deepcopy
+from itertools import count
 from math import inf, isinf
 from typing import Callable, Union
 
@@ -15,25 +14,14 @@ import numpy as np
 import sympy
 from scipy.optimize import LinearConstraint, linprog
 
-from jax.nn import softplus
-
-from momi3.utils import signif, update
-from momi3.math_functions import softplus_inverse
+from momi3.utils import update
 
 NoneType = type(None)
 NP_max = np.finfo(np.float32).max
 EPS_time_differences = 0.01  # to avoid 0 division, =min(t1-t0)
 
 
-def Intergers():
-    i = 0
-    while True:
-        yield i
-        i += 1
-
-
 class Params(dict):
-
     """Parameter class.
 
     Attributes:
@@ -65,9 +53,9 @@ class Params(dict):
 
         # iter size, rate and prop parameters.
         # Note: Not iterating time parameters because same time points have the same time key (Generated above).
-        iter_size = Intergers()
-        iter_rate = Intergers()
-        iter_prop = Intergers()
+        iter_size = count()
+        iter_rate = count()
+        iter_prop = count()
 
         # 1 Demes:
         demes_event = "demes"
@@ -177,12 +165,12 @@ class Params(dict):
             for path in paths:
                 self._path_to_params[path] = key
 
-            if key[0] == 'e':
-                tkey = f'softplus({key})'
+            if key[0] == "e":
+                tkey = f"softplus({key})"
                 self._transforms_to_params[tkey] = key
                 self._params_to_transforms[key] = tkey
-            elif key[0] in ['r', 'p']:
-                tkey = f'logit({key})'
+            elif key[0] in ["r", "p"]:
+                tkey = f"logit({key})"
                 self._transforms_to_params[tkey] = key
                 self._params_to_transforms[key] = tkey
             else:
@@ -193,7 +181,7 @@ class Params(dict):
         for i in range(1, len(tau_keys)):
             tk1 = tau_keys[i]
             tk0 = tau_keys[i - 1]
-            tkey = f'log({tk1}-{tk0})'
+            tkey = f"log({tk1}-{tk0})"
             self._transforms_to_params[tkey] = (tk1, tk0)
             self._params_to_transforms[tk1, tk0] = tkey
 
@@ -221,7 +209,11 @@ class Params(dict):
     def set_train_all_taus(self, value: bool):
         # will apply all but tau_0
         keys = self._keys
-        [self[key].train(value) for key in keys if (isinstance(self[key], TimeParam)) & (key != 'tau_0')]
+        [
+            self[key].train(value)
+            for key in keys
+            if (isinstance(self[key], TimeParam)) & (key != "tau_0")
+        ]
 
     def set_train_all(self, value: bool):
         self.set_train_all_etas(value)
@@ -252,21 +244,20 @@ class Params(dict):
         return b1 & b2
 
     def set_optimization_results(self, theta_train_hat: dict):
-
         if set(theta_train_hat) == set(self.theta_train_dict(True)):
             tdtd = self._transformed_diff_tau_dict
             # Transformed
             for tkey in tdtd:
                 key1, key0 = self._transforms_to_params[tkey]
                 value = self[key0].num + self.transform_fns(
-                    theta_train_hat[tkey], ptype='tau', inverse=True
+                    theta_train_hat[tkey], ptype="tau", inverse=True
                 )
                 self[key1].set(value)
                 for path in self[key1].paths:
                     # change the values in demo_dict too
                     self._demo_dict = update(self._demo_dict, path, value)
             for tkey in set(theta_train_hat).difference(set(tdtd)):
-                ptype = re.findall("\w+_", tkey)[0][:-1]
+                ptype = re.findall(r"\w+_", tkey)[0][:-1]
                 key = self._transforms_to_params[tkey]
                 value = self.transform_fns(
                     theta_train_hat[tkey], ptype=ptype, inverse=True
@@ -296,7 +287,7 @@ class Params(dict):
                     self._demo_dict = update(self._demo_dict, path, value)
 
         else:
-            raise ValueError('Wrong theta_train_hat')
+            raise ValueError("Wrong theta_train_hat")
 
     def add_linear_constraint(self, expr_str):
         x = self._theta
@@ -313,14 +304,14 @@ class Params(dict):
         if transformed:
             ptttd = [{}, {}, {}, {}]
             for tkey in ttd:
-                if tkey.find('tau') == -1:
+                if tkey.find("tau") == -1:
                     # not tau
                     key = self._transforms_to_params[tkey]
                     paths = self._params_to_paths[key]
 
-                    if tkey.find('eta') != -1:
+                    if tkey.find("eta") != -1:
                         ind = 0
-                    elif tkey.find('rho') != -1:
+                    elif tkey.find("rho") != -1:
                         ind = 1
                     else:
                         ind = 2
@@ -406,10 +397,10 @@ class Params(dict):
         return paths
 
     def transform_fns(self, val, ptype, inverse=False):
-        if ptype == 'eta':
+        if ptype == "eta":
             return val
 
-        elif ptype == 'tau':
+        elif ptype == "tau":
             # it's actually log differences of tau
             if inverse:
                 # ret = softplus_inverse(val)
@@ -418,23 +409,25 @@ class Params(dict):
                 # ret = softplus(val)
                 ret = math.log(val)
 
-        elif ptype in ['rho', 'pi']:
+        elif ptype in ["rho", "pi"]:
             if inverse:
                 ret = 1 / (1 + math.exp(-val))
             else:
                 ret = math.log(val / (1 - val))
 
         else:
-            raise ValueError(f'Unknown {ptype=}')
+            raise ValueError(f"Unknown {ptype=}")
 
         return float(ret)
 
     @property
-    def _transformed_diff_tau_dict(self) -> tuple[dict[tuple, float], dict[tuple, float]]:
+    def _transformed_diff_tau_dict(
+        self,
+    ) -> tuple[dict[tuple, float], dict[tuple, float]]:
         # returns infer and no inter keys
         # This dict stores log(tau[i] - tau[i-1])
 
-        ptype = 'tau'
+        ptype = "tau"
         ptt = self._params_to_transforms
         keys = self._keys
         tau_keys = [key for key in keys if isinstance(self[key], TimeParam)]
@@ -456,31 +449,43 @@ class Params(dict):
             if train_it:
                 diff_tau_train_dict[key] = val
 
-        self['tau_0'].train_it = False
+        self["tau_0"].train_it = False
         return diff_tau_train_dict
 
     @property
     def _transformed_rho_dict(self):
-        ptype = 'rho'
+        ptype = "rho"
         ptt = self._params_to_transforms
         cur_keys = [key for key in self if isinstance(self[key], RateParam)]
-        _train_dict = {ptt[key]: self.transform_fns(self[key].num, ptype) for key in cur_keys if self[key].train_it}
+        _train_dict = {
+            ptt[key]: self.transform_fns(self[key].num, ptype)
+            for key in cur_keys
+            if self[key].train_it
+        }
         return _train_dict
 
     @property
     def _transformed_pi_dict(self):
-        ptype = 'pi'
+        ptype = "pi"
         ptt = self._params_to_transforms
         cur_keys = [key for key in self if isinstance(self[key], ProportionParam)]
-        _train_dict = {ptt[key]: self.transform_fns(self[key].num, ptype) for key in cur_keys if self[key].train_it}
+        _train_dict = {
+            ptt[key]: self.transform_fns(self[key].num, ptype)
+            for key in cur_keys
+            if self[key].train_it
+        }
         return _train_dict
 
     @property
     def _transformed_eta_dict(self):
-        ptype = 'eta'
+        ptype = "eta"
         ptt = self._params_to_transforms
         cur_keys = [key for key in self if isinstance(self[key], SizeParam)]
-        _train_dict = {ptt[key]: self.transform_fns(self[key].num, ptype) for key in cur_keys if self[key].train_it}
+        _train_dict = {
+            ptt[key]: self.transform_fns(self[key].num, ptype)
+            for key in cur_keys
+            if self[key].train_it
+        }
         return _train_dict
 
     @property
@@ -499,7 +504,7 @@ class Params(dict):
             self._transformed_eta_dict,
             self._transformed_rho_dict,
             self._transformed_pi_dict,
-            self._transformed_diff_tau_dict
+            self._transformed_diff_tau_dict,
         ]:
             transformed_theta_nuisance_dict.append(nd)
         return tuple(transformed_theta_nuisance_dict)
@@ -530,7 +535,7 @@ class Params(dict):
         trd = trd[0] | trd[1]
         for path in trd:
             key = self._path_to_params[path[0]]
-            new_key = f'logit({key})'
+            new_key = f"logit({key})"
             _transformed_params_to_paths[new_key] = self._params_to_paths[key]
             _paths_to_transformed_params[path] = new_key
 
@@ -538,7 +543,7 @@ class Params(dict):
         trd = trd[0] | trd[1]
         for path in trd:
             key = self._path_to_params[path[0]]
-            new_key = f'logit({key})'
+            new_key = f"logit({key})"
             _transformed_params_to_paths[new_key] = self._params_to_paths[key]
             _paths_to_transformed_params[path] = new_key
 
@@ -546,14 +551,14 @@ class Params(dict):
         trd = trd[0] | trd[1]
         for path in trd:
             key = self._path_to_params[path[0]]
-            new_key = f'log({key})'
+            new_key = f"log({key})"
             _transformed_params_to_paths[new_key] = self._params_to_paths[key]
             _paths_to_transformed_params[path] = new_key
 
         trd = self._transformed_diff_tau_dict
         trd = trd[0] | trd[1]
         for paths in trd:
-            if paths == (('init',),):
+            if paths == (("init",),):
                 pass
             else:
                 path1 = paths
@@ -562,7 +567,7 @@ class Params(dict):
                 key1 = self._path_to_params[path1[0]]
                 key2 = self._path_to_params[path2[0]]
 
-                new_key = f'log({key2}-{key1})'
+                new_key = f"log({key2}-{key1})"
                 _transformed_params_to_paths[new_key] = (path1, path2)
                 _paths_to_transformed_params[path1, path2] = new_key
         self._transformed_params_to_paths = _transformed_params_to_paths
@@ -609,8 +614,8 @@ class Params(dict):
         if val is None:
             ret = r"$%s$" % key
         else:
-            if letter == 'pi':
-                val += '\%'
+            if letter == "pi":
+                val += r"\%"
             ret = r"$%s=%s$" % (key, val)
         return ret
 
@@ -618,14 +623,14 @@ class Params(dict):
         positions = set([])
         for key in text_params:
             cur = text_params[key]
-            ymin, ymax = cur['ymin'], cur['ymax']
+            ymin, ymax = cur["ymin"], cur["ymax"]
             r = ymax - ymin
             i = 2
             cont = True
             while cont:
                 for j in range(1, i):
                     if log_time:
-                        position = 1 + ymin + r * (10 ** j) / (10 ** i)
+                        position = 1 + ymin + r * (10**j) / (10**i)
                     else:
                         position = ymin + r * j / i
                     if positions.issuperset({position}):
@@ -635,9 +640,9 @@ class Params(dict):
                         positions.add(position)
                         break
                 i += 1
-            cur['y'] = position
-            del cur['ymin']
-            del cur['ymax']
+            cur["y"] = position
+            del cur["ymin"]
+            del cur["ymax"]
 
     def tubes(
         self,
@@ -672,12 +677,11 @@ class Params(dict):
         # print format for vars
         if pformats is None:
             pformats = {
-                'eta': lambda x: f"{int(x):d}",
-                'tau': lambda x: f"{int(x):d}",
-                'rho': lambda x: f"{x:.2g}",
-                'pi': lambda x: f"{(100*x):.2f}",
+                "eta": lambda x: f"{int(x):d}",
+                "tau": lambda x: f"{int(x):d}",
+                "rho": lambda x: f"{x:.2g}",
+                "pi": lambda x: f"{(100*x):.2f}",
             }
-
 
         lxlim, rxlim = ret.get_xlim()
         min_time, max_time = ret.get_ylim()
@@ -689,7 +693,9 @@ class Params(dict):
         else:
             box_color_by = "train"
 
-        default_kwargs = {"kwargs": {"va": "bottom", "ha": "center", "fontsize": fontsize}}
+        default_kwargs = {
+            "kwargs": {"va": "bottom", "ha": "center", "fontsize": fontsize}
+        }
 
         text_params = {}
 
@@ -718,7 +724,7 @@ class Params(dict):
                         }
                         text_params[key].update(default_kwargs)
 
-                        text = pformats['pi'](dG.pulses[j].proportions[0])
+                        text = pformats["pi"](dG.pulses[j].proportions[0])
                         pulse_text.append({"x": x, "y": y, "text": text})
                         break
 
@@ -765,7 +771,7 @@ class Params(dict):
                 texts = [epoch.start_size, epoch.end_size]
 
                 if texts[0] == texts[1]:
-                    text = pformats['eta'](texts[1])
+                    text = pformats["eta"](texts[1])
                     y = ys[1]
                     y = np.where((y < 1) & log_time, 1 + y, y)
 
@@ -784,7 +790,7 @@ class Params(dict):
                     var_type = iter(["start_size", "end_size"])
                     if not ys[0] > max_time:
                         for k in range(2):
-                            text = pformats['eta'](texts[k])
+                            text = pformats["eta"](texts[k])
                             y = ys[k]
                             y = np.where((y < 1) & log_time, 1 + y, y)
                             # y = np.clip(y, a_min=step, a_max=max_time)
@@ -810,7 +816,7 @@ class Params(dict):
         mig_params = {}
         for key in rho_keys:
             mig_params[key] = {"inferred": self[key].train_it}
-            val = pformats['rho'](self[key].num)
+            val = pformats["rho"](self[key].num)
             mig_path = list(list(self[key].paths)[0])
             start_time = mig_path[:-1] + ["start_time"]
             end_time = mig_path[:-1] + ["end_time"]
@@ -829,7 +835,7 @@ class Params(dict):
         self._solve_y_conflict(mig_params, log_time)
         text_params.update(mig_params)
 
-        if tau_keys == None:
+        if tau_keys is None:
             tau_keys = sorted(
                 [key for key in self if (key[:3] == "tau") & (not isinf(self[key].num))]
             )
@@ -875,7 +881,7 @@ class Params(dict):
         # PLOTTING FOR ETA, RHO AND PI
         for key in non_tau_keys:
             cur = text_params[key]
-            val = pformats[cur['type']](self[key].num)
+            val = pformats[cur["type"]](self[key].num)
             kwargs = cur["kwargs"]
             prms_box_current = deepcopy(prms_box)
 
@@ -888,20 +894,19 @@ class Params(dict):
                 elif show_letters:
                     text = self.key_to_tex(key)
                 else:
-                    if cur['type'] == 'pi':
-                        val += '%'
+                    if cur["type"] == "pi":
+                        val += "%"
                     text = "%s" % val
 
                 if show_all | text_params[key]["inferred"]:
-
                     cur_x = cur["x"]
                     cur_y = cur["y"]
 
                     if key in nudge_text_pos:
-                        if 'x' in nudge_text_pos[key]:
-                            cur_x += nudge_text_pos[key]['x']
-                        if 'y' in nudge_text_pos[key]:
-                            cur_y += nudge_text_pos[key]['y']
+                        if "x" in nudge_text_pos[key]:
+                            cur_x += nudge_text_pos[key]["x"]
+                        if "y" in nudge_text_pos[key]:
+                            cur_y += nudge_text_pos[key]["y"]
 
                     plt.text(
                         cur_x,
@@ -931,7 +936,7 @@ class Params(dict):
 
         # PLOTTING FOR TIME PARAMS
         values = [self[key].num for key in tau_keys]
-        formatted = [pformats['tau'](x) for x in values]
+        formatted = [pformats["tau"](x) for x in values]
 
         if show_letters & show_values:
             labels = [
@@ -943,11 +948,13 @@ class Params(dict):
             labels = ["%s" % val for val in formatted]
 
         if log_time:
-            if values[0] == 0.:
+            if values[0] == 0.0:
                 values = np.array(values) + 1.0
 
         if show_letters | show_values:
-            ret.set_yticks(values, labels, fontsize=tau_font_size)  # Show time parameters in yticks
+            ret.set_yticks(
+                values, labels, fontsize=tau_font_size
+            )  # Show time parameters in yticks
             for i, key in enumerate(tau_keys):
                 if show_all | text_params[key]["inferred"]:
                     prms_box_current = deepcopy(prms_box)
@@ -1054,7 +1061,7 @@ class Param(object):
         else:
             object.__setattr__(self, key, value)
 
-    def set(self, value: Union[float, Param]):
+    def set(self, value: Union[float, "Param"]):
         if isinstance(value, Param):
             value = value.num
         if any([value > self.UB, value < self.LB]):
@@ -1131,7 +1138,6 @@ class RateParam(Param):
 
 
 class LinearConstraints(object):
-
     """Handles Linear constraints of the momi model
 
     Attributes:
@@ -1607,9 +1613,9 @@ def get_html_repr(params):
 
     def eq_to_html(eq):
         eq = re.sub(r"_(\d+)", r"<sub>\1</sub>", eq)
-        eq = eq.replace("<=", '≤')
-        eq = eq.replace(">=", '≥')
-        eq = eq.replace("==", '=')
+        eq = eq.replace("<=", "≤")
+        eq = eq.replace(">=", "≥")
+        eq = eq.replace("==", "=")
         for key, value in Greek.items():
             eq = eq.replace(key, value)
         return eq
@@ -1673,7 +1679,8 @@ def get_html_repr(params):
     # FIXME: Add the actual link to paper
     return f"""
 <div style="display: inline-block; width: 30%;">
-    <a href="https://github.com/jthlab/momi3" target="_blank">SOURCE CODE</a> <a href="https://www.biorxiv.org/content/10.1101/2024.03.26.586844v1" target="_blank">PAPER</a>
+    <a href="https://github.com/jthlab/momi3" target="_blank">SOURCE CODE</a>
+    <a href="https://www.biorxiv.org/content/10.1101/2024.03.26.586844v1" target="_blank">PAPER</a>
     <br>
     <img src="https://enesdilber.github.io/momilogo.png" style="width:75px;height:52px;">
     <table border="1" style="width: 100%;">
