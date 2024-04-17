@@ -2,8 +2,8 @@ from functools import reduce
 
 import numpy as np
 import scipy.sparse as sps
-from pytest import fixture
 from jax.experimental.sparse import BCOO
+from pytest import fixture
 
 from momi3.kronprod import GroupedKronProd, KronProd
 
