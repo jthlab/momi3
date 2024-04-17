@@ -19,8 +19,8 @@ from jax.numpy import diag, dot, exp, log
 from jax.scipy.special import logsumexp
 from jax.tree_util import register_pytree_node
 from joblib import Parallel, delayed
-from tqdm.autonotebook import tqdm
 from sparse._coo.core import COO
+from tqdm.autonotebook import tqdm
 
 from .math_functions import expm1d, log_hypergeom
 
@@ -181,7 +181,7 @@ def msprime_chromosome_simulator(
     recombination_rate: float,
     mutation_rate: float,
     seed: int = None,
-    low_memory: bool = True
+    low_memory: bool = True,
 ) -> Union[sparse.COO, np.ndarray]:
     chr_sim = msp.sim_ancestry(
         ploidy=1,
@@ -204,7 +204,9 @@ def msprime_chromosome_simulator(
     if low_memory:
         jsfs = tskit_low_memory_afs(mt_chr, sample_ids)
     else:
-        jsfs = mt_chr.allele_frequency_spectrum(sample_sets=sample_ids, polarised=True, span_normalise=False)
+        jsfs = mt_chr.allele_frequency_spectrum(
+            sample_sets=sample_ids, polarised=True, span_normalise=False
+        )
     return jsfs
 
 
@@ -368,8 +370,8 @@ def halfsigmoid(x, scale=10):
 
 
 def signif(x, ptype):
-    if ptype in ['eta', 'tau']:
-        ret = str(int(x))
+    if ptype in ["eta", "tau"]:
+        str(int(x))
     else:
         return f"{x:.2g}"  # 2 digit significance
 
@@ -386,14 +388,14 @@ def ones(n):
 
 def downsample_jsfs(jsfs: np.ndarray, down_sample_to: list[int]) -> np.ndarray:
     """Returns downsampled jsfs
-    
+
     Parameters
     ----------
     jsfs : np.ndarray
         joint-sfs
     down_sample_to : list[int]
         new shape of the jsfs will be down_sample_to + 1.
-        If you don't want to sample some dimensions give Nones.    
+        If you don't want to sample some dimensions give Nones.
     Returns
     -------
     np.ndarray
@@ -413,22 +415,22 @@ def downsample_jsfs(jsfs: np.ndarray, down_sample_to: list[int]) -> np.ndarray:
 
 
 def bootstrap_sample(
-        jsfs: Union[COO, jnp.ndarray, np.ndarray], n_SNPs: int = None, seed=None
+    jsfs: Union[COO, jnp.ndarray, np.ndarray], n_SNPs: int = None, seed=None
 ) -> COO:
-        np.random.seed(seed)
-        nmuts = int(round(jsfs.sum()))
-        jsfs_nonzero = jsfs.nonzero()
-        nonzeros = [tuple(i) for i in np.array(jsfs_nonzero).T]
-        if isinstance(jsfs, COO):
-            p = jsfs.data
-        else:
-            p = jsfs[jsfs_nonzero]
-        p = p / nmuts
-        if n_SNPs is not None:
-            nmuts = n_SNPs
-        new_inds = np.random.choice(range(len(nonzeros)), p=p, size=nmuts)
-        sfs = {}
-        for new_ind in new_inds:
-            config = nonzeros[new_ind]
-            sfs[config] = sfs.get(config, 0) + 1
-        return COO(sfs, shape=jsfs.shape)
+    np.random.seed(seed)
+    nmuts = int(round(jsfs.sum()))
+    jsfs_nonzero = jsfs.nonzero()
+    nonzeros = [tuple(i) for i in np.array(jsfs_nonzero).T]
+    if isinstance(jsfs, COO):
+        p = jsfs.data
+    else:
+        p = jsfs[jsfs_nonzero]
+    p = p / nmuts
+    if n_SNPs is not None:
+        nmuts = n_SNPs
+    new_inds = np.random.choice(range(len(nonzeros)), p=p, size=nmuts)
+    sfs = {}
+    for new_ind in new_inds:
+        config = nonzeros[new_ind]
+        sfs[config] = sfs.get(config, 0) + 1
+    return COO(sfs, shape=jsfs.shape)
