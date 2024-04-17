@@ -386,7 +386,7 @@ def ones(n):
     return n * [1]
 
 
-def downsample_jsfs(jsfs: np.ndarray, down_sample_to: list[int]) -> np.ndarray:
+def downsample_jsfs(jsfs: np.ndarray | COO, down_sample_to: list[int]) -> COO:
     """Returns downsampled jsfs
 
     Parameters
@@ -408,8 +408,9 @@ def downsample_jsfs(jsfs: np.ndarray, down_sample_to: list[int]) -> np.ndarray:
         j = np.arange(m + 1)[None, :]
         i = np.arange(n + 1)[:, None]
         H = scipy.stats.hypergeom(n, i, m).pmf(j)
+        H = COO.from_numpy(H)
         jsfs = sparse.moveaxis(
-            sparse.tensordot(jsfs, H, axes=(ind, 0), return_type=np.ndarray), -1, ind
+            sparse.tensordot(jsfs, H, axes=(ind, 0), return_type=COO), -1, ind
         )
     return jsfs
 
