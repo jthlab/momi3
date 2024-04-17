@@ -15,7 +15,12 @@ from momi3.JAX_functions import JAX_functions
 from momi3.lineage_sampler import bound_sampler
 from momi3.optimizers import ProjectedGradient_optimizer
 from momi3.Params import Params
-from momi3.utils import msprime_chromosome_simulator, msprime_simulator, tqdm, bootstrap_sample
+from momi3.utils import (
+    bootstrap_sample,
+    msprime_chromosome_simulator,
+    msprime_simulator,
+    tqdm,
+)
 
 
 def esfs(g: demes.Graph, sample_sizes: dict[str, int]):
@@ -33,7 +38,7 @@ def esfs(g: demes.Graph, sample_sizes: dict[str, int]):
     return Momi(g, *zip(*sample_sizes.items())).sfs_spectrum()
 
 
-class Momi(object):
+class Momi:
     def __init__(
         self,
         demo: demes.Graph,
@@ -143,9 +148,9 @@ class Momi(object):
             assert set(theta_train_dict) == set(ttd)
 
         theta_train_path_dict = {
-            self._key_to_paths(
-                key, params, False
-            ): theta_train_dict[key] for key in theta_train_dict}
+            self._key_to_paths(key, params, False): theta_train_dict[key]
+            for key in theta_train_dict
+        }
 
         data = self._get_data(jsfs)
         v = self._JAX_functions.loglik(theta_train_path_dict, tpd, data)
@@ -182,15 +187,15 @@ class Momi(object):
             theta_train_path_dict = ({}, {}, {}, {})
             for tkey in theta_train_dict:
                 paths = self._key_to_paths(tkey, params, transformed)
-                pkeys = ['eta', 'rho', 'pi', 'tau']
+                pkeys = ["eta", "rho", "pi", "tau"]
                 for i, pkey in enumerate(pkeys):
                     if tkey.find(pkey) != -1:
                         theta_train_path_dict[i][paths] = theta_train_dict[tkey]
         else:
             theta_train_path_dict = {
-                self._key_to_paths(
-                    key, params, transformed
-                ): theta_train_dict[key] for key in theta_train_dict}
+                self._key_to_paths(key, params, transformed): theta_train_dict[key]
+                for key in theta_train_dict
+            }
 
         data = self._get_data(jsfs)
         V, G = self._JAX_functions.loglik_and_grad(
@@ -201,7 +206,8 @@ class Momi(object):
             G = G[0] | G[1] | G[2] | G[3]
 
         G = {
-            self._paths_to_keys(paths, params, transformed): float(G[paths]) for paths in G
+            self._paths_to_keys(paths, params, transformed): float(G[paths])
+            for paths in G
         }
 
         return float(V), G
@@ -293,15 +299,12 @@ class Momi(object):
         jsfs: Union[COO, jnp.ndarray, np.ndarray] = None,
         just_hess: bool = False,
     ):
-
         tpd = params._theta_path_dict
         ttpd = params._theta_train_path_dict()
 
         data = self._get_data(jsfs)
 
-        H_dict = self._JAX_functions.hessian(
-            ttpd, tpd, data
-        )
+        H_dict = self._JAX_functions.hessian(ttpd, tpd, data)
         H = []
         for i in ttpd:
             row = []
@@ -313,9 +316,7 @@ class Momi(object):
         if just_hess:
             return H
 
-        G = self._JAX_functions.loglik_and_grad(
-            ttpd, tpd, data
-        )[1]
+        G = self._JAX_functions.loglik_and_grad(ttpd, tpd, data)[1]
         G = jnp.array([G[i] for i in ttpd])
         J = jnp.outer(G, G)
         J_inv = jnp.linalg.pinv(J)  # Calling psuedo-inverse
@@ -340,7 +341,7 @@ class Momi(object):
         self,
         params: Params,
         jsfs: Union[COO, jnp.ndarray, np.ndarray],
-        return_COV_MATRIX: bool = False
+        return_COV_MATRIX: bool = False,
     ):
         H = self.GIM(params, jsfs, just_hess=True)
         COV = jnp.linalg.pinv(H)  # Calling psuedo-inverse
@@ -369,10 +370,19 @@ class Momi(object):
             sampled_demes=sampled_demes,
             sample_sizes=sample_sizes,
             num_replicates=num_replicates,
-            seed=seed
+            seed=seed,
         )
 
-    def simulate_chromosome(self, sequence_length, recombination_rate, mutation_rate, n_samples=None, params=None, seed=None, low_memory=True):
+    def simulate_chromosome(
+        self,
+        sequence_length,
+        recombination_rate,
+        mutation_rate,
+        n_samples=None,
+        params=None,
+        seed=None,
+        low_memory=True,
+    ):
         if params is None:
             params = self._default_params
 
@@ -393,10 +403,12 @@ class Momi(object):
             recombination_rate=recombination_rate,
             mutation_rate=mutation_rate,
             seed=seed,
-            low_memory=low_memory
+            low_memory=low_memory,
         )
 
-    def simulate_human_genome(self, recombination_rate=1e-8, mutation_rate=1e-8, seed=None):
+    def simulate_human_genome(
+        self, recombination_rate=1e-8, mutation_rate=1e-8, seed=None
+    ):
         chr_lengths = [
             248956422,
             242193529,
@@ -419,7 +431,7 @@ class Momi(object):
             58617616,
             64444167,
             46709983,
-            50818468
+            50818468,
         ]
 
         jsfs = np.zeros([i + 1 for i in self.sample_sizes])
@@ -437,7 +449,7 @@ class Momi(object):
         scale: dict[str, float] = None,
         seed: int = None,
         quantile: float = 0.95,
-        min_lineages: int = 4
+        min_lineages: int = 4,
     ):
         loc = params._theta_train
         if scale is None:
@@ -452,13 +464,12 @@ class Momi(object):
             scale=scale,
             seed=seed,
             quantile=quantile,
-            min_lineages=min_lineages
+            min_lineages=min_lineages,
         )
 
     def _bootstrap_sample(
         self, jsfs: Union[COO, jnp.ndarray, np.ndarray], n_SNPs: int = None, seed=None
     ):
-
         return bootstrap_sample(jsfs, n_SNPs, seed)
 
     def _key_to_paths(self, key, params, transformed):
@@ -477,8 +488,11 @@ class Momi(object):
         if transformed:
             try:
                 key = params._paths_to_params[paths]
-            except:
-                key = params._paths_to_params[paths[0]], params._paths_to_params[paths[1]]
+            except IndexError:
+                key = (
+                    params._paths_to_params[paths[0]],
+                    params._paths_to_params[paths[1]],
+                )
 
             return params._params_to_transforms[key]
         else:
@@ -493,7 +507,11 @@ class Momi(object):
 
     def _get_data(self, jsfs):
         return get_data(
-            self.sampled_demes, self.sample_sizes, self._T._leaves, jsfs, self.batch_size
+            self.sampled_demes,
+            self.sample_sizes,
+            self._T._leaves,
+            jsfs,
+            self.batch_size,
         )
 
     def _time_loglik(self, params, jsfs, repeat=25, average=True):

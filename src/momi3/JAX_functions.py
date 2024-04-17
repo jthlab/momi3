@@ -4,8 +4,8 @@ import jax
 import jax.numpy as jnp
 from jax import checkpoint, hessian, jit, value_and_grad
 
+from momi3.Data import Data, get_X_batches
 from momi3.utils import update
-from momi3.Data import get_X_batches, Data
 
 logging.basicConfig(level=logging.WARN)
 
@@ -17,12 +17,16 @@ def multinomial_log_likelihood(P, Q, Q_sum):
 
 
 def inverse_transform(transformed_ttpd, tpd):
-
     # inverse transform functions
     bias = 1e-10  # stability bias for the small values of rho and pi
     eta_fn = jax.nn.softplus
-    rho_fn = lambda x: jax.nn.sigmoid(x) * (1 - bias) + bias
-    pi_fn = lambda x: jax.nn.sigmoid(x) * (1 - bias) + bias
+
+    def rho_fn(x):
+        return jax.nn.sigmoid(x) * (1 - bias) + bias
+
+    def pi_fn(x):
+        return jax.nn.sigmoid(x) * (1 - bias) + bias
+
     tau_diff_fn = jnp.exp
 
     # eta
@@ -67,6 +71,7 @@ def esfs_map(theta_dict, X, auxd, demo, _f, esfs_tensor_prod, low_memory=False):
         return jax.vmap(esfs_tensor_prod, (None, 0, None, None, None))(
             theta_dict, X_batch, auxd, demo, _f
         )
+
     if low_memory:
         f = checkpoint(f)
     # return jax.vmap(f)(X).flatten()
@@ -84,10 +89,8 @@ def esfs_mapX(theta_dict, X, auxd, demo, _f, esfs_tensor_prod):
         return jax.pmap(
             jax.vmap(esfs_tensor_prod, (None, 0, None, None, None)),
             in_axes=(None, 0, None, None, None),
-            static_broadcasted_argnums=(4)
-        )(
-            theta_dict, X_batch, auxd, demo, _f
-        )
+            static_broadcasted_argnums=(4),
+        )(theta_dict, X_batch, auxd, demo, _f)
 
     return jax.lax.map(f, X).flatten()
 
@@ -102,9 +105,8 @@ def loglik_batch(
     _f,
     esfs_tensor_prod,
     esfs_map,
-    transformed_params=False
+    transformed_params=False,
 ):
-
     if transformed_params:
         theta_path_dict = inverse_transform(theta_train_path_dict, theta_path_dict)
     else:
@@ -132,7 +134,7 @@ def loglik_batch_transformed(
     _f,
     esfs_tensor_prod,
     esfs_map,
-    transformed_params=True
+    transformed_params=True,
 ):
     return loglik_batch(
         theta_train_path_dict,
@@ -144,7 +146,7 @@ def loglik_batch_transformed(
         _f,
         esfs_tensor_prod,
         esfs_map,
-        transformed_params
+        transformed_params,
     )
 
 
@@ -164,7 +166,7 @@ class JAX_functions:
         loglik_and_grad_batch=loglik_and_grad_batch,
         loglik_and_grad_batch_transformed=loglik_and_grad_batch_transformed,
         hessian_batch=hessian_batch,
-        esfs_mapX=esfs_mapX
+        esfs_mapX=esfs_mapX,
     ):
         self.demo = demo
         self._f = T.execute
@@ -172,17 +174,25 @@ class JAX_functions:
         self.leaves = tuple(T._leaves)
         self._n_samples = T._num_samples
         self.n_devices = jax.device_count()
-        self.esfs_map = lambda theta_dict, X, auxd, demo, _f, esfs_tensor_prod, low_memory=low_memory: esfs_map(theta_dict, X, auxd, demo, _f, esfs_tensor_prod, low_memory)
+        self.esfs_map = lambda theta_dict, X, auxd, demo, _f, esfs_tensor_prod, low_memory=low_memory: esfs_map(
+            theta_dict, X, auxd, demo, _f, esfs_tensor_prod, low_memory
+        )
 
         if jitted:
-            esfs_tensor_prod = jit(esfs_tensor_prod, static_argnames='_f')
-            self.esfs_map = jit(self.esfs_map, static_argnames=('_f', 'esfs_tensor_prod'))
-            esfs_mapX = jax.jit(esfs_mapX, static_argnums=(4, 5))
+            esfs_tensor_prod = jit(esfs_tensor_prod, static_argnames="_f")
+            self.esfs_map = jit(
+                self.esfs_map, static_argnames=("_f", "esfs_tensor_prod")
+            )
+            esfs_mapX = jit(esfs_mapX, static_argnums=(4, 5))
 
             loglik_static_nums = (6, 7, 8)
             loglik_batch = jit(loglik_batch, static_argnums=loglik_static_nums)
-            loglik_and_grad_batch = jit(loglik_and_grad_batch, static_argnums=loglik_static_nums)
-            loglik_and_grad_batch_transformed = jit(loglik_and_grad_batch_transformed, static_argnums=loglik_static_nums)
+            loglik_and_grad_batch = jit(
+                loglik_and_grad_batch, static_argnums=loglik_static_nums
+            )
+            loglik_and_grad_batch_transformed = jit(
+                loglik_and_grad_batch_transformed, static_argnums=loglik_static_nums
+            )
             hessian_batch = jit(hessian_batch, static_argnums=loglik_static_nums)
 
         self.esfs_tensor_prod = esfs_tensor_prod
@@ -192,7 +202,12 @@ class JAX_functions:
         self.hessian_batch = hessian_batch
         self.esfs_mapX = esfs_mapX
 
-    def esfs(self, theta_dict: dict[tuple, float], num_deriveds: dict[str, jnp.ndarray], batch_size: int) -> jnp.ndarray:
+    def esfs(
+        self,
+        theta_dict: dict[tuple, float],
+        num_deriveds: dict[str, jnp.ndarray],
+        batch_size: int,
+    ) -> jnp.ndarray:
         """Calculate expected site frequency spectrum for the sample config in num_deriveds.
             Example for The Gutenkunst et al (2009) out-of-Africa.
             Below example calculates 4 sfs configation -(0, 1, 0), (1, 0, 0), (0, 2, 1), (1, 0, 0)- by setting values
@@ -229,7 +244,9 @@ class JAX_functions:
         esfs_tensor_prod = self.esfs_tensor_prod
         esfs_map = self.esfs_map
 
-        deriveds = tuple(tuple(int(i) for i in num_deriveds[pop]) for pop in sampled_demes)
+        deriveds = tuple(
+            tuple(int(i) for i in num_deriveds[pop]) for pop in sampled_demes
+        )
         n_entries = len(deriveds[0])
 
         X = get_X_batches(
@@ -238,7 +255,7 @@ class JAX_functions:
             leaves,
             deriveds,
             batch_size,
-            add_etbl_vecs=False
+            add_etbl_vecs=False,
         )
 
         n_devices = self.n_devices
@@ -250,23 +267,16 @@ class JAX_functions:
                 auxd,
                 demo,
                 _f,
-                esfs_tensor_prod
+                esfs_tensor_prod,
             )
         else:
             pmap_fun = jax.pmap(
                 esfs_map,
                 in_axes=(None, 0, None, None, None),
-                static_broadcasted_argnums=(4, 5)
+                static_broadcasted_argnums=(4, 5),
             )
 
-            ret = pmap_fun(
-                theta_dict,
-                X,
-                auxd,
-                demo,
-                _f,
-                esfs_tensor_prod
-            )
+            ret = pmap_fun(theta_dict, X, auxd, demo, _f, esfs_tensor_prod)
 
         return ret.flatten()[:n_entries]
 
@@ -311,7 +321,7 @@ class JAX_functions:
         fun,
         theta_train_dict: dict[tuple, float],
         theta_path_dict: dict[tuple, float],
-        data: Data
+        data: Data,
     ):
         # This fun is called by
         # loglik: f(theta, data)
@@ -341,7 +351,7 @@ class JAX_functions:
                 demo,
                 _f,
                 esfs_tensor_prod,
-                esfs_map
+                esfs_map,
             )
         else:
             # return fun(
@@ -359,7 +369,7 @@ class JAX_functions:
             pmap_fun = jax.pmap(
                 fun,
                 in_axes=(None, None, 0, 0, None, None, None, None, None),
-                static_broadcasted_argnums=(6, 7, 8)
+                static_broadcasted_argnums=(6, 7, 8),
             )
 
             return pmap_fun(
@@ -371,7 +381,7 @@ class JAX_functions:
                 demo,
                 _f,
                 esfs_tensor_prod,
-                esfs_map
+                esfs_map,
             )
 
     def loglik(
@@ -407,12 +417,7 @@ class JAX_functions:
 
         n_devices = self.n_devices
 
-        V = self._run_fun(
-            self.loglik_batch,
-            theta_train_dict,
-            theta_path_dict,
-            data
-        )
+        V = self._run_fun(self.loglik_batch, theta_train_dict, theta_path_dict, data)
 
         if n_devices > 1:
             V = V.sum()
@@ -457,12 +462,7 @@ class JAX_functions:
         else:
             lagb = self.loglik_and_grad_batch
 
-        V, G = self._run_fun(
-            lagb,
-            theta_train_dict,
-            theta_path_dict,
-            data
-        )
+        V, G = self._run_fun(lagb, theta_train_dict, theta_path_dict, data)
 
         if n_devices > 1:
             V = V.sum()
@@ -471,7 +471,10 @@ class JAX_functions:
         return V, G
 
     def hessian(
-        self, theta_train_dict: dict[tuple, float], theta_path_dict: dict[tuple, float], data: Data
+        self,
+        theta_train_dict: dict[tuple, float],
+        theta_path_dict: dict[tuple, float],
+        data: Data,
     ) -> tuple[float, dict[tuple[tuple, tuple], float]]:
         """Returns hessian of theta_train_dict for the given data and theta.
             Example for The Gutenkunst et al (2009) out-of-Africa.
@@ -499,12 +502,7 @@ class JAX_functions:
 
         n_devices = self.n_devices
 
-        H = self._run_fun(
-            self.hessian_batch,
-            theta_train_dict,
-            theta_path_dict,
-            data
-        )
+        H = self._run_fun(self.hessian_batch, theta_train_dict, theta_path_dict, data)
 
         if n_devices > 1:
             H = {i: {j: H[i][j].sum() for j in H[i]} for i in H}
