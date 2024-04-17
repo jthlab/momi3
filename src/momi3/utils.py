@@ -59,6 +59,8 @@ def admix_hyp(nw, nv1, nv2):
 
 @lru_cache(None)
 def W_matrix(n: int) -> np.ndarray:
+    # n should be castable to int. otherwise mpq() constructor will fail.
+    n = int(n)
     # returns W matrix as calculated as eq 13:15 @ Polanski 2013
     # n: sample size
     if n == 1:
