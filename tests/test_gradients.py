@@ -223,7 +223,7 @@ class Moments_Gradient_Comparison:
             sample_sizes=sample_sizes,
         ):
             theta = jnp.concatenate([theta_train, theta_nuisance])
-            theta = [float(i) for i in theta]
+            theta = [float(x) for x in theta]
             demo_dict = deepcopy(demo_dict)
             for vec_i, g_ts in zip(theta, G_ts):
                 for g_t in g_ts:

@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from momi3.common import Axes, PopCounter, Population, State, oe_einsum, unique_strs
-from momi3.math_functions import convolve_sum, log_binom_pmf, log_hypergeom
+from momi3.math_functions import binom_pmf_safe, convolve_sum, log_hypergeom
 
 from .event import Event
 
@@ -103,7 +103,7 @@ class Pulse(Event):
         i = list(in_axes).index(self.dest)
         nw = st.pl.shape[i] - 1
         xw, j1, m1 = np.ogrid[(slice(None, nw + 1),) * 3]
-        B = jnp.exp(log_binom_pmf(m1, nw, p))
+        B = binom_pmf_safe(m1, nw, p)
         # C[j,k,u] is the probability of drawing u black balls from two urns when the total number of draws
         # from urn 1 is binomial(p) and the total number of black balls in the two urns are j and k respectively.
         C = convolve_sum(aux["H1"] * B, aux["H2"])[..., : nw + 1]
@@ -198,7 +198,7 @@ class Admix(Event):
         # nw = in_axes[self.child] - 1
         nw = st.pl.shape[list(in_axes).index(self.child)] - 1
         xw, j1, m1 = np.ogrid[(slice(None, nw + 1),) * 3]
-        B = jnp.exp(log_binom_pmf(m1, nw, p))
+        B = binom_pmf_safe(m1, nw, p)
         # unpacking the next expression:
         # - (H1 * B)[xw, j1, m1] = prob of j1 black balls when there are xw black balls and nw total balls
         #   and m1 total draws, and m1 is distributed binomially with probability p

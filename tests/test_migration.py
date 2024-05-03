@@ -3,7 +3,7 @@ from moments import Integration, Jackknife
 from pytest import fixture
 
 from momi3.common import Axes
-from momi3.lemmas.lift import _aux_single, _lift1
+from momi3.events.lift import _aux_single, _lift1
 from momi3.migration import (
     _lift_cm_const,
     _lift_cm_exp,

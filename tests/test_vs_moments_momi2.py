@@ -23,7 +23,7 @@ from cached_property import cached_property
 from scipy.optimize import approx_fprime
 
 from momi3.JAX_functions import multinomial_log_likelihood
-from momi3.MOMI import Momi
+from momi3.momi import Momi3
 from momi3.Params import Params
 from tests.demos import FiveDemes, MultiAnc, SingleDeme, ThreeDemes, TwoDemes
 
@@ -46,11 +46,8 @@ class Momi_vs_Moments:
     @cached_property
     def momi_sfs(self):
         dG = self.momi_graph
-        momi = Momi(
-            dG, sampled_demes=self.sampled_demes, sample_sizes=self.sample_sizes
-        )
-        esfs = momi.sfs_spectrum()
-        return esfs
+        momi = Momi3(dG, num_samples=dict(zip(self.sampled_demes, self.sample_sizes)))
+        return momi.expected_sfs()
 
     @cached_property
     def moments_sfs(self):
@@ -234,11 +231,11 @@ def generate_grid_test(
             )
         ).flatten()[1:-1]
 
-    momi = Momi(
+    momi = Momi3(
         demo, sampled_demes=sampled_demes, sample_sizes=sample_sizes, jitted=True
     )
 
-    params = Params(Momi(demo, sampled_demes=sampled_demes, sample_sizes=sample_sizes))
+    params = Params(Momi3(demo, sampled_demes=sampled_demes, sample_sizes=sample_sizes))
 
     n_grid = len(grid_values[0])
     p = len(params_to_change)

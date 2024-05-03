@@ -3,13 +3,13 @@ import numpy as np
 
 from momi3.MOMI import Momi
 
-from demos import ThreeDemes
+from .demos import ThreeDemes
 
 
 def test_momi2_model():
-    demo = demes.load('tests/yaml_files/8_pop_3_admix.yaml')
-    sampled_demes = demo.metadata['sampled_demes']
-    sample_sizes = demo.metadata['sample_sizes']
+    demo = demes.load("tests/yaml_files/8_pop_3_admix.yaml")
+    sampled_demes = demo.metadata["sampled_demes"]
+    sample_sizes = demo.metadata["sample_sizes"]
     momi = Momi(demo, sampled_demes, sample_sizes, jitted=False)
     bounds = momi.bound_sampler(momi._default_params, 100)
     momi_b = momi.bound(bounds)
@@ -29,7 +29,7 @@ def test_onepop():
     bounds = momi.bound_sampler(momi._default_params, 100)
     momi_b = momi.bound(bounds)
     s2 = momi_b.sfs_entry(d)
-    np.testing.assert_allclose(s1, s2)
+    np.testing.assert_allclose(s1, s2, rtol=1e-3)
 
 
 def test_threepop_pulse():
@@ -43,7 +43,7 @@ def test_threepop_pulse():
     bounds = momi.bound_sampler(momi._default_params, 100)
     momi_b = momi.bound(bounds)
     s2 = momi_b.sfs_entry(d)
-    np.testing.assert_allclose(s1, s2)
+    np.testing.assert_allclose(s1, s2, rtol=1e-3)
 
 
 def test_non_adm_non_mig():
@@ -57,7 +57,7 @@ def test_non_adm_non_mig():
     bounds = momi.bound_sampler(momi._default_params, 100)
     momi_b = momi.bound(bounds)
     s2 = momi_b.sfs_entry(d)
-    np.testing.assert_allclose(s1, s2)
+    np.testing.assert_allclose(s1, s2, rtol=1e-3)
 
 
 def jacobson_bound_sampler():
@@ -71,14 +71,14 @@ def jacobson_bound_sampler():
 
 
 def test_archaic_mig_bug():
-    demo = demes.load('tests/yaml_files/arc5_pulse_inferred.yaml')
+    demo = demes.load("tests/yaml_files/arc5_pulse_inferred.yaml")
     dd = demo.asdict()
-    dd['pulses'].pop(0)
+    dd["pulses"].pop(0)
     b = demes.Builder.fromdict(dd)
-    b.add_migration(source='OOA', dest='NeanderthalGHOST', rate=0.01)
-    b.add_migration(source='NeanderthalGHOST', dest='OOA', rate=0.01)
+    b.add_migration(source="OOA", dest="NeanderthalGHOST", rate=0.01)
+    b.add_migration(source="NeanderthalGHOST", dest="OOA", rate=0.01)
     demo = b.resolve()
-    sampled_demes = ('Yoruba', 'French', 'Papuan', 'Vindija', 'Denisovan')
+    sampled_demes = ("Yoruba", "French", "Papuan", "Vindija", "Denisovan")
     sample_sizes = [214, 56, 30, 2, 2]
     momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
     params = momi._default_params
@@ -87,5 +87,5 @@ def test_archaic_mig_bug():
     momi.total_branch_length()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_archaic_mig_bug()

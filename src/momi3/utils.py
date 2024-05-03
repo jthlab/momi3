@@ -15,20 +15,12 @@ import scipy
 import sparse
 import tskit
 from gmpy2 import mpq
-from jax.numpy import diag, dot, exp, log
+from jax.numpy import diag, dot, log
 from jax.scipy.special import logsumexp
-from jax.tree_util import register_pytree_node
 from joblib import Parallel, delayed
-from sparse._coo.core import COO
-from tqdm.autonotebook import tqdm
+from tqdm.auto import tqdm
 
 from .math_functions import expm1d, log_hypergeom
-
-register_pytree_node(
-    demes.Graph,
-    lambda g: ((), demes.dumps(g, simplified=False)),
-    lambda aux_data, _: demes.loads(aux_data),
-)
 
 
 @lru_cache(None)
@@ -107,7 +99,7 @@ def moran_transition(t, d, Q):
     tau: truncation time
     n: sample size
     """
-    D = diag(exp(t * d))
+    D = diag(jnp.exp(t * d))
     return jnp.linalg.solve(Q, dot(D, Q))
 
 
@@ -118,7 +110,7 @@ def growth_rate(Ne0, Ne1, tau):
 
 @jax.jit
 def pop_size_at_t(Ne0, b, t):
-    return Ne0 * exp(-b * t)
+    return Ne0 * jnp.exp(-b * t)
 
 
 @jax.jit
@@ -164,7 +156,7 @@ def exp_integralEGPS_quad(a, b, tau, j, error=False):
     from scipy.integrate import quad
 
     def f(t):
-        return exp(-j * a * (exp(b * t) - 1) / b)
+        return jnp.exp(-j * a * (jnp.exp(b * t) - 1) / b)
 
     ret = quad(f, 0, tau)
     if error:
@@ -386,43 +378,14 @@ def ones(n):
     return n * [1]
 
 
-def downsample_jsfs(jsfs: np.ndarray | COO, down_sample_to: list[int]) -> COO:
-    """Returns downsampled jsfs
-
-    Parameters
-    ----------
-    jsfs : np.ndarray
-        joint-sfs
-    down_sample_to : list[int]
-        new shape of the jsfs will be down_sample_to + 1.
-        If you don't want to sample some dimensions give Nones.
-    Returns
-    -------
-    np.ndarray
-        downsampled jsfs
-    """
-    down_sample_from = tuple(i - 1 for i in jsfs.shape)
-    for ind, (n, m) in enumerate(zip(down_sample_from, down_sample_to)):
-        if m is None:
-            continue
-        j = np.arange(m + 1)[None, :]
-        i = np.arange(n + 1)[:, None]
-        H = scipy.stats.hypergeom(n, i, m).pmf(j)
-        H = COO.from_numpy(H)
-        jsfs = sparse.moveaxis(
-            sparse.tensordot(jsfs, H, axes=(ind, 0), return_type=COO), -1, ind
-        )
-    return jsfs
-
-
 def bootstrap_sample(
-    jsfs: Union[COO, jnp.ndarray, np.ndarray], n_SNPs: int = None, seed=None
-) -> COO:
+    jsfs: Union[sparse.COO, jnp.ndarray, np.ndarray], n_SNPs: int = None, seed=None
+) -> sparse.COO:
     np.random.seed(seed)
     nmuts = int(round(jsfs.sum()))
     jsfs_nonzero = jsfs.nonzero()
     nonzeros = [tuple(i) for i in np.array(jsfs_nonzero).T]
-    if isinstance(jsfs, COO):
+    if isinstance(jsfs, sparse.COO):
         p = jsfs.data
     else:
         p = jsfs[jsfs_nonzero]
@@ -434,4 +397,4 @@ def bootstrap_sample(
     for new_ind in new_inds:
         config = nonzeros[new_ind]
         sfs[config] = sfs.get(config, 0) + 1
-    return COO(sfs, shape=jsfs.shape)
+    return sparse.COO(sfs, shape=jsfs.shape)

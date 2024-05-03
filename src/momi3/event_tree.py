@@ -526,17 +526,6 @@ class Momi:
         # todo: merge params with runtime overrides
         return self._f(params, X, self._T.auxd)
 
-    def sfs_entry(self, num_derived: dict, params=None):
-        X = {}
-        for pop in self._T.leaves:
-            # some ghost populations may not be sampled. then they have trivial partial leaf likelihood.
-            ns = self._n_samples.get(pop, 0)
-            d = num_derived.get(pop, 0)
-            if d > ns:
-                raise ValueError(f"More derived alleles than samples in {pop}")
-            X[pop] = jax.nn.one_hot(jnp.array([d]), ns + 1)[0]
-        return self.esfs_tensor_prod(X, params)
-
     def _sfs_entries(self, num_deriveds: dict):
         return jax.vmap(self.sfs_entry, 0)(num_deriveds)
 

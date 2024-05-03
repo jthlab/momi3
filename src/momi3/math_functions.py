@@ -1,124 +1,22 @@
 import jax
 import jax.numpy as jnp
-from jax import custom_jvp, lax, vmap
-from jax._src.scipy.special import _expn1, _expn2
-from jax.numpy import exp
-from jax.scipy.special import xlog1py, xlogy
-from scipy.special import betaln, gammaln
+import quadax
+from jax import lax, vmap
+from scipy.special import betaln
 
 
-@custom_jvp
-@jnp.vectorize
-@jax.jit
-def exp1(x):
-    x = jnp.array(x, dtype='float')
-    is_x_small = x < 1.0
-    x_safe = jnp.where(is_x_small, 100.0, x)
-    e1 = _expn1(1, x)
-    e2 = _expn2(1, x_safe)
-    ret = jnp.where(is_x_small, e1, e2)
-    return ret
-
-
-@exp1.defjvp
-@jax.jit
-def exp1_jvp(primals, tangents):
-    (x,), (x_dot,) = primals, tangents
-    return exp1(x), lax.mul(lax.neg(x_dot), exp1(x))
-
-
-def _expi_neg(x):
-    # expi for x < 0
-    return -exp1(-x)
-
-
-def _expi_pos_small(x):
-    # expi for 0. < x < 7.1
-    gamma = 0.5772157
-    ret = gamma + jnp.log(x)
-    p = 1 / jnp.array(
-        [439084800, 36288000, 3265920, 322560, 35280, 4320, 600, 96, 18, 4, 1, jnp.inf]
+def binom_pmf_safe(k, n, p):
+    p_safe = jnp.where(jnp.isclose(p, 0.0) | jnp.isclose(p, 1.0), 0.5, p)
+    return jnp.select(
+        [jnp.isclose(p, 0.0), jnp.isclose(p, 1.0)],
+        [(k == 0).astype(float), (k == n).astype(float)],
+        jax.scipy.stats.binom.pmf(k, n, p_safe),
     )
-    return ret + jnp.polyval(p, x)
-
-
-def _expi_pos_large(x):
-    # expi for x > 7.1
-    ret = jnp.exp(x) / x
-    p = jnp.array([3628800, 362880, 40320, 5040, 720, 120, 24, 6, 2, 1, 1])
-    return ret * jnp.polyval(p, 1 / x)
-
-
-@custom_jvp
-@jnp.vectorize
-@jax.jit
-def aexpi(x):
-    # approximate expi
-    return lax.cond(
-        x < 0,
-        _expi_neg,
-        lambda x: lax.cond(x < 7.1, _expi_pos_small, _expi_pos_large, x),
-        x,
-    )
-
-
-@aexpi.defjvp
-def aexpi_jvp(primals, tangents):
-    (x,), (x_dot,) = primals, tangents
-    return aexpi(x), jnp.exp(x) / x * x_dot
-
-
-def logFactorial(x):
-    return gammaln(x + 1)
-
-
-def logBinom(n, k):
-    return logFactorial(n) - logFactorial(k) - logFactorial(n - k)
-
-
-def expm1d_series(x):
-    p = 1 / jnp.array([3628800, 362880, 40320, 5040, 720, 120, 24, 6, 2, 1])
-    return jnp.polyval(p, x)
-
-
-def expm1d_naive(x):
-    # used by exp_integralEGPS
-    return jnp.expm1(x) / x
-
-
-def TEi_series(x):
-    p = jnp.array([3628800, -362880, 40320, -5040, 720, -120, 24, -6, 2, -1, 1])
-    return jnp.polyval(p, x)
-
-
-def TEi_naive(x):
-    # used by exp_integralEGPS
-    x = jnp.array(x)
-    y = 1.0 / x
-    return -aexpi(-y) * jnp.exp(y) / x
-
-
-def expm1d(x):
-    # used by exp_integralEGPS
-    is_x_small = jnp.isclose(x, 0.0)
-    x_safe = jnp.where(is_x_small, 1.0, x)
-    NV = expm1d_naive(x_safe)
-    TS = expm1d_series(x)
-    return jnp.where(is_x_small, TS, NV)
-
-
-def TEi(x):
-    # used by exp_integralEGPS
-    is_x_small = jnp.abs(x) < 0.015
-    x_safe = jnp.where(is_x_small, 1.0, x)
-    NV = TEi_naive(x_safe)
-    TS = TEi_series(x)
-    return jnp.where(is_x_small, TS, NV)
 
 
 def admix_inner_loop(nw, x1, x2, xw, m1, q):
     # used by admix_outer_loop
-    B = log_binom_pmf(m1, nw, 1 - q)
+    B = binom_pmf_safe(m1, nw, 1 - q)
     j1s = jnp.arange(nw + 1)
     j2s = xw - j1s
     m2 = nw - m1
@@ -151,6 +49,13 @@ def admix_outer_loop(lik, x1, x2, q):
     return jnp.einsum("ab,a...->...", inner_sum, lik)
 
 
+def expm1d(x):
+    "(exp(x) - 1)/x"
+    x_small = abs(x) < 1e-6
+    x_safe = jnp.where(x_small, 1.0, x)
+    return jnp.where(x_small, 1 + x / 2, jnp.expm1(x_safe) / x_safe)
+
+
 def exp_integral(a, tau, j):
     r"""
     Returns exponential integral of coalescent rate for constant pop size: \int_0^tau exp(-R(t))
@@ -161,8 +66,8 @@ def exp_integral(a, tau, j):
     a = a * j
     tauinf = jnp.isinf(tau)
     tau_safe = jnp.where(tauinf, 1.0, tau)
-    ret = jnp.where(tauinf, 1 / a, expm1d(-a * tau_safe) * tau_safe)
-    return ret
+    c = tau_safe * expm1d(-a * tau_safe)
+    return jnp.where(tauinf, 1 / a, c)
 
 
 def exp_integralEGPS(g, a, tau, j):
@@ -173,13 +78,18 @@ def exp_integralEGPS(g, a, tau, j):
     tau: truncation time (must be less than infinity)
     j: rate coefficient
     """
-    pow0 = 1 / a / j
-    pow1 = g * tau
-    ret = -TEi(pow0 * g / exp(pow1))
-    ret = ret * exp(-expm1d(pow1) * tau / pow0 - pow1)
-    ret = ret + TEi(pow0 * g)
-    ret = ret * pow0
-    return ret
+    g = -g
+
+    def R(t):
+        g_small = abs(g) < 1e-6
+        g_safe = jnp.where(g_small, 1.0, g)
+        r1 = -jnp.expm1(-g_safe * t) / g_safe
+        # r2 = taylor series expansion of r1 about g=0
+        r2 = t * (1 - g * t / 2)
+        return a * jnp.where(g_small, r2, r1)
+
+    y, info = quadax.quadgk(lambda x: jnp.exp(-R(x)), [0.0, tau])
+    return y
 
 
 def log_hypergeom(k, M, n, N):
@@ -202,16 +112,6 @@ def log_hypergeom(k, M, n, N):
         - betaln(tot + 1, 1)
     )
     return result
-
-
-def log_binom_pmf(k, n, p):
-    """
-    Returns the log of binomial pmf
-    k: number of success
-    n: sample size
-    p: success probability
-    """
-    return logBinom(n, k) + xlogy(k, p) + xlog1py(n - k, -p)
 
 
 def convolve_sum(A, B):

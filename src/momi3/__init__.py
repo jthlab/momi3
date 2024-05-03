@@ -1,4 +1,14 @@
+import logging
 import sys
+
+import demes
+import jax
+import platformdirs
+import sparse
+from jax.tree_util import register_pytree_node
+
+jax.config.update("jax_compilation_cache_dir", platformdirs.user_cache_dir("momi3"))
+logging.getLogger("jax").setLevel(logging.INFO)
 
 if sys.version_info[:2] >= (3, 8):
     # TODO: Import directly (no need for conditional) when `python_requires = >= 3.8`
@@ -14,3 +24,18 @@ except PackageNotFoundError:  # pragma: no cover
     __version__ = "unknown"
 finally:
     del version, PackageNotFoundError
+
+
+register_pytree_node(
+    demes.Graph,
+    lambda g: ((), g.asdict()),
+    lambda aux_data, _: demes.Graph.fromdict(aux_data),
+)
+
+register_pytree_node(
+    sparse.COO,
+    lambda sp: ((sp.coords, sp.data), sp.shape),
+    lambda aux_data, children: sparse.COO(
+        coords=children[0], data=children[1], shape=aux_data
+    ),
+)

@@ -1,12 +1,16 @@
+import json
 import math
+import pprint
 import re
+from collections import UserDict
 from copy import deepcopy
 from itertools import count
 from math import inf, isinf
-from typing import Callable, Union
+from typing import Callable, NamedTuple
 
 import demes
 import demesdraw
+import jax
 import jax.numpy as jnp
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -14,48 +18,42 @@ import numpy as np
 import sympy
 from scipy.optimize import LinearConstraint, linprog
 
-from momi3.utils import update
+from momi3.event_tree import ETBuilder
+from momi3.polyhedron import project_polyhedron
 
 NoneType = type(None)
 NP_max = np.finfo(np.float32).max
-EPS_time_differences = 0.01  # to avoid 0 division, =min(t1-t0)
+# minimal time difference, in generations, to avoid 0 division
+MIN_TIME_DIFFERENCE = 0.01
 
 
-class Params(dict):
-    """Parameter class.
+class Params(UserDict):
+    """Parameters in a demographic model.
 
     Attributes:
         add_linear_constraint (func): Adds a new user constraint
-        set (func): set a new value for the given parameter
-        set_train (func): set to learn the optimum parameter value
     """
 
-    def __init__(self, momi=None, demo_dict=None, T=None):
-        if momi is not None:
-            T = momi._T
-            demo_dict = momi.demo.asdict()
-        demo_dict = deepcopy(demo_dict)
-        self._demo_dict = demo_dict
+    def __init__(self, demo: demes.Graph, T: ETBuilder):
+        UserDict.__init__(self)
+        self._demo = demo
         self._T = T
-        self._frozen = False
-        self._paths_to_params = {}
-        self._path_to_params = {}
-        self._params_to_paths = {}
-        self._transforms_to_params = {}
-        self._params_to_transforms = {}
+        demo_dict = demo.asdict()
+        self._demo_dict = demo_dict
+        # serialize the demo_dict, safer than deepcopy
+        self._params_json = json.dumps(demo_dict)
+        self._user_constraints = []
 
         # Create time keys dictionary: tau_0, tau_1, ..., tau_p.
         # time_0 < time_1 < ... < time_p
         # tkeys[time_i] = tau_i
-        ts = set(float(i.t.t) for i in T.nodes())
+        ts = set(float(node.t.t) for node in T.nodes())
         ts = sorted(list(ts))
-        tkeys = dict(zip(ts, [f"tau_{i}" for i in range(len(ts))]))
+        self._time_keys = tkeys = dict(zip(ts, [f"tau_{i}" for i in range(len(ts))]))
 
         # iter size, rate and prop parameters.
         # Note: Not iterating time parameters because same time points have the same time key (Generated above).
-        iter_size = count()
-        iter_rate = count()
-        iter_prop = count()
+        iter_size, iter_rate, iter_prop = [count() for _ in range(3)]
 
         # 1 Demes:
         demes_event = "demes"
@@ -65,29 +63,37 @@ class Params(dict):
 
             # Start time of a Deme:
             param_name = "start_time"
-            num = float(deme[param_name])
-            key = tkeys[num]
-            self._init_Theta(num, key, demes_event, param_name, i, j, k)
+            x = float(deme[param_name])
+            key = tkeys[x]
+            self._init_param(
+                x, key, demes_event, param_name, i, j, k, fixed=np.isinf(x)
+            )
 
             # Proportion of Ancestors:
             param_name = "proportions"
-            if len(deme["proportions"]) == 1:
-                # Single ancestor, proportion is fixed to 1.
-                pass
-            else:
+            # If only a single ancestor, proportion is fixed to 1 so there
+            # is no parameter.
+            if len(deme["proportions"]) > 1:
                 for k, proportion in enumerate(deme["proportions"]):
-                    num = float(proportion)
+                    x = float(proportion)
                     key = f"pi_{next(iter_prop)}"
-                    self._init_Theta(num, key, demes_event, param_name, i, j, k)
+                    self._init_param(x, key, demes_event, param_name, i, j, k)
 
             # Iterate epochs
             for j, epoch in enumerate(deme["epochs"]):
                 # End time of an Epoch:
                 param_name = "end_time"
-                num = float(epoch[param_name])
-                key = tkeys[num]
-                self._init_Theta(num, key, demes_event, param_name, i, j, k)
-
+                x = float(epoch[param_name])
+                key = tkeys[x]
+                # do not add a time parameter for the last epoch of a sampled deme.
+                # rationale: where 'end_time' is the non-learnable sampling time
+                fixed = all(
+                    [
+                        deme["name"] in self._T._num_samples,
+                        j == len(deme["epochs"]) - 1,
+                    ]
+                )
+                self._init_param(x, key, demes_event, param_name, i, j, k, fixed)
                 # Size of an Epoch:
                 if epoch["size_function"] == "constant":
                     val = next(iter_size)
@@ -96,8 +102,8 @@ class Params(dict):
                     # Exponential pop size, default _Theta key
                     keys = [f"eta_{next(iter_size)}", f"eta_{next(iter_size)}"]
                 for key, param_name in zip(keys, ["start_size", "end_size"]):
-                    num = float(epoch[param_name])
-                    self._init_Theta(num, key, demes_event, param_name, i, j, k)
+                    x = float(epoch[param_name])
+                    self._init_param(x, key, demes_event, param_name, i, j, k)
 
         # 2 Migrations:
         j = None
@@ -107,9 +113,9 @@ class Params(dict):
         for i, migration in enumerate(self._demo_dict["migrations"]):
             # Time of a Migration:
             for param_name in ["start_time", "end_time"]:
-                num = float(migration[param_name])
-                key = tkeys[num]
-                self._init_Theta(num, key, demes_event, param_name, i, j, k)
+                x = float(migration[param_name])
+                key = tkeys[x]
+                self._init_param(x, key, demes_event, param_name, i, j, k)
 
             # Rate of a Migration:
             # If A->B and B->A at the same time frame. We use a symmetric migration rate
@@ -123,8 +129,8 @@ class Params(dict):
                 key = f"rho_{next(iter_rate)}"
                 migration_rates[sorted_mig] = key
             param_name = "rate"
-            num = float(migration[param_name])
-            self._init_Theta(num, key, demes_event, param_name, i, j, k)
+            x = float(migration[param_name])
+            self._init_param(x, key, demes_event, param_name, i, j, k)
 
         # 3 Pulses:
         demes_event = "pulses"
@@ -134,200 +140,111 @@ class Params(dict):
 
             # Time of the pulse
             param_name = "time"
-            num = float(pulse[param_name])
-            key = tkeys[num]
-            self._init_Theta(num, key, demes_event, param_name, i, j, k)
+            x = float(pulse[param_name])
+            key = tkeys[x]
+            self._init_param(x, key, demes_event, param_name, i, j, k)
 
             # Proportions of the pulse
             param_name = "proportions"
             for k, proportion in enumerate(pulse["proportions"]):
-                num = float(proportion)
+                x = float(proportion)
                 key = f"pi_{next(iter_prop)}"
-                self._init_Theta(num, key, demes_event, param_name, i, j, k)
-                pulse[param_name][k] = num
+                self._init_param(x, key, demes_event, param_name, i, j, k)
+                pulse[param_name][k] = x
 
-        # Linear time constraints for times
-        time_constraints_str_exprs = set([])
-        for t0, t1 in T.edges():
-            i = t0.t.t
-            j = t1.t.t
-            if all([i != j, not isinf(i), not isinf(j)]):
-                time_constraints_str_exprs.add(
-                    f"{tkeys[i]}<={tkeys[j]}-{EPS_time_differences}"
-                )
-        self._linear_constraints = LinearConstraints(self, time_constraints_str_exprs)
+    def set_train(
+        self,
+        times: bool = False,
+        proportions: bool = False,
+        rates: bool = False,
+        sizes: bool = False,
+    ):
+        """Set training status of parameters.
 
-        # paths to params keys
+        Args:
+            times: Set training status of time parameters.
+            proportions: Set training status of proportion parameters.
+            rates: Set training status of rate parameters.
+            sizes: Set training status of size parameters.
+
+        Notes:
+            If a parameter is not set to train, it will be fixed to the value currently specified.
+        """
         for key in self:
-            paths = tuple(self[key].paths)
-            self._paths_to_params[paths] = key
-            self._params_to_paths[key] = paths
-            for path in paths:
-                self._path_to_params[path] = key
-
-            if key[0] == "e":
-                tkey = f"softplus({key})"
-                self._transforms_to_params[tkey] = key
-                self._params_to_transforms[key] = tkey
-            elif key[0] in ["r", "p"]:
-                tkey = f"logit({key})"
-                self._transforms_to_params[tkey] = key
-                self._params_to_transforms[key] = tkey
-            else:
-                pass
-
-        tau_keys = [key for key in self if isinstance(self[key], TimeParam)]
-        tau_keys = sorted(tau_keys, key=lambda key: self[key].num)
-        for i in range(1, len(tau_keys)):
-            tk1 = tau_keys[i]
-            tk0 = tau_keys[i - 1]
-            tkey = f"log({tk1}-{tk0})"
-            self._transforms_to_params[tkey] = (tk1, tk0)
-            self._params_to_transforms[tk1, tk0] = tkey
-
-        self._frozen = True
-
-    def set_train(self, key: str, value: bool):
-        self[key].train(value)
-
-    def set_train_all_etas(self, value: bool):
-        keys = self._keys
-        [self[key].train(value) for key in keys if isinstance(self[key], SizeParam)]
-
-    def set_train_all_rhos(self, value: bool):
-        keys = self._keys
-        [self[key].train(value) for key in keys if isinstance(self[key], RateParam)]
-
-    def set_train_all_pis(self, value: bool):
-        keys = self._keys
-        [
-            self[key].train(value)
-            for key in keys
-            if isinstance(self[key], ProportionParam)
-        ]
-
-    def set_train_all_taus(self, value: bool):
-        # will apply all but tau_0
-        keys = self._keys
-        [
-            self[key].train(value)
-            for key in keys
-            if (isinstance(self[key], TimeParam)) & (key != "tau_0")
-        ]
-
-    def set_train_all(self, value: bool):
-        self.set_train_all_etas(value)
-        self.set_train_all_rhos(value)
-        self.set_train_all_pis(value)
-        self.set_train_all_taus(value)
-
-    def set(self, key: str, value: float):
-        value = float(value)
-        self._check_parameter(key)
-        x = self._theta
-        self._linear_constraints.check_assignment(key, value, x)
-        self[key].set(value)
-        for path in self[key].paths:
-            # change the values in demo_dict too
-            value = float(value)
-            self._demo_dict = update(self._demo_dict, path, value)
-
-    def _is_theta_train_valid(self, theta_train_hat: dict | jnp.ndarray) -> bool:
-        keys = self._train_keys
-        if isinstance(theta_train_hat, dict):
-            theta_train_hat = jnp.array(
-                [theta_train_hat[key] for key in keys], dtype="f"
-            )
-        A, b, G, h = self._polyhedron_hyperparams()
-        b1 = jnp.all(G @ theta_train_hat <= h)
-        b2 = jnp.allclose(A @ theta_train_hat, b)
-        return b1 & b2
-
-    def set_optimization_results(self, theta_train_hat: dict):
-        if set(theta_train_hat) == set(self.theta_train_dict(True)):
-            tdtd = self._transformed_diff_tau_dict
-            # Transformed
-            for tkey in tdtd:
-                key1, key0 = self._transforms_to_params[tkey]
-                value = self[key0].num + self.transform_fns(
-                    theta_train_hat[tkey], ptype="tau", inverse=True
-                )
-                self[key1].set(value)
-                for path in self[key1].paths:
-                    # change the values in demo_dict too
-                    self._demo_dict = update(self._demo_dict, path, value)
-            for tkey in set(theta_train_hat).difference(set(tdtd)):
-                ptype = re.findall(r"\w+_", tkey)[0][:-1]
-                key = self._transforms_to_params[tkey]
-                value = self.transform_fns(
-                    theta_train_hat[tkey], ptype=ptype, inverse=True
-                )
-                self[key].set(value)
-                for path in self[key].paths:
-                    # change the values in demo_dict too
-                    self._demo_dict = update(self._demo_dict, path, value)
-
-        elif set(theta_train_hat) == set(self.theta_train_dict(False)):
-            keys = self._train_keys
-            if isinstance(theta_train_hat, dict):
-                theta_train_hat = jnp.array(
-                    [theta_train_hat[key] for key in keys], dtype="f"
-                )
-
-            if self._is_theta_train_valid(theta_train_hat):
-                pass
-            else:
-                raise ValueError("Invalid theta_train_hat")
-
-            for key, value in zip(keys, theta_train_hat):
-                value = float(value)
-                self[key].set(value)
-                for path in self[key].paths:
-                    # change the values in demo_dict too
-                    self._demo_dict = update(self._demo_dict, path, value)
-
-        else:
-            raise ValueError("Wrong theta_train_hat")
-
-    def add_linear_constraint(self, expr_str):
-        x = self._theta
-        self._linear_constraints.add_constraint(expr_str, x)
-
-    def theta_train_dict(self, transformed=False):
-        if transformed:
-            return self._transformed_theta_train_dict
-        else:
-            return self._theta_train_dict
-
-    def _theta_train_path_dict(self, transformed=False):
-        ttd = self.theta_train_dict(transformed)
-        if transformed:
-            ptttd = [{}, {}, {}, {}]
-            for tkey in ttd:
-                if tkey.find("tau") == -1:
-                    # not tau
-                    key = self._transforms_to_params[tkey]
-                    paths = self._params_to_paths[key]
-
-                    if tkey.find("eta") != -1:
-                        ind = 0
-                    elif tkey.find("rho") != -1:
-                        ind = 1
-                    else:
-                        ind = 2
-                    ptttd[ind][paths] = ttd[tkey]
-                else:
-                    key1, key2 = self._transforms_to_params[tkey]
-                    paths1 = self._params_to_paths[key1]
-                    paths2 = self._params_to_paths[key2]
-                    ptttd[3][paths1, paths2] = ttd[tkey]
-            return ptttd
-        else:
-            return {self._params_to_paths[key]: ttd[key] for key in ttd}
+            if key.startswith("tau"):
+                b = times
+            elif key.startswith("pi"):
+                b = proportions
+            elif key.startswith("rho"):
+                b = rates
+            elif key.startswith("eta"):
+                b = sizes
+            if not isinstance(self[key], FixedParam):
+                self[key].train = b
 
     @property
-    def _theta_path_dict(self):
-        return {self._params_to_paths[key]: self[key].num for key in self}
+    def trainable(self):
+        return [key for key in self if self[key].train]
+
+    @property
+    def constraints(self):
+        # Linear time constraints for times
+        cons = set()
+        tkeys = self._time_keys
+        for t0, t1 in self._T.edges():
+            i = t0.t.t
+            j = t1.t.t
+            ki = tkeys[i]
+            kj = tkeys[j]
+            if i != j:
+                if not self[ki].train:
+                    ki = self[ki].value
+                if not self[kj].train:
+                    kj = self[kj].value
+                    if np.isinf(kj):
+                        continue
+                cons.add(f"{ki}<={kj}-{MIN_TIME_DIFFERENCE}")
+
+        # upper/lower bound constraints
+        for key in self.trainable:
+            if np.isfinite(self[key].lower_bound):
+                cons.add(f"{self[key].lower_bound}<={key}")
+            if np.isfinite(self[key].upper_bound):
+                cons.add(f"{key}<={self[key].upper_bound}")
+
+        # proportions sum to one constraints
+        for i, deme in enumerate(self._demo_dict["demes"]):
+            if len(deme["proportions"]) > 1:
+                keys = [f"pi_{k}" for k in range(len(deme["proportions"]))]
+                cons.add(f"{'+'.join(keys)}==1")
+
+        return LinearConstraints(tuple(self.trainable), cons)
+
+    def __setitem__(self, key: str, value: float):
+        assert key in self
+        self[key].value = value
+
+    def update(self, d: dict[str, float]) -> "Params":
+        """Update parameters with new default values.
+
+        Args:
+            d: A dictionary mapping parameter keys to default values.
+
+        Returns:
+            Modified Params with new default values.
+        """
+        p_new = Params(self._demo, self._T)
+        for key, value in d.items():
+            p_new[key] = value
+        return p_new
+
+    def to_path_dict(self) -> dict[tuple, float]:
+        """Returns a dictionary of mapping paths to value"""
+        ret = json.loads(self._params_json)
+        for key in self:
+            for path in self[key].paths:
+                set_path(ret, path, self[key].value)
+        return ret
 
     @property
     def _keys(self):
@@ -336,7 +253,7 @@ class Params(dict):
     @property
     def _theta(self):
         keys = self._keys
-        return [self[key].num for key in keys]
+        return [float(self[key]) for key in keys]
 
     @property
     def _train_bool(self):
@@ -359,7 +276,7 @@ class Params(dict):
     def _theta_train(self):
         keys = self._keys
         bools = self._train_bool
-        return [self[key].num for key, b in zip(keys, bools) if b]
+        return [float(self[key]) for key, b in zip(keys, bools) if b]
 
     @property
     def _theta_nuisance(self):
@@ -573,16 +490,10 @@ class Params(dict):
         self._transformed_params_to_paths = _transformed_params_to_paths
         self._paths_to_transformed_params = _paths_to_transformed_params
 
-    def _polyhedron_hyperparams(self, htol=0.0):
-        # See: https://jaxopt.github.io/stable/_autosummary/jaxopt.projection.projection_polyhedron.html
-        A, b, G, h = self._linear_constraints.get_polyhedron_hyperparams(
-            self._theta, self._train_bool
-        )
-        return A, b, G, h - htol
-
-    def _linear_constraints_for_scipy(self, htol=0.0, atol=1e-8, rtol=1e-5):
+    def for_scipy(self, htol=0.0, atol=1e-8, rtol=1e-5):
         # See: https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.LinearConstraint.html
-        A, b, G, h = self._polyhedron_hyperparams(htol)
+        A, b, G, h = self.get_polyhedron_hyperparams()
+        h -= htol
         eps = atol + jnp.abs(b) * rtol
         LCs = [LinearConstraint(A, b - eps, b + eps), LinearConstraint(G, ub=h - htol)]
         return LCs
@@ -963,35 +874,30 @@ class Params(dict):
                     ret.get_yticklabels()[i].set_bbox(prms_box_current)
                     ret.get_yticklabels()[i].set_fontsize(tau_font_size)
 
-    def _init_Theta(
+    def _init_param(
         self,
-        num: float,
+        x: float,
         key: str,
         demes_event: str,
         param_name: str,
         i: int,
-        j: Union[int, NoneType],
-        k: Union[int, NoneType],
+        j: int | None,
+        k: int | None,
+        fixed: bool = False,
     ):
-        """Initiates self[key]. If the key exist it adds deme_dict position to
-        the existing key.
+        """Initialize a new parameter at self[key]. If the key exist it adds deme_dict position to the existing key.
+
         Args:
             num (int): Numeric value of the parameter
             key (str): key of the parameter in self._Theta
             demes_event (str): 'demes', 'migrations' or 'pulses'
             param_name (str): name of the param. 'start_time', 'end_time' etc.
-            i (int): i; self[demes_event][i]
-            j (Union[int, NoneType]): j; self['demes'][i]['epochs'][j]
-            k (Union[int, NoneType]): k; self[demes_event][i]['proportions'][k]
-        Returns:
-            demoParam
+            i: self[demes_event][i]
+            j: self['demes'][i]['epochs'][j]
+            k: self[demes_event][i]['proportions'][k]
         """
-
         if param_name in ["time", "start_time", "end_time"]:
-            if isinf(num):
-                param_class = RootTimeParam
-            else:
-                param_class = TimeParam
+            param_class = TimeParam
         elif param_name in ["end_size", "start_size"]:
             param_class = SizeParam
         elif param_name == "rate":
@@ -1001,89 +907,86 @@ class Params(dict):
         else:
             raise ValueError(f"Unknown parameter: {param_name}")
 
-        path, demes_params_desc = get_path(
-            self._demo_dict, demes_event, param_name, i, j, k
-        )
+        if fixed:
+            param_class = FixedParam
+
+        path, desc = get_path(self._demo_dict, demes_event, param_name, i, j, k)
 
         if key in self:
-            self[key].add_param(path, demes_params_desc)
+            self[key].add_path(path, desc)
         else:
-            self[key] = param_class(
-                num=num, path=path, demes_params_desc=demes_params_desc
+            val = param_class(
+                value=x, path=path, desc=desc, train=param_class is not TimeParam
             )
-
-        return None
+            # we don't use self[key] = val because it's overridden in this class.
+            super().__setitem__(key, val)
 
     def _repr_html_(self):
         return get_html_repr(self)
 
-    def __setitem__(self, key, value):
-        if self._frozen:
-            self.set(key, value)
-        else:
-            super().__setitem__(key, value)
 
-    def copy(self):
-        params_copy = Params(demo_dict=self.demo_dict, T=self._T)
-        train_bool = self._train_bool
-        keys = self._keys
-        [params_copy.set_train(key, value) for key, value in zip(keys, train_bool)]
-        params_copy._linear_constraints.user_constraint_dict = deepcopy(
-            self._linear_constraints.user_constraint_dict
-        )
-        return params_copy
-
-
-class Param(object):
+class Param:
     """
-    Parameter Class. Each params[key] is belong to this class.
+    Parameter Class. Each params[key] belongs to this class.
     """
-
-    _frozen = False
-    _accepted_keys = ["num", "LB", "UB", "demes_params_descs", "paths", "_frozen"]
 
     def __init__(
-        self, num: float, LB: float, UB: float, demes_params_desc: str, path: tuple
+        self,
+        value: float,
+        lower_bound: float,
+        upper_bound: float,
+        path: tuple,
+        desc: tuple,
+        train: bool = False,
     ):
-        self.num = num
-        self.UB = UB
-        self.LB = LB
-        self.demes_params_descs = set([demes_params_desc])
-        self.paths = set([path])
-        self.train_it = False
-        self._frozen = True
+        assert lower_bound <= value <= upper_bound
+        self._value = value
+        self._upper_bound = upper_bound
+        self._lower_bound = lower_bound
+        self._train = train
+        self.paths = {path: desc}
 
-    def __setattr__(self, key, value):
-        if self._frozen & (key in self._accepted_keys[3:]):
-            raise ValueError(f"{key} cannot be changed")
-        elif self._frozen & (key == "num"):
-            raise ValueError(f"Use method set({value})")
-        else:
-            object.__setattr__(self, key, value)
+    @property
+    def train(self):
+        return self._train
 
-    def set(self, value: Union[float, "Param"]):
-        if isinstance(value, Param):
-            value = value.num
-        if any([value > self.UB, value < self.LB]):
-            raise ValueError(f"Assignment should be in [{self.LB}, {self.UB}]")
-        else:
-            object.__setattr__(self, "num", value)
+    @train.setter
+    def train(self, value: bool):
+        self._train = bool(value)
 
-    def set_LB(self, value: float):
-        object.__setattr__(self, "LB", value)
+    @property
+    def lower_bound(self):
+        return self._lower_bound
 
-    def set_UB(self, value: float):
-        object.__setattr__(self, "UB", value)
+    @lower_bound.setter
+    def lower_bound(self, value):
+        assert value <= self.value
+        self._lower_bound = value
 
-    def train(self, train_it: bool):
-        self.train_it = train_it
+    @property
+    def upper_bound(self):
+        return self._upper_bound
 
-    def add_param(self, path, demes_params_desc):
-        self.demes_params_descs.add(demes_params_desc)
-        self.paths.add(path)
+    @upper_bound.setter
+    def upper_bound(self, value):
+        assert value >= self.value
+        self._upper_bound = value
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, value):
+        # assert self.lower_bound <= value <= self.upper_bound
+        self._value = jnp.array(value, float)
+
+    def add_path(self, path: tuple, desc: str):
+        assert path not in self.paths
+        self.paths[path] = desc
 
     def __str__(self):
-        return str(self.num)
+        return str(self.value)
 
     def __repr__(self):
         return str(self)
@@ -1091,305 +994,129 @@ class Param(object):
 
 class TimeParam(Param):
     def __init__(self, **kwargs):
-        LB = 0.0
-        UB = inf
-        kwargs.update(LB=LB, UB=UB)
+        lower_bound = 0.0
+        upper_bound = inf
+        kwargs.update(lower_bound=lower_bound, upper_bound=upper_bound)
         super().__init__(**kwargs)
 
 
-class RootTimeParam(Param):
-    def __init__(self, **kwargs):
-        LB = inf
-        UB = inf
-        kwargs.update(LB=LB, UB=UB)
-        super().__init__(**kwargs)
+class FixedParam(Param):
+    def __init__(self, value: float, path: tuple, desc: tuple, train: bool = False):
+        self._value = value
+        self._upper_bound = self._lower_bound = None
+        self._train = False
+        self.paths = {path: desc}
 
-    def train(self, train_it: bool):
-        if train_it:
-            raise ValueError(
-                "This is the start time of the root time and equal to infinity. Untrainable."
-            )
-        else:
-            pass
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, value):
+        raise ValueError("FixedParam value cannot be changed")
+
+    @property
+    def train(self):
+        return False
+
+    @train.setter
+    def train(self, value):
+        raise ValueError("FixedParam cannot be trained")
 
 
 class SizeParam(Param):
     def __init__(self, **kwargs):
-        LB = 0.01
-        UB = inf
-        kwargs.update(LB=LB, UB=UB)
+        lower_bound = 0.01
+        upper_bound = inf
+        kwargs.update(lower_bound=lower_bound, upper_bound=upper_bound)
         super().__init__(**kwargs)
 
 
 class ProportionParam(Param):
     def __init__(self, **kwargs):
-        LB = 0.0
-        UB = 1.0
-        kwargs.update(LB=LB, UB=UB)
+        lower_bound = 0.0
+        upper_bound = 1.0
+        kwargs.update(lower_bound=lower_bound, upper_bound=upper_bound)
         super().__init__(**kwargs)
 
 
 class RateParam(Param):
     def __init__(self, **kwargs):
-        LB = 0.0
-        UB = 1.0
-        kwargs.update(LB=LB, UB=UB)
+        lower_bound = 0.0
+        upper_bound = 1.0
+        kwargs.update(lower_bound=lower_bound, upper_bound=upper_bound)
         super().__init__(**kwargs)
 
 
-class LinearConstraints(object):
-    """Handles Linear constraints of the momi model
+class LinearConstraints(NamedTuple):
+    """Class representing a set of linear constraints on demographic parameters.
 
-    Attributes:
-        add_constraint (func): Adds new user constraint
-        all_constraints (dict): Returns all constraints
-        check_assignment (func): Check if the assignment violates any constraint
-        check_constraint (func): Check if the constraint is valid
-        check_equation (func): Check if the equation is valid
-        discard_constraint (func): Discard the given user constraint
-        get_train_arrays (func): Returns projection_polyhedron arrays
-        hard_constraints (dict): Necessary constraints for the model
-        keys (list): Variable names. e.g. eta_0, eta_1, ...
-        user_constraint_dict (dict): User defined constraints
+    Params:
+        keys: The names of the parameters in the constraints.
+        constraints: A list of strings representing the constraints.
     """
 
-    def __init__(self, params, time_constraints_str_exprs):
-        self.keys = params._keys
-        self.hard_constraints = {}
-        self.user_constraint_dict = dict()
+    keys: list[str]
+    constraints: list[str]
 
-        # Initiate hard constraints:
-        time_lc_vecs = {"A": [], "b": []}
-        other_lc_vecs = {"A": [], "b": []}
-        for key in self.keys:
-            cur_param = params[key]
-            A = []
-            b = []
+    def theta_to_x(self, theta: dict[str, float]) -> jax.Array:
+        "Convert theta to x"
+        return jnp.array([theta[key] for key in self.keys])
 
-            LB = cur_param.LB
-            if not isinf(LB):
-                Ai, bi, operator = linear_constraint_vector(f"{key}>={LB}", self.keys)
-                A.append(np.array(Ai, dtype="f"))
-                b.append(bi)
+    def x_to_theta(self, x: jax.Array) -> dict[str, float]:
+        "Convert x to theta"
+        return {key: jnp.array(val).astype(float) for key, val in zip(self.keys, x)}
 
-            UB = cur_param.UB
-            if not isinf(UB):
-                Ai, bi, operator = linear_constraint_vector(f"{key}<={UB}", self.keys)
-                A.append(np.array(Ai, dtype="f"))
-                b.append(bi)
+    def valid(self, theta: dict[str, float], eps: float = 1e-6) -> bool:
+        "Check that constraints are satisfiable for given theta"
+        A, b, G, h = self.polyhedron
+        x = self.theta_to_x(theta)
+        return jnp.allclose(A @ x, b) and jnp.all(G @ x <= h + eps)
 
-            if cur_param.__class__.__name__ == "TimeParam":
-                time_lc_vecs["A"] += A
-                time_lc_vecs["b"] += b
-            else:
-                other_lc_vecs["A"] += A
-                other_lc_vecs["b"] += b
+    def get_projector(self, verbose: bool = False):
+        "Returns a function which takes a value x, and projects it onto the feasible set"
+        poly = self.polyhedron
+        f = project_polyhedron(*poly, verbose)
 
-        for str_expr in time_constraints_str_exprs:
-            Ai, bi, operator = linear_constraint_vector(str_expr, self.keys)
-            time_lc_vecs["A"].append(np.array(Ai, dtype="f"))
-            time_lc_vecs["b"].append(bi)
+        def g(params_d):
+            x = self.theta_to_x(params_d)
+            x_proj = f(x)
+            return self.x_to_theta(x_proj)
 
-        A_time = np.array(time_lc_vecs["A"], dtype="f")
-        b_time = np.array(time_lc_vecs["b"])
-        A_time, b_time = reduce_linear_constraints(A_time, b_time)
-        time_lc_vecs["A"] = list(A_time)
-        time_lc_vecs["b"] = list(b_time)
-
-        self.hard_constraints = {
-            "A": time_lc_vecs["A"] + other_lc_vecs["A"],
-            "b": time_lc_vecs["b"] + other_lc_vecs["b"],
-        }
-
-    def check_assignment(self, key, value, x):
-        """Check if the assignment violates any constraint.
-
-        Args:
-            key (str): Parameter name e.g. "eta_2"
-            value (float): Parameter value
-            x (list[float]): Values of all paremeters. Ordering is in self.keys
-        """
-        keys = self.keys
-        x[[i for (i, key_i) in enumerate(keys) if key_i == key][0]] = value
-        x = np.array(x, dtype="f")
-        hard_constraints = self.hard_constraints
-
-        operator = "LessThan"
-        for i in range(len(hard_constraints["b"])):
-            Ai = hard_constraints["A"][i]
-            bi = hard_constraints["b"][i]
-            cond = self.check_equation(Ai, x, bi, operator)
-            if not cond:
-                self._raise_constraint_error(Ai, bi, operator)
-            else:
-                pass
-
-    def check_constraint(self, expr_str, x):
-        """Check if the constraint is valid.
-
-        Args:
-            expr_str (str): It should be a valid string expression
-            x (list[float]): Values of all paremeters. Ordering is in self.keys
-        """
-        keys = self.keys
-        x = np.array(x, dtype="f")
-        Ai, bi, operator = linear_constraint_vector(expr_str, keys)
-        Ai = np.array(Ai, dtype="f")
-        cond = self.check_equation(Ai, x, bi, operator)
-        if not cond:
-            raise ValueError("Constraints should hold when you are assigning them")
-        else:
-            pass
-
-    def check_equation(self, Ai, x0, bi, operator):
-        """Check if the equation is valid.
-        True if A \times x0^T <= bi or A \times x0^T == bi
-
-        Args:
-            Ai (array): Coefficients of parameters in self.keys
-            x0 (array): Values of parameters in self.keys
-            bi (float): Right hand side of the equation
-            operator (str): 'LessThan' or EqualTo
-
-        Returns:
-            bool: Is equation valid?
-        """
-        x0 = self._safe_inf(x0)
-        if operator == "EqualTo":
-            return np.isclose(Ai @ x0, bi)
-        elif operator == "LessThan":
-            return Ai @ x0 <= bi
-        else:
-            raise ValueError(f"Unknown operator: {operator}")
-
-    def add_constraint(self, expr_str, x):
-        """Adds a user constraint if the constraint is valid for x.
-
-        Args:
-            expr_str (str): It should be a valid string expression
-            x (list[float]): Values of all paremeters. Ordering is in self.keys
-        """
-        keys = self.keys
-        self.check_constraint(expr_str, x)  # Test whether it is a valid constraint
-        Ai, bi, operator = linear_constraint_vector(expr_str, keys)
-        self.user_constraint_dict[expr_str] = {
-            "Ai": np.array(Ai, dtype="f"),
-            "bi": bi,
-            "operator": operator,
-        }
-
-    def discard_constraint(self, expr_str):
-        """Discards a user constraint if the constraint is available.
-
-        Args:
-            expr_str (str): It should be a valid string expression
-        """
-        del self.user_constraint_dict[expr_str]
+        g.poly = poly
+        return g
 
     @property
-    def all_constraints(self):
-        """Returns all constraints.
-        ret['LessThan'] is for A @ x <= b
-        ret['EqualTo'] is for A @ x == b
+    def polyhedron(self):
+        keys = list(self.keys)
+        A, b, G, h = [], [], [], []
+        for c in self.constraints:
+            ret = linear_constraint_vector(c, keys)
+            if ret is None:
+                # Returns none if there are no parameters in the constraint
+                continue
+            Ai, bi, operator = ret
+            if operator == "EqualTo":
+                A.append(Ai)
+                b.append(bi)
+            else:
+                assert operator == "LessThan"
+                G.append(Ai)
+                h.append(bi)
 
-        Returns:
-            dict: Constraint matrices.
-        """
-        hard_constraints = deepcopy(self.hard_constraints)
+        def m2n(a):
+            return sympy.matrix2numpy(sympy.Matrix(a), dtype=float)
 
-        # All hard constraints have format: g(Theta) <= b
-        ret = {
-            "LessThan": {"A": hard_constraints["A"], "b": hard_constraints["b"]},
-            "EqualTo": {"A": [], "b": []},
-        }
-
-        for cur_constraint in self.user_constraint_dict.values():
-            operator = cur_constraint["operator"]
-            ret[operator]["A"].append(cur_constraint["Ai"])
-            ret[operator]["b"].append(cur_constraint["bi"])
-
-        return ret
-
-    def get_polyhedron_hyperparams(self, theta, train_bool):
-        """Returns projection_polyhedron arrays.
-        See: https://jaxopt.github.io/stable/_autosummary/jaxopt.projection.projection_polyhedron.html
-
-        Args:
-            theta (list[float]): Values of all paremeters. Ordering is in self.keys
-            train_bool (list[bool]): Boolean for inference. Ordering is in self.keys
-
-        Returns:
-            (array, array, array, array): G, h, A, b s.t. Gx <= h and Ax == b
-        """
-
-        all_constraints = self.all_constraints
-        x = self._safe_inf(np.array(theta, dtype="f"))
-
-        G = np.array(all_constraints["LessThan"]["A"], dtype="f")
-        h = np.array(all_constraints["LessThan"]["b"], dtype="f")
-
-        A = np.array(all_constraints["EqualTo"]["A"], dtype="f")
-        b = np.array(all_constraints["EqualTo"]["b"], dtype="f")
-
-        x_nt = x[np.logical_not(train_bool)]
-
-        G, G_nt = G[:, train_bool], G[:, np.logical_not(train_bool)]
-        h = h - G_nt @ x_nt
-
-        nonzero = np.logical_not(np.alltrue(np.isclose(G, 0.0), 1))
-        G = G[nonzero, :]
-        h = h[nonzero]
-
-        if len(b) != 0:
-            A, A_nt = A[:, train_bool], A[:, np.logical_not(train_bool)]
-            b = b - A_nt @ x_nt
-
-            nonzero = np.logical_not(np.alltrue(np.isclose(A, 0.0), 1))
-            A = A[nonzero, :]
-            b = b[nonzero]
-        else:
-            A = jnp.zeros(G.shape[1])[None, :]
-            b = jnp.array([0.0])
-
-        return (
-            jnp.array(A, dtype="f"),
-            jnp.array(b, dtype="f"),
-            jnp.array(G, dtype="f"),
-            jnp.array(h, dtype="f"),
-        )
-
-    def get_bounds(self, theta, train_bool):
-        """Returns list of [lower_bound, upper_bound] for train=True parameters.
-        It maximizes (and minimizes for the lower bound) the value of the parameter
-        for given constraints in params._linear_constraints
-
-        Args:
-            theta (list[float]): Values of all paremeters. Ordering is in self.keys
-            train_bool (list[bool]): Boolean for inference. Ordering is in self.keys
-
-        Returns:
-            List[List[float, float]]: Supremum bounds of train=True parameters
-        """
-        A, b, G, h = self.get_polyhedron_hyperparams(theta, train_bool)
-        if len(b) == 0:
-            A = None
-            b = None
-        else:
-            pass
-
-        bounds = []
-        n_var = G.shape[1]
-        for i in range(n_var):
-            bs = [-inf, inf]
-            for j, coef in enumerate([1, -1]):
-                c = np.zeros(n_var)
-                c[i] = coef
-                opt_res = linprog(c, A_ub=G, b_ub=h, A_eq=A, b_eq=b)
-                if opt_res.success:
-                    bs[j] = coef * opt_res.fun
-            bounds.append(bs)
-
-        return bounds
+        A = sympy.Matrix(A)
+        b = sympy.Matrix(b)
+        Abr, _ = A.row_join(b).rref()
+        A, b = np.split(m2n(Abr), [-1], axis=1)
+        A = A.reshape(-1, len(keys))
+        b = b.reshape(-1)
+        G = m2n(G).reshape(-1, len(keys))
+        h = m2n(h).reshape(-1)
+        G, h = _reduce_inequality_constraints(G, h)
+        return (A, b, G, h)
 
     def _pretty_expr(self, Ai, bi, operator):
         # Returns sympy expressions
@@ -1417,61 +1144,44 @@ class LinearConstraints(object):
             raise ValueError(f"Unknown operator {operator}")
         return expr
 
-    def _raise_constraint_error(self, Ai, bi, operator):
-        # Raises constraint error
-        expr = self._pretty_expr(Ai, bi, operator)
-        raise ValueError(f"Violates the equation: {expr}")
-
-    def _safe_inf(self, vec):
-        # Transform infinity to a number for 0*inf computations.
-        vec = np.array(vec)
-        vec[np.isinf(vec)] = NP_max
-        return vec
-
     def __repr__(self):
-        LessThan = self.all_constraints["LessThan"]
-        EqualTo = self.all_constraints["EqualTo"]
-
+        A, b, G, h = self.polyhedron
         out = []
-        for i in range(len(LessThan["A"])):
-            eq_str = str(
-                self._pretty_expr(LessThan["A"][i], LessThan["b"][i], "LessThan")
-            )
+        for Gi, hi in zip(G, h):
+            eq_str = str(self._pretty_expr(Gi, hi, "LessThan"))
             out.append(eq_str)
 
-        for i in range(len(EqualTo["A"])):
-            eq = self._pretty_expr(EqualTo["A"][i], EqualTo["b"][i], "EqualTo")
+        for Ai, bi in zip(A, b):
+            eq = self._pretty_expr(Ai, bi, "EqualTo")
             lhs, rhs = str(eq.lhs), str(eq.rhs)
             eq_str = lhs + " == " + rhs
             out.append(eq_str)
 
-        return "\n".join(out)
+        return pprint.pformat(out)
 
 
-def linear_constraint_vector(linear_constraint_str: str, variables: list):
+def linear_constraint_vector(linear_constraint_str: str, variables: tuple[str]):
     """Takes a string expression and returns Ai, bi and operator.
     Args:
         linear_constraint_str (str): This is an string expression
         variables (list): list of variable names
 
     Returns:
-        Tuple(list, list, list): Ai, bi, and operator, where
-        Ai@x<=bi if operator=LessThan
-        Ai@x=bi if operator=EqualTo
+        Tuple(list, list, list): Ai, bi, Gi, Hi
+        where Gi@x<=hi and Ai@x=bi.
 
     Raises:
         ValueError: If equation is not in correct form for sympy to parse it
     """
-    variable_order = dict(zip(variables, range(len(variables))))
-    n_Theta = len(variables)
+    n = len(variables)
 
-    if linear_constraint_str.find("==") != -1:
+    if "==" in linear_constraint_str:
         # Equality constraint
         lhs, rhs = linear_constraint_str.split("==")
         lhs, rhs = sympy.sympify(lhs), sympy.sympify(rhs)
         expr = sympy.Eq(lhs, rhs).simplify()
         operator = "EqualTo"
-    elif linear_constraint_str.find("<=") + linear_constraint_str.find(">=") > -2:
+    elif ("<=" in linear_constraint_str) or (">=" in linear_constraint_str):
         # Inequality constraint
         expr = sympy.simplify(linear_constraint_str)
         operator = expr.__class__.__name__
@@ -1482,6 +1192,13 @@ g(_Theta)<=h(_Theta) or
 g(_Theta)>=h(_Theta) or
 g(_Theta)==h(_Theta)"""
         )
+
+    # the expression evaluated to a boolean, so it didn't contain
+    # any variables. Ensure that the constraint is satisfied and return empty arrays.
+    if expr.is_Boolean:
+        assert expr
+        return None
+
     lhs = expr.lhs
     rhs = expr.rhs
 
@@ -1502,28 +1219,38 @@ g(_Theta)==h(_Theta)"""
     lhs_constant = lhs.as_coeff_Add()[0]
     rhs_constant = rhs.as_coeff_Add()[0]
 
-    lhs_params = [str(i) for i in lhs_params]
-    rhs_params = [str(i) for i in rhs_params]
-
     if operator == "GreaterThan":
-        lhs_coefs = [-i for i in lhs_coefs]
+        lhs_coefs = [-x for x in lhs_coefs]
         rhs_constant = -rhs_constant
         operator = "LessThan"
     elif operator == "LessThan":
-        rhs_coefs = [-i for i in rhs_coefs]
+        rhs_coefs = [-x for x in rhs_coefs]
         lhs_constant = -lhs_constant
     else:
-        rhs_coefs = [-i for i in rhs_coefs]
+        rhs_coefs = [-x for x in rhs_coefs]
 
-    Ai = n_Theta * [0]
+    Ai = n * [0]
     non_zero_params = lhs_params + rhs_params
     non_zero_coefs = lhs_coefs + rhs_coefs
-    non_zero_indeces = [variable_order[i] for i in non_zero_params]
-    for i, val in zip(non_zero_indeces, non_zero_coefs):
+    non_zero_indices = [variables.index(str(p)) for p in non_zero_params]
+    for i, val in zip(non_zero_indices, non_zero_coefs):
         Ai[i] = val
 
     bi = float(lhs_constant + rhs_constant)
     return Ai, bi, operator
+
+
+def set_path(d, path_tup, val):
+    """Set value to a nested dictionary.
+
+    Args:
+        d (dict): Nested dictionary
+        path_tup (tuple): Path to the value
+        val (Any): Value to be set
+    """
+    for key in path_tup[:-1]:
+        d = d[key]
+    d[path_tup[-1]] = val
 
 
 def get_path(demo_dict, demes_event, param_name, i, j, k):
@@ -1544,17 +1271,17 @@ def get_path(demo_dict, demes_event, param_name, i, j, k):
 
     if demes_event == "demes":
         dname = demo_dict[demes_event][i]["name"]
-        demes_params_desc = f"{param_name} of {dname}"
+        desc = f"{param_name} of {dname}"
         if not b1:
-            demes_params_desc += f" (epoch {j})"
+            desc += f" (epoch {j})"
     elif demes_event == "pulses":
         sources = " ".join(demo_dict[demes_event][i]["sources"])
         dest = demo_dict[demes_event][i]["dest"]
-        demes_params_desc = f"{param_name} of the pulse from {sources} to {dest}"
+        desc = f"{param_name} of the pulse from {sources} to {dest}"
     elif demes_event == "migrations":
         source = demo_dict[demes_event][i]["source"]
         dest = demo_dict[demes_event][i]["dest"]
-        demes_params_desc = f"{param_name} of the migration from {source} to {dest}"
+        desc = f"{param_name} of the migration from {source} to {dest}"
     else:
         raise ValueError(f"Unknown {demes_event=}")
 
@@ -1567,34 +1294,42 @@ def get_path(demo_dict, demes_event, param_name, i, j, k):
         # proportion assignment
         path = (demes_event, i, param_name, k)
 
-    return path, demes_params_desc
+    return path, desc
 
 
-def reduce_linear_constraints(A, b):
-    """To remove redundant inequalities from a system of linear inequalities.
-    A @ x0 <= b
-    A has shape (k, l) and b has (k,).
-    This returns A, b with shape (r, l) and (r,) where r <= l
+def _reduce_inequality_constraints(G, h):
+    """Remove redundant inequalities from a system of linear inequalities G @ x0 <= h.
 
     Args:
-        A (2d array): Description
-        b (1d array): Description
+        G (2d array): Coefficients of the inequalities
+        h (1d array): Constants of the inequalities
 
     Returns:
-        tuple(2d array, 1d array): Reduced A and b
+        Reduced G, h.
     """
     i = 0
-    while i < len(A):
-        e = np.eye(len(A))[i]
-        bi = b + e
-        res = linprog(-A[i], A, bi, bounds=(None, None), method="simplex")
-        if -res.fun <= b[i]:
+    while i < len(G):
+        # len(G) could change from the previous iteration
+        Id = np.eye(len(G))
+        e = Id[i]
+        hi = h + e
+
+        # If the constraint is redundant, then the optimal value of the
+        # following linear program should be greater than or equal to h[i]:
+
+        # **** Don't change method="highs" to "simplex", simplex will fail to find
+        # the optimal solution in some cases, which results in constraints being
+        # silently dropped!
+        res = linprog(-G[i], G, hi, bounds=(None, None), method="highs")
+
+        if -res.fun <= h[i]:
             # constraint is redundant
-            A = np.delete(A, i, axis=0)
-            b = np.delete(b, i, axis=0)
+            # logger.debug("constraint {}<={} is redundant", G[i], h[i])
+            G = np.delete(G, i, axis=0)
+            h = np.delete(h, i, axis=0)
         else:
             i += 1
-    return A, b
+    return np.copy(G), np.copy(h)  # return copies
 
 
 def get_body(vals, styles):
@@ -1629,7 +1364,13 @@ def get_html_repr(params):
         },
         "table2": "",
     }
-    param_types = ["SizeParam", "RateParam", "ProportionParam", "TimeParam"]
+    param_types = [
+        "SizeParam",
+        "RateParam",
+        "ProportionParam",
+        "TimeParam",
+        "FixedParam",
+    ]
     Greek = dict(zip(["eta", "rho", "pi", "tau"], ["&#951", "&#961", "&#960", "&#964"]))
     keys = list(params.keys())
 
@@ -1657,14 +1398,17 @@ def get_html_repr(params):
                 i = int(re.findall(r"\d+", key)[0])
                 key_greek = re.findall(r"[a-z]+", key)[0]
                 name = Greek[key_greek] + f"<sub>{i}</sub>"
-                num = "{num:.3g}".format(num=cur.num)
-                if params[key].train_it:
-                    train = "&#9989"
-                else:
-                    train = "&#10060"
-                table1_vals.append([name, num, train])
-                for demes_params_desc in cur.demes_params_descs:
-                    table2_vals.append([demes_params_desc, name])
+                num = "{num:.3g}".format(num=cur.value)
+                a = [name, num]
+                if cur.__class__ is not FixedParam:
+                    if params[key].train:
+                        train = "&#9989"
+                    else:
+                        train = "&#10060"
+                    a.append(train)
+                table1_vals.append(a)
+                for desc in cur.paths.values():
+                    table2_vals.append([desc, name])
         table1_vals = sorted(table1_vals, key=lambda x: x[0])
         body["table1"][param_type] = get_body(table1_vals, styles=styles["table1"])
 
@@ -1672,8 +1416,8 @@ def get_html_repr(params):
     body["table2"] = get_body(table2_vals, styles=styles["table2"])
 
     eq_table = []
-    for eq in params._linear_constraints.user_constraint_dict.keys():
-        eq_table.append([eq_to_html(eq)])
+    # for eq in params.constraints.user_constraints.keys():
+    #     eq_table.append([eq_to_html(eq)])
     eq_table = get_body(eq_table, styles=styles["table_eq"])
 
     # FIXME: Add the actual link to paper
@@ -1733,6 +1477,18 @@ def get_html_repr(params):
     </thead>
     <tbody>
     {body['table1']['TimeParam']}
+    </tbody>
+    </table>
+    <table border="1" style="width: 100%;">
+    <caption><h4>Fixed Parameters</h4></caption>
+    <thead>
+        <tr style="text-align: right;">
+            <th >Parameter</th>
+            <th >Value</th>
+        </tr>
+    </thead>
+    <tbody>
+    {body['table1']['FixedParam']}
     </tbody>
     </table>
     <table border="1" style="width: 100%;">

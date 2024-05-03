@@ -7,7 +7,6 @@ from functools import partial
 from typing import TypeVar
 
 import networkx as nx
-from jax import lax
 from jax import numpy as jnp
 from jax import vmap
 
@@ -275,8 +274,16 @@ def _etbl_R(nv, Ne, tau, W):
         N1, N0 = Ne
         g = -(jnp.log(N0) - jnp.log(N1)) / tau
         f_exp = vmap(partial(exp_integralEGPS, g), (None, None, 0))
-        cm = lax.cond(jnp.isclose(g, 0.0), f_const, f_exp, 1 / (2 * N1), tau, jC2)
-        R = lax.cond(jnp.isclose(g, 0.0), _R_const, partial(_R_exp, g), 2 * N1, tau)
+        # cm = lax.cond(jnp.isclose(g, 0.0), f_const, f_exp, 1 / (2 * N1), tau, jC2)
+        # R = lax.cond(jnp.isclose(g, 0.0), _R_const, partial(_R_exp, g), 2 * N1, tau)
+        cm = jnp.where(
+            jnp.isclose(g, 0.0),
+            f_const(1 / (2 * N1), tau, jC2),
+            f_exp(1 / (2 * N1), tau, jC2),
+        )
+        R = jnp.where(
+            jnp.isclose(g, 0.0), _R_const(2 * N1, tau), partial(_R_exp, g)(2 * N1, tau)
+        )
     else:
         cm = f_const(1 / (2 * Ne), tau, jC2)
         R = _R_const(2 * Ne, tau)

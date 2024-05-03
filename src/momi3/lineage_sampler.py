@@ -6,7 +6,6 @@ import jax.numpy as jnp
 import networkx as nx
 import numpy as np
 import scipy
-import sparse
 from jax.scipy.special import gammaln as gammaln
 
 from momi3 import events
@@ -194,7 +193,7 @@ def sample_lift(
     params: Params,
     seed: int = None,
     quantile: float = 0.95,
-    min_lineages=4
+    min_lineages=4,
 ):
     """Samples surviving lineages and returns its user given quantile
 
@@ -219,10 +218,10 @@ def sample_lift(
     Ne0s_dict = {pop: [] for pop in pops}
     Ne1s_dict = {pop: [] for pop in pops}
 
-    train_keys = params._train_keys
+    train_keys = params.trainable
     for theta_train in theta_train_sample:
         for key, val in zip(train_keys, theta_train):
-            params[key].set(val)
+            params[key].value = val
         demo_dict = params._demo_dict
 
         t0s.append(traverse(demo_dict, ev.t0.path))
@@ -258,7 +257,7 @@ def sample_lift(
             # print('-'*10)
 
         n1pop = int(round(np.quantile(ret, quantile)))
-        n1[pop] = max(n1pop, min_lineages)
+        n1[pop] = min(n0, max(n1pop, min_lineages))
 
     return n1
 
@@ -300,8 +299,8 @@ def pulse_quantiles(
     return n1
 
 
-def sample_theta_train(loc, scale, size, params):
-    A, b, G, h = params._polyhedron_hyperparams()
+def sample_theta_train(loc, scale, size, polyhedron_params):
+    A, b, G, h = polyhedron_params
     X = np.random.normal(loc, scale, size=(size, len(loc))).T
     np.all(np.isclose(A @ X, b[:, None]), 0)
     GT = np.all(G @ X <= h[:, None], 0)
@@ -318,7 +317,7 @@ def bound_sampler(
     scale: jnp.ndarray,
     seed: int = None,
     quantile: float = 0.95,
-    min_lineages: int = 4
+    min_lineages: int = 4,
 ):
     """Bound sampler for event tree
 
@@ -332,11 +331,11 @@ def bound_sampler(
         quantile (float, optional): Quantile cuts for bounds
     """
     theta_train_sample = np.zeros((len(loc), 0))
-    n = T.num_samples
+    n = dict(T.num_samples)
+    polyhedron = params.constraints.polyhedron
     while theta_train_sample.shape[1] < size:
-        theta_train_sample = np.hstack(
-            (theta_train_sample, sample_theta_train(loc, scale, size, params))
-        )
+        stt = sample_theta_train(loc, scale, size, polyhedron)
+        theta_train_sample = np.hstack([theta_train_sample, stt])
     theta_train_sample = theta_train_sample[:, :size].T
 
     nodes = T.nodes
@@ -352,26 +351,29 @@ def bound_sampler(
 
             if (
                 isinstance(ev, events.Lift) and not ev.terminal
-            ):  # do not bound terminal events
+            ):  # do not bound migration events
                 if ev.migrations:
                     pass
+                    # FIXME: to be implemented
                     # n = Migration_sample(
                     #     n, ev, theta_train_sample, params, seed, quantile
                     # )
                 else:
-                    n = sample_lift(n, ev, theta_train_sample, params, seed, quantile, min_lineages)
+                    n = sample_lift(
+                        n, ev, theta_train_sample, params, seed, quantile, min_lineages
+                    )
                     NS[ev] = deepcopy(n)
-                    #print(ev.t1, "Lift", n)
+                    # print(ev.t1, "Lift", n)
                 seed = np.random.RandomState(seed).randint(2**31 - 1)
 
             elif isinstance(ev, events.Admix):
                 n = admix_quantiles(n, ev, params, quantile, min_lineages)
                 NS[ev] = deepcopy(n)
-                #print(u.t, "Admix", n)
+                # print(u.t, "Admix", n)
             elif isinstance(ev, events.Pulse):
                 n = pulse_quantiles(n, ev, params, quantile, min_lineages)
                 NS[ev] = deepcopy(n)
-                #print(u.t, "Pulse", n)
+                # print(u.t, "Pulse", n)
             elif isinstance(ev, events.Rename):
                 new, old = ev.new, ev.old
                 n[new] = n[old]

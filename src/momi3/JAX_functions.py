@@ -1,4 +1,5 @@
 import logging
+from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -74,8 +75,8 @@ def esfs_map(theta_dict, X, auxd, demo, _f, esfs_tensor_prod, low_memory=False):
 
     if low_memory:
         f = checkpoint(f)
-    # return jax.vmap(f)(X).flatten()
-    return jax.lax.map(f, X).flatten()
+    return jax.vmap(f)(X).flatten()
+    # return jax.lax.map(f, X).flatten()
 
 
 def esfs_mapX(theta_dict, X, auxd, demo, _f, esfs_tensor_prod):
@@ -123,34 +124,9 @@ def loglik_batch(
 loglik_and_grad_batch = value_and_grad(loglik_batch)
 hessian_batch = hessian(loglik_batch)
 
-
-def loglik_batch_transformed(
-    theta_train_path_dict,
-    theta_path_dict,
-    X_batch,
-    sfs_batch,
-    auxd,
-    demo,
-    _f,
-    esfs_tensor_prod,
-    esfs_map,
-    transformed_params=True,
-):
-    return loglik_batch(
-        theta_train_path_dict,
-        theta_path_dict,
-        X_batch,
-        sfs_batch,
-        auxd,
-        demo,
-        _f,
-        esfs_tensor_prod,
-        esfs_map,
-        transformed_params,
-    )
-
-
-loglik_and_grad_batch_transformed = value_and_grad(loglik_batch_transformed)
+loglik_and_grad_batch_transformed = value_and_grad(
+    partial(loglik_batch, transformed_params=True)
+)
 
 
 class JAX_functions:
