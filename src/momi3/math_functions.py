@@ -78,17 +78,19 @@ def exp_integralEGPS(g, a, tau, j):
     tau: truncation time (must be less than infinity)
     j: rate coefficient
     """
-    g = -g
 
     def R(t):
-        g_small = abs(g) < 1e-6
-        g_safe = jnp.where(g_small, 1.0, g)
-        r1 = -jnp.expm1(-g_safe * t) / g_safe
+        gt = -g * t
+        gt_small = abs(gt) < 1e-6
+        gt_safe = jnp.where(gt_small, 1.0, gt)
+        r1 = -jnp.expm1(-gt_safe) / gt_safe
         # r2 = taylor series expansion of r1 about g=0
-        r2 = t * (1 - g * t / 2)
-        return a * jnp.where(g_small, r2, r1)
+        r2 = 1 - gt / 2
+        return a * j * t * jnp.where(gt_small, r2, r1)
 
     y, info = quadax.quadgk(lambda x: jnp.exp(-R(x)), [0.0, tau])
+    # e2 = exp_integralEGPS_old(g, a, tau, j)
+    # jax.debug.print("g:{} a:{} tau:{} j:{} y:{} e2:{} info:{}", g, a, tau, j, y, e2, info)
     return y
 
 

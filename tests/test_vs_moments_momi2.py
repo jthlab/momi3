@@ -329,15 +329,16 @@ def test_single_pop(run_type="pytest", **kwargs):
 
 @pytest.mark.exponential
 def test_single_pop_small_exponential_size(run_type="pytest", **kwargs):
-    g = 1e-5
+    g = 1e-4
 
     demo, model1 = SingleDeme.Exponential(g=g).base()
     sampled_demes = ["A"]
     sample_sizes = [10]
     mvm = Momi_vs_Moments(demo, model1, sampled_demes, sample_sizes)
     print(f"single pop exponential growth w/ {g=}")
-    mvm.compare("momi3", "momi2", run_type, **kwargs)
+    mvm.compare("momi2", "moments", run_type, **kwargs)
     mvm.compare("momi3", "moments", run_type, **kwargs)
+    mvm.compare("momi3", "momi2", run_type, **kwargs)
 
 
 @pytest.mark.exponential

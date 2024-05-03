@@ -1026,7 +1026,7 @@ class FixedParam(Param):
 
 class SizeParam(Param):
     def __init__(self, **kwargs):
-        lower_bound = 0.01
+        lower_bound = min(kwargs["value"], 0.01)
         upper_bound = inf
         kwargs.update(lower_bound=lower_bound, upper_bound=upper_bound)
         super().__init__(**kwargs)
