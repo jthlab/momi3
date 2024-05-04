@@ -38,10 +38,13 @@ def project_polyhedron(A, b, G, h, verbose: bool = False):
     prob = _make_projection_dpp(A, b, G, h)
 
     def solve(x):
-        xp = prob.parameters()[0]
-        y = prob.variables()[0]
-        xp.value = x
-        prob.solve(verbose=verbose)
+        try:
+            xp = prob.parameters()[0]
+            y = prob.variables()[0]
+            xp.value = x
+            prob.solve(verbose=verbose)
+        except ValueError as e:
+            raise ValueError(f"Projection failed when x={x}") from e
         return y.value
 
     def ret(x):
