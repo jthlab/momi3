@@ -42,7 +42,7 @@ def project_polyhedron(A, b, G, h, verbose: bool = False):
             xp = prob.parameters()[0]
             y = prob.variables()[0]
             xp.value = x
-            prob.solve(verbose=verbose)
+            prob.solve(solver=cp.CLARABEL, verbose=verbose)
         except ValueError as e:
             raise ValueError(f"Projection failed when x={x}") from e
         return y.value

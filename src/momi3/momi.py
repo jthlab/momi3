@@ -106,16 +106,18 @@ class Momi3:
         ret = vmap(self._T.execute, in_axes=(None, 0, None))(pd, X_batch, self._T.auxd)
         return ret[0] - ret[1] - ret[2]
 
-    def expected_sfs(self, params_d: dict[str, float] = {}):
+    def expected_sfs(self, params_d: dict[str, float] = {}, use_vmap: bool = True):
         bs = [range(n + 1) for n in self._num_samples.values()]
         num_derived = jnp.array(list(it.product(*bs)))
 
-        @vmap
         def f(ds):
             d = dict(zip(self._num_samples, ds))
             return self.E_tbl(params_d, dict(d))
 
-        etbls = f(num_derived)
+        if use_vmap:
+            etbls = vmap(f)(num_derived)
+        else:
+            etbls = lax.map(f, num_derived)
         tau = self.E_tau(params_d)
         sh = tuple(n + 1 for n in self._num_samples.values())
         return (etbls / tau).reshape(sh)
@@ -124,7 +126,9 @@ class Momi3:
         self,
         params_d: dict[str, float],
         jsfs: JSFS,
+        *,
         theta: float = None,
+        folded: bool = True,
         use_vmap: bool = True,
     ) -> float:
         """Log likelihood of joint site frequency spectrum.
@@ -135,45 +139,57 @@ class Momi3:
                 The size of each axis should be 1 + sample size, with axis ordering
                 corresponding to the key ordering in self.num_samples.
             theta: mutation rate per unit time, if known.
+            folded: Conduct inference on the folded allele frequency spectrum.
 
         Returns:
             float: log-likelihood value
         """
+        tau = self.E_tau(params_d)
         f = self._loglik_vmap if use_vmap else self._loglik_scan
-        return f(params_d, jsfs, theta)
+        ll = f(params_d, jsfs, tau, folded)
+        if theta is not None:
+            s = (jsfs.counts * (~jsfs.nonseg_sites)).sum()
+            ll += jax.scipy.stats.poisson.logpmf(s, tau * theta)
+        return ll
+
+    def _configs(self, ds: list[int], folded: bool):
+        configs = [dict(zip(self._num_samples, ds))]
+        if folded:
+            configs.append(
+                dict(
+                    zip(
+                        self._num_samples.keys(),
+                        [n - d for n, d in zip(self._num_samples.values(), ds)],
+                    )
+                )
+            )
+
+        return configs
 
     def _loglik_vmap(
-        self, params_d: dict[str, float], jsfs: JSFS, theta: float
+        self, params_d: dict[str, float], jsfs: JSFS, tau: float, folded: bool
     ) -> float:
         @vmap
         def f(ds):
-            return self.E_tbl(params_d, dict(zip(self._num_samples, ds)))
+            confs = self._configs(ds, folded)
+            return jnp.array([self.E_tbl(params_d, c) for c in confs]).mean()
 
         etbls = f(jsfs.sites)
-        tau = self.E_tau(params_d)
-        p = jsfs.counts / jsfs.counts.sum()
+        p = jsfs.counts  # / jsfs.counts.sum()
         ret = xlogy(p, etbls / tau).sum()
         return ret
-        # if theta is not None:
-        # # theta is not none, use the poisson likelihood
-        #     ret += jax.scipy.stats.poisson.logpmf(jsfs.counts.sum(), theta * tau).sum()
-        # ns = jsfs.nonseg_sites
-        # return jnp.where(
-        #     ns,
-        #     -jsfs.counts * theta * tau,
-        #     jax.scipy.stats.poisson.logpmf(jsfs.counts, theta * etbls),
-        # ).sum()
 
-    def _loglik_scan(self, params_d: dict[str, float], jsfs: JSFS) -> float:
-        tau = self.E_tau(params_d)
-
+    def _loglik_scan(
+        self, params_d: dict[str, float], jsfs: JSFS, tau: float, folded: bool
+    ) -> float:
         def f(accum, tup):
             ds, pi = tup
-            etbl = self.E_tbl(params_d, dict(zip(self._num_samples, ds)))
+            confs = self._configs(ds, folded)
+            etbl = jnp.array([self.E_tbl(params_d, c) for c in confs]).mean()
             accum += xlogy(pi, etbl / tau)
             return accum, None
 
-        p = jsfs.counts / jsfs.counts.sum()
+        p = jsfs.counts  # / jsfs.counts.sum()
         return lax.scan(f, 0.0, (jsfs.sites, p))[0]
 
     def optimize(
@@ -388,7 +404,10 @@ class Momi3:
         if hasattr(self, "_bounded"):
             raise ValueError("Already bounded")
         train_keys = self.params.trainable
-        loc = [self.params[key].value for key in train_keys]
+        pd = {key: self.params[key].value for key in train_keys}
+        if not self.constraints.valid(pd):
+            raise ValueError("Initial parameters violate constraints")
+        loc = list(pd.values())
         scale = [scale.get(k, 0.0) for k in train_keys]
         bounds = bound_sampler(
             T=self._T,

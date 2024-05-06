@@ -9,6 +9,7 @@ from typing import TypeVar
 import networkx as nx
 from jax import numpy as jnp
 from jax import vmap
+from jax.scipy.linalg import expm
 
 from momi3.common import (
     Axes,
@@ -231,21 +232,24 @@ def _lift1(pl, in_axis, Ne, tau, d, Q, M, QQ, RR, W, terminal):
     # now compute the lifted partial likelihood
     # we basically want to contract the partial likelihood along the lifted axis with the matrix
     # Q * exp(d * R) * Qinv. however for numerical & computational reasons, avoid matrix-matrix products or inversion
-    ed = jnp.exp(R * d)
-    pl_axes = list(range(pl.ndim))
-    out_axes = list(pl_axes)
-    i = max(pl_axes) + 1
-    out_axes[in_axis] = i
-    # the next line is equivalent to tensordot(pl, d[:, None] * Q, axes=(in_axis, 1))
-    Ql = oe_einsum(pl, pl_axes, ed, [i], Q, [i, in_axis], out_axes)
-
-    # the next two lines push the lifted axis to the end and apply a batched solve
-    # equivalent to tensordot(Ql, Qinv, axes=(in_axis, 1)) but without forming Qinv
-    # def f(x):
-    #     # return lax.linalg.triangular_solve(RR, QQ.T @ x, left_side=True, lower=False)
-    #     return jnp.linalg.solve(Q, x)
-
-    plp = jnp.apply_along_axis(lambda x: jnp.linalg.solve(Q, x), in_axis, Ql)
+    if False:
+        ed = jnp.exp(R * d)
+        pl_axes = list(range(pl.ndim))
+        out_axes = list(pl_axes)
+        i = max(pl_axes) + 1
+        out_axes[in_axis] = i
+        Ql = oe_einsum(pl, pl_axes, ed, [i], Q, [i, in_axis], out_axes)
+        # the next two lines push the lifted axis to the end and apply a batched solve
+        # equivalent to tensordot(Ql, Qinv, axes=(in_axis, 1)) but without forming Qinv
+        # def f(x):
+        #     # return lax.linalg.triangular_solve(RR, QQ.T @ x, left_side=True, lower=False)
+        #     return jnp.linalg.solve(Q, x)
+        plp = jnp.apply_along_axis(lambda x: jnp.linalg.solve(Q, x), in_axis, Ql)
+    else:
+        P = expm(M.T * R)
+        plp = jnp.tensordot(pl, P, axes=(in_axis, 1))
+        # move the lifted axis back to its original position
+        plp = jnp.moveaxis(plp, -1, in_axis)
     return plp, etbl
 
 
@@ -284,12 +288,23 @@ def _etbl_R(nv, Ne, tau, W):
         R = jnp.where(
             jnp.isclose(g, 0.0), _R_const(2 * N1, tau), partial(_R_exp, g)(2 * N1, tau)
         )
+        # for calculating the approximation below
+        Ne = N0
     else:
         cm = f_const(1 / (2 * Ne), tau, jC2)
         R = _R_const(2 * Ne, tau)
+    # the basic quantities, which we may approximate below
     fn = W @ cm
     k = j - 1
     e_tmrca_min_tau = ((k / nv) * fn).sum()
+    # the expected number of coalescent events is ~= a * nC2 * tau. If this is almost zero,
+    # then there are no coalescences in the interval, so the expected total branch length is
+    # tau subtending nv lineages of size 1.
+    e = jnp.eye(nv - 1)[0]
+    no_coal = jnp.isclose(jC2[-1] / 2 / Ne * tau, 0.0)
+    fn = jnp.where(no_coal, nv * tau * e, fn)
+    e_tmrca_min_tau = jnp.where(no_coal, tau, e_tmrca_min_tau)
+    # now compute the remaining branch lengths
     etbl = jnp.r_[0, fn, jnp.where(jnp.isinf(tau), 0, tau - e_tmrca_min_tau)]
     return etbl, R
 

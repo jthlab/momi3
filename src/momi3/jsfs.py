@@ -89,7 +89,7 @@ class JSFS(NamedTuple):
     def nonseg_sites(self) -> "JSFS":
         """Return a boolean mask indicating whether each site is segregating."""
         s1 = jnp.all(self.sites == jnp.zeros(self.d, dtype=int), axis=1)
-        s2 = jnp.all(self.sites == jnp.array(self.sample_sizes.values()), axis=1)
+        s2 = jnp.all(self.sites == jnp.array(list(self.sample_sizes.values())), axis=1)
         return s1 | s2
 
     def project(self, pops: list[str]) -> "JSFS":

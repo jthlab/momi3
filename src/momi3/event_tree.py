@@ -12,6 +12,7 @@ import jax
 import jax.numpy as jnp
 import networkx as nx
 from frozendict import frozendict
+from loguru import logger
 
 from momi3 import events
 from momi3.common import Axes, Population, State, Time, unique_strs
@@ -218,6 +219,7 @@ class ETBuilder:
             self.nodes[self._leaves[pop]]["state"] = State(pl=XX, phi=0.0, l0=l0)
         # traverse tree starting at leaves and working up
         for u in nx.topological_sort(self._T):
+            logger.trace("executing node {}", u)
             child_state = {}
             for i, ch in enumerate(self._T.predecessors(u), 1):
                 st = self.nodes[ch]["state"]

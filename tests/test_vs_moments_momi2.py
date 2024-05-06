@@ -11,7 +11,6 @@ from itertools import product
 
 import dadi
 import demes
-import jax
 import jax.numpy as jnp
 import moments
 import momi as momi2
@@ -32,8 +31,6 @@ GRADIENT_RTOL = 0.05
 NORMALIZE_ESFS = True
 dadi_pts = 200
 
-jax.config.update("jax_enable_x64", False)
-
 
 class Momi_vs_Moments:
     def __init__(self, demo, model1, sampled_demes, sample_sizes):
@@ -47,7 +44,7 @@ class Momi_vs_Moments:
     def momi_sfs(self):
         dG = self.momi_graph
         momi = Momi3(dG, num_samples=dict(zip(self.sampled_demes, self.sample_sizes)))
-        return momi.expected_sfs()
+        return momi.expected_sfs(use_vmap=False)
 
     @cached_property
     def moments_sfs(self):
@@ -475,6 +472,14 @@ def test_two_pop_two_pulses(run_type="pytest", **kwargs):
     print("two-pop w/ two pulses")
     mvm.compare("momi3", "momi2", run_type, **kwargs)
     mvm.compare("momi3", "moments", run_type, **kwargs)
+
+
+def test_two_pop_large_n_pulse0(run_type="pytest", **kwargs):
+    demo, model1 = TwoDemes.Constant().base()
+    sampled_demes = ["A", "B"]
+    sample_sizes = [50, 51]
+    mvm = Momi_vs_Moments(demo, model1, sampled_demes, sample_sizes)
+    mvm.compare("momi3", "momi2", run_type, **kwargs)
 
 
 def test_two_pop_large_n(run_type="pytest", **kwargs):

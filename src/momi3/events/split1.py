@@ -3,6 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import TypeVar
 
+import jax
 import numpy as np
 from jax import numpy as jnp
 
@@ -71,14 +72,16 @@ class Split1(Event):
         # downsample if necessary
         assert n <= nw1 + nw2
         if n < nw1 + nw2:
-            # replaces the old code, B_plus = jnp.linalg.pinv(B), with QR. this is faster if we call repeatedly,
-            # (and probably not slower since I think pinv does a QR anyways.)
             B = np.exp(
                 log_hypergeom(
                     M=nw1 + nw2, N=i[..., 0], n=n, k=jnp.arange(n + 1)[None, :]
                 )
             )  # [nw1+nw2+1, n + 1]
-            aux["Bplus"] = np.linalg.pinv(B, rcond=1e-5)
+            aux["B"] = B
+            aux["Bplus"] = np.linalg.pinv(B)
+            Q, R = np.linalg.qr(B, mode="reduced")
+            aux["Q"] = Q
+            aux["R"] = R
 
         return out_axes, nsp, aux
 
@@ -106,12 +109,19 @@ class Split1(Event):
             # B = QR so B+X = solve(R, Q.T B)
             # hypergeometrically upsample (forwards in time) to go from n to nw1 + nw2
             b = unique_str(out_inds)
-            B_inds = [a, b]
+            Bplus_inds = [a, b]
             H_inds = [b, self.donor, self.recipient]
+            # plp = oe_einsum(
+            #     aux["Bplus"], Bplus_inds, aux["H"], H_inds, st.pl, pl_inds, out_inds
+            # )
             plp = oe_einsum(
-                aux["Bplus"], B_inds, aux["H"], H_inds, st.pl, pl_inds, out_inds
+                aux["Q"].T, Bplus_inds, aux["H"], H_inds, st.pl, pl_inds, out_inds
+            )
+            plp = jnp.apply_along_axis(
+                lambda x: jax.scipy.linalg.solve_triangular(aux["R"], x), i, plp
             )
         else:
             H_inds = [a, self.donor, self.recipient]
             plp = oe_einsum(aux["H"], H_inds, st.pl, pl_inds, out_inds)
+
         return st._replace(pl=plp)
