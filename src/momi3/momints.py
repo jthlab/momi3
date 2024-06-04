@@ -46,7 +46,7 @@ def _migration(ns):
     d = (1 + np.arange(nj + 1)) * nk / (nj + 1)
     Phi0 = sps.diags(d) @ J
     # similarly, shift when we downsample; the probability of getting nk in the downsampled pop is 0
-    Phi1 = sps.vstack([_downsample(nk), np.zeros(nk + 1)])
+    Phi1 = sps.vstack([_downsample(nk), np.zeros([1, nk + 1])])
     # Phi1[ij,ik] now equals Phi[n + ej - ek](i + ej) for ij=0,...,nj and ik=0,...,nk
     # now we shift the k axis down by one to reach Phi[n + ej - ek](i + ej - ek)
     Phi2 = sps.vstack([np.zeros([1, nk + 1]), Phi1.tocsc()[:-1, :]])
@@ -136,11 +136,12 @@ def _jackknife(n):
     # from the downsampling formula, Phi[n+1,0] = Phi[n,0] - Phi[n+1,1]/(n+1)
     #                                Phi[n+1,n+1] = Phi[n,n] - Phi[n+1,n]/(n+1)
     # augment the jackknife matrix to also handle the cases i=0, i=n
+    o = np.ones([1, 1])
     return sps.bmat(
         [
-            [1.0, -J0[0] / (n + 1), None],
+            [o, -J0[0] / (n + 1), None],
             [None, J0, None],
-            [None, -J0[-1] / (n + 1), 1.0],
+            [None, -J0[-1] / (n + 1), o],
         ]
     )
 
