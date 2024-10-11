@@ -59,7 +59,9 @@ class Momi3:
     def constraints(self):
         return self.params.constraints
 
-    def E_tbl(self, params_d: dict[str, float], num_derived: dict[str, int]) -> float:
+    def E_tbl(
+        self, params_d: dict[str, float], num_derived: dict[str, int], aux=None
+    ) -> float:
         """Compute the expected total branch length of the genealogy for a given set of parameters.
 
         Args:
@@ -70,6 +72,7 @@ class Momi3:
             Expected total branch length subtending the given configuration.
         """
         # require that the derived allele counts are consistent with the sample sizes
+        aux = aux or self._T.auxd
         num_samples = self._num_samples
         assert set(num_samples) == set(num_derived)
         # create X mapping each population to a one-hot encoded array of derived allele counts
@@ -79,11 +82,11 @@ class Momi3:
             n = num_samples.get(pop, 0)
             d = num_derived.get(pop, 0)
             # checkify.check(d <= n, f"More derived alleles than samples in {pop}")
-            X[pop] = jnp.eye(n + 1)[d]
+            X[pop] = jax.nn.one_hot(jnp.array([d]), n + 1)[0]
         pd = self.params.update(params_d).to_path_dict()
-        return self._T.execute(pd, X, self._T.auxd).clip(1e-10)
+        return self._T.execute(pd, X, aux).clip(1e-10)
 
-    def E_tau(self, params_d: dict[str, float]) -> float:
+    def E_tau(self, params_d: dict[str, float], aux=None) -> float:
         """Compute the expected total branch length of the genealogy for a given set of parameters.
 
         Args:
@@ -92,6 +95,7 @@ class Momi3:
         Returns:
             Expected total branch length subtending the given configuration.
         """
+        aux = aux or self._T.auxd
         X_batch = {}
         for pop in self._T.leaves:
             ns = self._num_samples.get(pop, 0)
@@ -103,7 +107,7 @@ class Momi3:
                 ]
             )
         pd = self.params.update(params_d).to_path_dict()
-        ret = vmap(self._T.execute, in_axes=(None, 0, None))(pd, X_batch, self._T.auxd)
+        ret = vmap(self._T.execute, in_axes=(None, 0, None))(pd, X_batch, aux)
         return ret[0] - ret[1] - ret[2]
 
     def expected_sfs(self, params_d: dict[str, float] = {}, use_vmap: bool = True):
@@ -112,7 +116,7 @@ class Momi3:
 
         def f(ds):
             d = dict(zip(self._num_samples, ds))
-            return self.E_tbl(params_d, dict(d))
+            return self.E_tbl(params_d, dict(d), self._T.auxd)
 
         if use_vmap:
             etbls = vmap(f)(num_derived)
@@ -130,6 +134,7 @@ class Momi3:
         theta: float = None,
         folded: bool = True,
         use_vmap: bool = True,
+        aux=None,
     ) -> float:
         """Log likelihood of joint site frequency spectrum.
 
@@ -144,48 +149,84 @@ class Momi3:
         Returns:
             float: log-likelihood value
         """
-        tau = self.E_tau(params_d)
         f = self._loglik_vmap if use_vmap else self._loglik_scan
-        ll = f(params_d, jsfs, tau, folded)
-        if theta is not None:
-            s = (jsfs.counts * (~jsfs.nonseg_sites)).sum()
-            ll += jax.scipy.stats.poisson.logpmf(s, tau * theta)
+        ll, _ = f(params_d, jsfs, folded, aux=aux, theta=theta)
         return ll
 
     def _configs(self, ds: list[int], folded: bool):
-        configs = [dict(zip(self._num_samples, ds))]
+        ns = jnp.array(list(self._num_samples.values()))
         if folded:
-            configs.append(
-                dict(
-                    zip(
-                        self._num_samples.keys(),
-                        [n - d for n, d in zip(self._num_samples.values(), ds)],
-                    )
-                )
+            ds = ns - ds
+        return dict(zip(self._num_samples, ds))
+
+    def _branch_lengths(
+        self, params_d: dict[str, float], jsfs: JSFS, folded: bool, aux
+    ) -> float:
+        configs = [vmap(lambda ds: self._configs(ds, False))(jsfs.sites)]
+
+        if folded:
+            configs.append(vmap(lambda ds: self._configs(ds, True))(jsfs.sites))
+
+        configs = jax.tree.map(lambda *a: jnp.stack(a, axis=1).reshape(-1), *configs)
+
+        # encode as one-hot
+        X = jax.tree.map(
+            lambda ds, ns: jax.nn.one_hot(ds, ns + 1), configs, self._num_samples
+        )
+
+        # total branch length calcs
+        X_tau = {}
+        for pop, ns in self._num_samples.items():
+            ns = self._num_samples.get(pop, 0)
+            X_tau[pop] = jnp.array(
+                [
+                    jnp.ones(ns + 1, dtype="f"),
+                    jax.nn.one_hot(jnp.array([0]), ns + 1)[0],
+                    jax.nn.one_hot(jnp.array([ns]), ns + 1)[0],
+                ],
+                dtype=int,
             )
 
-        return configs
+        # merge together all configs
+        X_batch = jax.tree.map(lambda a, b: jnp.concatenate([a, b]), X, X_tau)
+
+        pd = self.params.update(params_d).to_path_dict()
+        etbls = vmap(self._T.execute, in_axes=(None, 0, None))(pd, X_batch, aux)
+
+        tau = jax.tree.map(lambda e: e[-3] - e[-2] - e[-1], etbls).clip(2e-10)
+        etbls = jax.tree.map(lambda e: e[:-3], etbls).clip(1e-10)
+
+        if folded:
+            etbls = jax.tree_map(lambda e: e.reshape(-1, 2).sum(axis=1), etbls)
+
+        return etbls, tau
 
     def _loglik_vmap(
-        self, params_d: dict[str, float], jsfs: JSFS, tau: float, folded: bool
+        self,
+        params_d: dict[str, float],
+        jsfs: JSFS,
+        folded: bool,
+        aux,
+        theta: float = None,
     ) -> float:
-        @vmap
-        def f(ds):
-            confs = self._configs(ds, folded)
-            return jnp.array([self.E_tbl(params_d, c) for c in confs]).mean()
-
-        etbls = f(jsfs.sites)
+        etbls, tau = self._branch_lengths(params_d, jsfs, folded, aux)
         p = jsfs.counts  # / jsfs.counts.sum()
-        ret = xlogy(p, etbls / tau).sum()
-        return ret
+        # jax.debug.print('etbls: {}', etbls)
+        # jax.debug.print('tau: {}', tau)
+        if theta is not None:
+            e = etbls * theta
+            ll = jnp.sum(-e + jsfs.counts * jnp.log(e))
+        else:
+            ll = xlogy(p, etbls / tau).sum()
+        return ll, tau
 
     def _loglik_scan(
-        self, params_d: dict[str, float], jsfs: JSFS, tau: float, folded: bool
+        self, params_d: dict[str, float], jsfs: JSFS, tau: float, folded: bool, aux
     ) -> float:
         def f(accum, tup):
             ds, pi = tup
             confs = self._configs(ds, folded)
-            etbl = jnp.array([self.E_tbl(params_d, c) for c in confs]).mean()
+            etbl = jnp.array([self.E_tbl(params_d, c, aux=aux) for c in confs]).mean()
             accum += xlogy(pi, etbl / tau)
             return accum, None
 

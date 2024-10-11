@@ -3,9 +3,10 @@
 
 import cvxpy as cp
 import jax
+import numpy as np
 
 
-def _make_projection_dpp(A, b, G, h):
+def _make_projection_dpp(A, b, G, h, tol):
     """Project point x onto a polyhedron defined by Ax = b, Gx <= h.
 
     Params:
@@ -27,21 +28,21 @@ def _make_projection_dpp(A, b, G, h):
     if A.shape[0] > 0:
         constraints.append(A @ y == b)
     if G.shape[0] > 0:
-        constraints.append(G @ y <= h)
+        constraints.append(G @ y <= h - tol)
     problem = cp.Problem(objective, constraints)
     assert problem.is_dpp()
     return problem
 
 
-def project_polyhedron(A, b, G, h, verbose: bool = False):
+def project_polyhedron(A, b, G, h, verbose: bool = False, tol: float = 1e-6):
     """Jittable function that projects onto given polyedron"""
-    prob = _make_projection_dpp(A, b, G, h)
+    prob = _make_projection_dpp(A, b, G, h, tol)
 
     def solve(x):
         try:
             xp = prob.parameters()[0]
             y = prob.variables()[0]
-            xp.value = x
+            xp.value = np.array(x)
             prob.solve(solver=cp.CLARABEL, verbose=verbose)
         except ValueError as e:
             raise ValueError(f"Projection failed when x={x}") from e

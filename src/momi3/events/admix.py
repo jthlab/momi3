@@ -81,7 +81,9 @@ class Pulse(Event):
                     M=nw1 + nw2, N=i[..., 0], n=n, k=jnp.arange(n + 1)[None, :]
                 )
             )  # [nw1+nw2+1, n + 1]
-            aux["Bplus"] = np.linalg.pinv(B, rcond=1e-5)
+            # B x = y, where x is the downsampled vector and y is the original vector.
+            # i.e. x solves the least squares problem min ||Bx - y||^2
+            aux["Bplus"] = np.linalg.pinv(B, rcond=1e-5)  # [n+1, nw1+nw2+1]
         return out_axes, new_ns, aux
 
     def _execute_impl(self, st: State, params: dict, aux: T) -> State:
@@ -209,6 +211,9 @@ class Admix(Event):
         #   number of draws from urn 1 is binomial(p) and the total number of black balls in the two urns
         #   are j and k respectively.
         C = convolve_sum(aux["H1"] * B, aux["H2"])
+        # import jax
+        # jax.debug.print("C: {}", C[0,-1])
+        # jax.debug.print("C2: {}", C2[0,-1])
         C = C[
             :, :, : nw + 1
         ]  # slice down to nw + 1 because we can't draw more than that.

@@ -1,6 +1,7 @@
+from functools import partial
+
 import jax
 import jax.numpy as jnp
-import quadax
 from jax import lax, vmap
 from scipy.special import betaln
 
@@ -88,7 +89,10 @@ def exp_integralEGPS(g, a, tau, j):
         r2 = 1 - gt / 2
         return a * j * t * jnp.where(gt_small, r2, r1)
 
-    y, info = quadax.quadgk(lambda x: jnp.exp(-R(x)), [0.0, tau])
+    # TODO: adapt the range of x based on g
+    x = jnp.linspace(0.0, tau, 1000)
+    y = jnp.trapezoid(jnp.exp(-R(x)), x)
+    # y, info = quadax.quadgk(lambda x: jnp.exp(-R(x)), [0.0, tau])
     # e2 = exp_integralEGPS_old(g, a, tau, j)
     # jax.debug.print("g:{} a:{} tau:{} j:{} y:{} e2:{} info:{}", g, a, tau, j, y, e2, info)
     return y
@@ -117,7 +121,7 @@ def log_hypergeom(k, M, n, N):
 
 
 def convolve_sum(A, B):
-    "C[j,k,l+m] += A[i,j,l,n] * B[i,k,m,n]"
+    "C[j,k,l+m] = sum_{i,n} A[i,j,l,n] * B[i,k,m,n]"
     k = B.shape[2]
 
     def f1(aj, bk):
@@ -135,6 +139,35 @@ def convolve_sum(A, B):
     f2 = vmap(f1, (None, 0))
     f3 = vmap(f2, (0, None))
     return f3(A, B)
+
+
+def convolve_sum_2(A: jnp.ndarray, B: jnp.ndarray) -> jnp.ndarray:
+    """
+    Convolves A and B along the third and second-to-last dimensions, respectively.
+
+    Args:
+    A: Input array of shape (J, L, N)
+    B: Input array of shape (K, M, N)
+
+    Returns:
+    Convolved array of shape (J, K, L + M - 1)
+    """
+    J, L, N = A.shape
+    K, M, N = B.shape
+    Ab = A.transpose((0, 2, 1))[:, None]  # J, 1, N, L
+    Bb = B.transpose((0, 2, 1))[None, :]  # 1, K, N, M
+    jnp.zeros(1)
+
+    @partial(jnp.vectorize, signature=("(n,l),(n,m)->(k)"))
+    def cv(a, b):
+        def g(an, bn):
+            return jnp.convolve(an, bn, mode="full")
+
+        return vmap(g, (0, 0))(a, b).sum(0)
+
+    C = cv(Ab, Bb)
+    # assert C.shape == (J, K, L + M - 1)
+    return C
 
 
 def softplus_inverse(tx):

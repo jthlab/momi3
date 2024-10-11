@@ -1,13 +1,16 @@
 import operator
 from functools import reduce, singledispatch
-from typing import NamedTuple, Union
+from typing import Union
 
+import jax_dataclasses as jdc
 import numpy as np
+from jax import jit
 from jax import numpy as jnp
 from jax.experimental.sparse import BCOO, empty, eye, sparsify
 
 
-class KronProd(NamedTuple):
+@jdc.pytree_dataclass
+class KronProd:
     """Class representing a matrix A defined by a sum of Kronecker products: A = ∑_n ⊗_i A_{ni}.
 
     Params:
@@ -20,7 +23,10 @@ class KronProd(NamedTuple):
     """
 
     A: list[dict[int, Union[jnp.ndarray, BCOO]]]
-    dims: tuple[int, ...]
+    dims: jdc.Static[tuple[int, ...]]
+
+    def _replace(self, *args, **kwargs):
+        return jdc.replace(self, *args, **kwargs)
 
     def _check_dims(self):
         for Ai in self.A:
@@ -31,6 +37,10 @@ class KronProd(NamedTuple):
     @classmethod
     def eye(cls, dims):
         return cls([], dims)
+
+    @property
+    def dtype(self):
+        return list(self.A[0].values())[0].dtype
 
     def trace(self) -> float:
         ret = 0.0
@@ -62,12 +72,14 @@ class KronProd(NamedTuple):
             mats = ident()
             for i in An:
                 mats[i] = An[i]
-            ret += reduce(_spkron, mats)
+            ret += reduce(kron, mats)
         return ret
 
-    def densify(self):
+    def todense(self):
         """Convert from sparse to dense representation of Ai"""
-        return self.__class__([{k: v.todense() for k, v in d.items()} for d in self.A])
+        return self.__class__(
+            [{k: v.todense() for k, v in d.items()} for d in self.A], self.dims
+        )
 
     def __matmul__(self, x):
         """Compute the matrix vector product Ax."""
@@ -135,9 +147,11 @@ class KronProd(NamedTuple):
         return self._replace(A=[{k: v.T for k, v in Ai.items()} for Ai in self.A])
 
 
+@jdc.pytree_dataclass
 class GroupedKronProd(KronProd):
     """Group operations between pairs of indices."""
 
+    @jit
     def __matmul__(self, other: jnp.ndarray) -> jnp.ndarray:
         ret = jnp.zeros_like(other)
         d = len(self.dims)
@@ -149,13 +163,17 @@ class GroupedKronProd(KronProd):
                 for Ai in self.A:
                     assert len(Ai) <= 2
                     if Ai.keys() == {i, j}:
-                        Qij += _spkron(Ai[i], Ai[j])
+                        Qij += kron(Ai[i], Ai[j])
                     elif Ai.keys() == {i}:
-                        Qij += _spkron(f * Ai[i], eye(self.dims[j]))
+                        Qij += kron(f * Ai[i], eye_like(Ai[i], self.dims[j]))
                     elif Ai.keys() == {j}:
-                        Qij += _spkron(eye(self.dims[i]), f * Ai[j])
-                Qij = Qij.sort_indices()
-                assert Qij.indices_sorted
+                        Qij += kron(eye_like(Ai[j], self.dims[i]), f * Ai[j])
+                try:
+                    Qij = Qij.sort_indices()
+                    assert Qij.indices_sorted
+                except AttributeError:
+                    assert isinstance(Qij, jnp.ndarray)
+
                 r1 = other.swapaxes(i, 0).swapaxes(j, 1)
                 ret += (
                     (Qij @ r1.reshape(n, -1))
@@ -170,6 +188,16 @@ class GroupedKronProd(KronProd):
 
 
 @singledispatch
+def eye_like(mat: jnp.ndarray, n: int) -> jnp.ndarray:
+    return jnp.eye(n)
+
+
+@eye_like.register
+def _(mat: BCOO, n: int) -> BCOO:
+    return eye(n)
+
+
+@singledispatch
 def tr(A: BCOO):
     # sparse matrix trace
     assert A.ndim == 2
@@ -181,7 +209,16 @@ tr.register(jnp.ndarray, jnp.trace)
 tr.register(np.ndarray, np.trace)
 
 
-def _spkron(A, B) -> BCOO:
+@singledispatch
+def kron(A: jnp.ndarray, B: jnp.ndarray) -> jnp.ndarray:
+    assert A.ndim == B.ndim == 2
+    assert isinstance(A, jnp.ndarray) and isinstance(B, jnp.ndarray)
+    return jnp.kron(A, B)
+
+
+@kron.register
+def _spkron(A: BCOO, B: BCOO) -> BCOO:
+    assert isinstance(A, BCOO) and isinstance(B, BCOO)
     # sparse kronecker product of BCOO matrices. (actually just COO)
     assert A.ndim == B.ndim == 2
     return (

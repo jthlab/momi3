@@ -17,8 +17,8 @@ class JSFS(NamedTuple):
         counts: The counts of the nonzero entries.
 
     Notes:
-        The JSFS is a sparse tensor, where the dimensions are the sample sizes
-        of the populations (plus one). The nonzero entries are the counts of the number of
+        The JSFS is a sparse tensor, where the dimensions are the sample sizes of the
+        populations (plus one). The nonzero entries are the counts of the number of
         sites with a given frequency of derived alleles.
     """
 
@@ -28,16 +28,24 @@ class JSFS(NamedTuple):
 
     def to_COO(self) -> sparse.COO:
         return sparse.COO(
-            self.sites.T, self.counts, shape=tuple(s + 1 for s in self.sample_sizes)
+            self.sites.T, self.counts, shape=tuple(n + 1 for n in self.ns)
         )
 
     @classmethod
-    def from_COO(cls, coo: sparse.COO) -> "JSFS":
+    def from_COO(cls, coo: sparse.COO, pops: list[str]) -> "JSFS":
         return cls(
-            sample_sizes=tuple(s - 1 for s in coo.shape),
+            sample_sizes=dict(zip(pops, [s - 1 for s in coo.shape])),
             sites=coo.coords.T,
             counts=coo.data,
         )
+
+    @property
+    def pops(self):
+        return list(self.sample_sizes.keys())
+
+    @property
+    def ns(self):
+        return list(self.sample_sizes.values())
 
     @property
     def s(self) -> int:
@@ -46,6 +54,17 @@ class JSFS(NamedTuple):
     @property
     def d(self) -> int:
         return len(self.sample_sizes)
+
+    @property
+    def num_seg_sites(self):
+        return (self.counts * (~self.nonseg_sites)).sum()
+
+    def slice(self, i: int) -> list["JSFS"]:
+        "Slice jsfs into i sub-jsfs of approximately equal size."
+        return [
+            self._replace(sites=self.sites[j], counts=self.counts[j])
+            for j in np.array_split(np.arange(self.s), i)
+        ]
 
     def random_sample(
         self,
@@ -88,27 +107,32 @@ class JSFS(NamedTuple):
     @property
     def nonseg_sites(self) -> "JSFS":
         """Return a boolean mask indicating whether each site is segregating."""
-        s1 = jnp.all(self.sites == jnp.zeros(self.d, dtype=int), axis=1)
-        s2 = jnp.all(self.sites == jnp.array(list(self.sample_sizes.values())), axis=1)
+        s1 = jnp.all(self.sites == 0, axis=1)
+        s2 = jnp.all(self.sites == jnp.array(self.ns), axis=1)
         return s1 | s2
 
     def project(self, pops: list[str]) -> "JSFS":
-        """Projects the jsfs onto the given populations.
+        """Projects the jsfs to a subset of populations.
 
         Params:
             jsfs: joint-sfs
-            pops: populations to project onto.
+            pops: populations to keep.
 
         Returns:
             A projected jsfs.
         """
-        mask = jnp.zeros(self.d, dtype=bool)
-        mask = jax.ops.index_update(mask, jnp.array(pops), True)
-        return self._replace(
-            sample_sizes=jnp.array(self.sample_sizes)[mask], sites=self.sites[:, mask]
+        ind = [self.pops.index(k) for k in pops]
+        sites = self.sites[:, ind]
+        H, br = np.histogramdd(
+            sites,
+            bins=[np.arange(self.sample_sizes[p] + 2) for p in pops],
+            weights=self.counts,
         )
+        ret = JSFS.from_COO(sparse.COO.from_numpy(H), pops)
+        ns = ret.nonseg_sites
+        return ret._replace(sites=ret.sites[~ns], counts=ret.counts[~ns])
 
-    def downsample(self, new_sample_sizes: list[int | None]) -> "JSFS":
+    def downsample(self, new_sample_sizes: dict[str, int]) -> "JSFS":
         """Downsamples the jsfs to the given sample size.
 
         Params:
@@ -122,8 +146,12 @@ class JSFS(NamedTuple):
             This reduces the sparsity of the jsfs.
         """
         ret = self.to_COO()
-        for ind, (n, m) in enumerate(zip(self.sample_sizes, new_sample_sizes)):
-            if m is None:
+        for ind, (k, n) in enumerate(self.sample_sizes.items()):
+            m = new_sample_sizes.get(k, n)
+            if m > n:
+                raise ValueError(f"Cannot upsample population {k}.")
+            if m == n:
+                # no change
                 continue
             j = np.arange(m + 1)[None, :]
             i = np.arange(n + 1)[:, None]
@@ -132,4 +160,7 @@ class JSFS(NamedTuple):
             ret = sparse.moveaxis(
                 sparse.tensordot(ret, H, axes=(ind, 0), return_type=sparse.COO), -1, ind
             )
-        return JSFS.from_COO(ret)
+        ret = JSFS.from_COO(ret, self.pops)
+        ns = ret.nonseg_sites
+        # remove non-segregating sites
+        return ret._replace(sites=ret.sites[~ns], counts=ret.counts[~ns])

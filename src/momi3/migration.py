@@ -6,13 +6,19 @@ import jax.numpy as jnp
 import scipy.sparse as sps
 from jax import jacfwd
 from jax.experimental.sparse import BCOO
+from loguru import logger
+from scipy.sparse.linalg._expm_multiply import _expm_multiply_simple
 
 from .common import Axes, Ne_t, Population
 from .kronprod import GroupedKronProd
 from .momints import _drift, _migration, _mutation
-from .spexpm import expmv
 
 jax.config.update("jax_bcoo_cusparse_lowering", True)
+
+
+def _dense_expmv(A, v, t):
+    result_shape = jax.ShapeDtypeStruct(v.shape, v.dtype)
+    return jax.pure_callback(_expm_multiply_simple, result_shape, A, v, t)
 
 
 def lift_cm_aux(
@@ -36,7 +42,7 @@ def lift_cm_aux(
             return ret
         return A
 
-    tm = jax.tree_util.tree_map(f, tm)
+    tm = jax.tree.map(f, tm)
     tm["axes"] = axes
     return tm
 
@@ -46,11 +52,13 @@ def _e0_like(pl):
 
 
 def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
-    # Ne = params["Ne"]
-    # const = all(not isinstance(Ne[pop], tuple) for pop in Ne)
-    if False:  # const:
+    Ne = params["Ne"]
+    all(not isinstance(Ne[pop], tuple) for pop in Ne)
+    if False:
+        logger.debug("using sparse matrix exponentiation for {}", aux)
         f = _lift_cm_const
     else:
+        logger.debug("using diffeq solver for {}", aux)
         f = _lift_cm_exp
     return f(params, t, pl, axes, aux)
 
@@ -90,21 +98,36 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     # bcoo_sparse, vjp, etc. etc. "manually" transposing before multiplying with any traced migration params seems
     # to be the key.
     Q_mig_T, _ = _Q_mig_mut(dims, axes, params["mig"], aux, tr=True)
+
+    if False:
+        # Convert all Q_* to dense
+        Q_drift = Q_drift.todense()
+        Q_mig = Q_mig.todense()
+        Q_mut = Q_mut.todense()
+        Q_mig_T = Q_mig_T.todense()
+
+    solver = dfx.Kvaerno3()
     term = dfx.ODETerm(_A)
-    solver = dfx.Tsit5()
-    ssc = dfx.PIDController(rtol=1e-6, atol=1e-7)
+    ssc = dfx.PIDController(rtol=1e-6, atol=1e-6)
 
     def solve(y0, args):
-        return dfx.diffeqsolve(
+        res = dfx.diffeqsolve(
             term,
             solver,
             t0=t[0],
             t1=t[1],
-            dt0=(t[1] - t[0]) / 50.0,
+            dt0=(t[1] - t[0]) / 10,
+            # dt0=1.,
             y0=y0,
             args=args,
             stepsize_controller=ssc,
-        ).ys
+            # max_steps=4096,
+            max_steps=16384,
+            adjoint=dfx.RecursiveCheckpointAdjoint(checkpoints=10),
+            # adjoint=dfx.BacksolveAdjoint(),
+        )
+        # jax.debug.print("number of steps: {}", res.stats["num_steps"])
+        return res.ys
 
     primal_args = (Q_mig_T, Q_mut.T, Q_drift.T, dims, axes, Ne, t, aux)
     plp = solve(pl, primal_args)[0]
@@ -150,7 +173,7 @@ def _lift_cm_const(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, 
     dt = t[1] - t[0]
     dims = pl.shape
     Ne = params["Ne"]
-    coal = {pop: 1.0 / Ne[pop] for pop in Ne}
+    coal = {pop: 1.0 / (4 * Ne[pop]) for pop in Ne}
     Q_drift = _Q_drift(
         dims,
         axes,
@@ -164,19 +187,42 @@ def _lift_cm_const(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, 
         aux,
     )
     Q_lift = (Q_mig + Q_drift) * dt
-    pl_lift = expmv(Q_lift.T, pl)
+    if False:
+
+        def expmv(A, x):
+            return (
+                jax.scipy.linalg.expm(A, max_squarings=128) @ x.reshape(-1)
+            ).reshape(x.shape)
+
+        A = Q_lift.T.materialize().todense()
+        pl_lift = expmv(A, pl)
+    else:
+        A = (Q_mig + Q_drift).T.materialize()
+        plf = pl.reshape(-1)
+        assert plf.shape == (A.shape[0],)
+        pl_lift = _dense_expmv(A, plf, dt).reshape(pl)
+
     assert pl_lift.shape == pl.shape
     # now compute the expected branch lengths
     e0 = _e0_like(pl)
 
     def f(theta):
-        # note: Q_mut * (...) has to be implemented as multiplication from the right order for it to work with traced
+        # note: Q_mut * (...) has to be performed as right multiplication for it to work with traced
         # jax code
         Q = Q_lift + Q_mut * theta * dt
-        v = expmv(Q, e0)
-        return v
+        A = Q.materialize().todense()
+        return expmv(A, e0)
 
-    etbl = jacfwd(f)(0.0).at[(0,) * pl.ndim].set(0.0)
+    etbl0 = jacfwd(f)(0.0)
+    # d/dt expm(Q1 + t Q2) v |{t=0} ~= (Q1 + Q1 Q2) v
+
+    # def f(Qsp, x):
+    #     return (Qsp.materialize().todense() @ x.reshape(-1)).reshape(x.shape)
+
+    # etbl0 = Q_lift @ e0 + Q_lift @ (Q_mut @ (dt * e0))
+    # etbl0 = f(Q_lift, e0) + f(Q_lift, f(Q_mut, dt * e0))
+
+    etbl = etbl0.at[(0,) * pl.ndim].set(0.0)
     return pl_lift, etbl
 
 

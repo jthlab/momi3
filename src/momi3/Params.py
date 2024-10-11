@@ -224,6 +224,13 @@ class Params(UserDict):
         assert key in self
         self[key].value = value
 
+    def from_desc(self, desc):
+        for k, v in self.items():
+            for d in v.paths.values():
+                if desc == d:
+                    return v
+        raise KeyError(f"Parameter with description {desc} not found")
+
     def update(self, d: dict[str, float]) -> "Params":
         """Update parameters with new default values.
 
@@ -249,58 +256,6 @@ class Params(UserDict):
     @property
     def _keys(self):
         return sorted(list(self.keys()))
-
-    @property
-    def _theta(self):
-        keys = self._keys
-        return [float(self[key]) for key in keys]
-
-    @property
-    def _train_bool(self):
-        keys = self._keys
-        return [self[key].train_it for key in keys]
-
-    @property
-    def _train_keys(self):
-        keys = self._keys
-        bools = self._train_bool
-        return [key for key, b in zip(keys, bools) if b]
-
-    # @property
-    # def _nuisance_keys(self):
-    #     keys = self._keys
-    #     bools = self._train_bool
-    #     return [key for key, b in zip(keys, bools) if not b]
-
-    @property
-    def _theta_train(self):
-        keys = self._keys
-        bools = self._train_bool
-        return [float(self[key]) for key, b in zip(keys, bools) if b]
-
-    @property
-    def _theta_nuisance(self):
-        keys = self._keys
-        bools = self._train_bool
-        return [self[key].num for key, b in zip(keys, bools) if not b]
-
-    @property
-    def _theta_train_dict(self):
-        keys = self._keys
-        bools = self._train_bool
-        paths_train = [key for key, b in zip(keys, bools) if b]
-        theta_train = self._theta_train
-        return dict(zip(paths_train, theta_train))
-
-    @property
-    def _theta_nuisance_dict(self):
-        keys = self._keys
-        bools = self._train_bool
-        paths_nuisance = [
-            tuple(self[key].paths) for key, b in zip(keys, bools) if not b
-        ]
-        theta_nuisance = self._theta_nuisance
-        return dict(zip(paths_nuisance, theta_nuisance))
 
     @property
     def _Paths(self):
@@ -336,167 +291,6 @@ class Params(UserDict):
             raise ValueError(f"Unknown {ptype=}")
 
         return float(ret)
-
-    @property
-    def _transformed_diff_tau_dict(
-        self,
-    ) -> tuple[dict[tuple, float], dict[tuple, float]]:
-        # returns infer and no inter keys
-        # This dict stores log(tau[i] - tau[i-1])
-
-        ptype = "tau"
-        ptt = self._params_to_transforms
-        keys = self._keys
-        tau_keys = [key for key in keys if isinstance(self[key], TimeParam)]
-        tau_keys = sorted(tau_keys, key=lambda key: self[key].num)
-        tau_vals = [self[key].num for key in tau_keys]
-
-        n_diff_tau = len(tau_keys) - 1
-
-        diff_tau_vals = [tau_vals[i + 1] - tau_vals[i] for i in range(n_diff_tau)]
-        trans_tau_vals = [self.transform_fns(val, ptype) for val in diff_tau_vals]
-        trans_tau_keys = [
-            ptt[tau_keys[i + 1], tau_keys[i]] for i in range(len(tau_keys) - 1)
-        ]
-
-        diff_tau_train_dict = {}
-        for key, val in zip(trans_tau_keys, trans_tau_vals):
-            tkeys = self._transforms_to_params[key]
-            train_it = self[tkeys[0]].train_it | self[tkeys[1]].train_it
-            if train_it:
-                diff_tau_train_dict[key] = val
-
-        self["tau_0"].train_it = False
-        return diff_tau_train_dict
-
-    @property
-    def _transformed_rho_dict(self):
-        ptype = "rho"
-        ptt = self._params_to_transforms
-        cur_keys = [key for key in self if isinstance(self[key], RateParam)]
-        _train_dict = {
-            ptt[key]: self.transform_fns(self[key].num, ptype)
-            for key in cur_keys
-            if self[key].train_it
-        }
-        return _train_dict
-
-    @property
-    def _transformed_pi_dict(self):
-        ptype = "pi"
-        ptt = self._params_to_transforms
-        cur_keys = [key for key in self if isinstance(self[key], ProportionParam)]
-        _train_dict = {
-            ptt[key]: self.transform_fns(self[key].num, ptype)
-            for key in cur_keys
-            if self[key].train_it
-        }
-        return _train_dict
-
-    @property
-    def _transformed_eta_dict(self):
-        ptype = "eta"
-        ptt = self._params_to_transforms
-        cur_keys = [key for key in self if isinstance(self[key], SizeParam)]
-        _train_dict = {
-            ptt[key]: self.transform_fns(self[key].num, ptype)
-            for key in cur_keys
-            if self[key].train_it
-        }
-        return _train_dict
-
-    @property
-    def _transformed_theta_train_dict(self):
-        e = self._transformed_eta_dict
-        r = self._transformed_rho_dict
-        p = self._transformed_pi_dict
-        dt = self._transformed_diff_tau_dict
-
-        return e | r | p | dt
-
-    @property
-    def _transformed_theta_nuisance_dict(self):
-        transformed_theta_nuisance_dict = []
-        for td, nd in [
-            self._transformed_eta_dict,
-            self._transformed_rho_dict,
-            self._transformed_pi_dict,
-            self._transformed_diff_tau_dict,
-        ]:
-            transformed_theta_nuisance_dict.append(nd)
-        return tuple(transformed_theta_nuisance_dict)
-
-    def _transformed_train(self, Grad=False):
-        if Grad:
-            trd = Grad
-        else:
-            trd = self._transformed_theta_train_dict
-        ret = {}
-        for i in range(3):
-            for g in trd[i]:
-                key = self._paths_to_transformed_params[g]
-                ret[key] = float(trd[i][g])
-
-        for g in trd[3]:
-            g1 = g
-            g2 = tuple(trd[3][g])[0]
-            key = self._paths_to_transformed_params[g1, g2]
-            ret[key] = float(trd[3][g][g2])
-        return ret
-
-    def _init_transformed_maps(self):
-        _transformed_params_to_paths = {}
-        _paths_to_transformed_params = {}
-
-        trd = self._transformed_rho_dict
-        trd = trd[0] | trd[1]
-        for path in trd:
-            key = self._path_to_params[path[0]]
-            new_key = f"logit({key})"
-            _transformed_params_to_paths[new_key] = self._params_to_paths[key]
-            _paths_to_transformed_params[path] = new_key
-
-        trd = self._transformed_pi_dict
-        trd = trd[0] | trd[1]
-        for path in trd:
-            key = self._path_to_params[path[0]]
-            new_key = f"logit({key})"
-            _transformed_params_to_paths[new_key] = self._params_to_paths[key]
-            _paths_to_transformed_params[path] = new_key
-
-        trd = self._transformed_eta_dict
-        trd = trd[0] | trd[1]
-        for path in trd:
-            key = self._path_to_params[path[0]]
-            new_key = f"log({key})"
-            _transformed_params_to_paths[new_key] = self._params_to_paths[key]
-            _paths_to_transformed_params[path] = new_key
-
-        trd = self._transformed_diff_tau_dict
-        trd = trd[0] | trd[1]
-        for paths in trd:
-            if paths == (("init",),):
-                pass
-            else:
-                path1 = paths
-                path2 = tuple(trd[path1])[0]
-
-                key1 = self._path_to_params[path1[0]]
-                key2 = self._path_to_params[path2[0]]
-
-                new_key = f"log({key2}-{key1})"
-                _transformed_params_to_paths[new_key] = (path1, path2)
-                _paths_to_transformed_params[path1, path2] = new_key
-        self._transformed_params_to_paths = _transformed_params_to_paths
-        self._paths_to_transformed_params = _paths_to_transformed_params
-
-    def for_scipy(self, htol=0.0, atol=1e-8, rtol=1e-5):
-        # See: https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.LinearConstraint.html
-        A, b, G, h = self.get_polyhedron_hyperparams()
-        h -= htol
-        eps = atol + jnp.abs(b) * rtol
-        LCs = [LinearConstraint(A, b - eps, b + eps), LinearConstraint(G, ub=h - htol)]
-        return LCs
 
     def _check_parameter(self, key):
         if key not in self:
@@ -544,11 +338,11 @@ class Params(UserDict):
                         position = 1 + ymin + r * (10**j) / (10**i)
                     else:
                         position = ymin + r * j / i
-                    if positions.issuperset({position}):
+                    if positions.issuperset({float(position)}):
                         pass
                     else:
                         cont = False
-                        positions.add(position)
+                        positions.add(float(position))
                         break
                 i += 1
             cur["y"] = position
@@ -584,6 +378,8 @@ class Params(UserDict):
         show_all = not hide_non_inferreds
         dG = self.demo_graph
         ret = demesdraw.tubes(dG, **kwargs)
+
+        path_to_param = {p: k for k in self for p in self[k].paths}
 
         # print format for vars
         if pformats is None:
@@ -626,12 +422,12 @@ class Params(UserDict):
                         y = np.where((y < 1) & log_time, 1 + y, y)
 
                         path = ("pulses", j, "proportions", 0)
-                        key = self._path_to_params[path]
+                        key = path_to_param[path]
                         text_params[key] = {
                             "type": "pi",
                             "x": x,
                             "y": y,
-                            "inferred": key in self._train_keys,
+                            "inferred": key in self.trainable,
                         }
                         text_params[key].update(default_kwargs)
 
@@ -646,7 +442,7 @@ class Params(UserDict):
         #     x = line._x
         #     y = line._y
         #     if len(y) == 2:
-        #         for j, t in enumerate(times):
+        #         for j, t in enumerate(times)
         #             if jnp.isclose(t, y[0]):
         #                 x = (x[0] + x[1]) / 2
         #                 y = y[0]
@@ -687,12 +483,12 @@ class Params(UserDict):
                     y = np.where((y < 1) & log_time, 1 + y, y)
 
                     path = ("demes", i, "epochs", j, "end_size")
-                    key = self._path_to_params[path]
+                    key = path_to_param[path]
                     text_params[key] = {
                         "type": "eta",
                         "x": x,
                         "y": y,
-                        "inferred": key in self._train_keys,
+                        "inferred": key in self.trainable,
                     }
                     text_params[key].update(default_kwargs)
 
@@ -711,12 +507,12 @@ class Params(UserDict):
                                 va = "bottom"
 
                             path = ("demes", i, "epochs", j, next(var_type))
-                            key = self._path_to_params[path]
+                            key = path_to_param[path]
                             text_params[key] = {
                                 "type": "eta",
                                 "x": x,
                                 "y": y,
-                                "inferred": key in self._train_keys,
+                                "inferred": key in self.trainable,
                             }
                             text_params[key].update(default_kwargs)
                             text_params[key] = deepcopy(text_params[key])
@@ -726,19 +522,19 @@ class Params(UserDict):
         # MIGRATIONS
         mig_params = {}
         for key in rho_keys:
-            mig_params[key] = {"inferred": self[key].train_it}
-            val = pformats["rho"](self[key].num)
+            mig_params[key] = {"inferred": self[key].train}
+            val = pformats["rho"](self[key].value)
             mig_path = list(list(self[key].paths)[0])
             start_time = mig_path[:-1] + ["start_time"]
             end_time = mig_path[:-1] + ["end_time"]
-            st_key = self._path_to_params[tuple(start_time)]
-            en_key = self._path_to_params[tuple(end_time)]
+            st_key = path_to_param[tuple(start_time)]
+            en_key = path_to_param[tuple(end_time)]
             mig_params[key] = {
                 "type": "rho",
                 "x": rxlim,
-                "ymin": self[en_key].num,
-                "ymax": self[st_key].num,
-                "inferred": key in self._train_keys,
+                "ymin": self[en_key].value,
+                "ymax": self[st_key].value,
+                "inferred": key in self.trainable,
             }
             mig_params[key].update(default_kwargs)
             mig_params[key] = deepcopy(mig_params[key])
@@ -748,7 +544,11 @@ class Params(UserDict):
 
         if tau_keys is None:
             tau_keys = sorted(
-                [key for key in self if (key[:3] == "tau") & (not isinf(self[key].num))]
+                [
+                    key
+                    for key in self
+                    if (key[:3] == "tau") & (not isinf(self[key].value))
+                ]
             )
         else:
             pass
@@ -756,7 +556,7 @@ class Params(UserDict):
         non_tau_keys = sorted([key for key in self if key[:3] != "tau"])
 
         for key in tau_keys:
-            text_params[key] = {"inferred": self[key].train_it}
+            text_params[key] = {"inferred": self[key].train}
 
         colors = [(1.0, 1.0, 1.0), (1.0, 0, 0)]
         cm = mcolors.LinearSegmentedColormap.from_list("Custom", colors)
@@ -792,7 +592,7 @@ class Params(UserDict):
         # PLOTTING FOR ETA, RHO AND PI
         for key in non_tau_keys:
             cur = text_params[key]
-            val = pformats[cur["type"]](self[key].num)
+            val = pformats[cur["type"]](self[key].value)
             kwargs = cur["kwargs"]
             prms_box_current = deepcopy(prms_box)
 
@@ -846,7 +646,7 @@ class Params(UserDict):
         #     plt.axvline(rxlim, linestyle="--", color="black")
 
         # PLOTTING FOR TIME PARAMS
-        values = [self[key].num for key in tau_keys]
+        values = [self[key].value for key in tau_keys]
         formatted = [pformats["tau"](x) for x in values]
 
         if show_letters & show_values:
@@ -1073,10 +873,10 @@ class LinearConstraints(NamedTuple):
         x = self.theta_to_x(theta)
         return jnp.allclose(A @ x, b) and jnp.all(G @ x <= h + eps)
 
-    def get_projector(self, verbose: bool = False):
+    def get_projector(self, verbose: bool = False, tol: float = 1e-6):
         "Returns a function which takes a value x, and projects it onto the feasible set"
         poly = self.polyhedron
-        f = project_polyhedron(*poly, verbose)
+        f = project_polyhedron(*poly, verbose=verbose, tol=tol)
 
         def g(params_d):
             x = self.theta_to_x(params_d)
@@ -1085,6 +885,19 @@ class LinearConstraints(NamedTuple):
 
         g.poly = poly
         return g
+
+    def to_scipy(self, htol=0.0, atol=1e-8, rtol=1e-5):
+        # See: https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.LinearConstraint.html
+        A, b, G, h = self.polyhedron
+        h -= htol
+        eps = atol + jnp.abs(b) * rtol
+        ret = []
+        # scipy does not like constraints with dimension 0
+        if A.size > 0:
+            ret.append(LinearConstraint(A, b - eps, b + eps))
+        if G.size > 0:
+            ret.append(LinearConstraint(G, ub=h - htol))
+        return ret
 
     @property
     def polyhedron(self):

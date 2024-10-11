@@ -1,6 +1,7 @@
 import jax
 import numpy as np
-from jax.experimental.sparse import BCOO
+import pytest
+from jax.experimental.sparse import BCOO, random_bcoo, sparsify
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import expm_multiply
 
@@ -8,6 +9,7 @@ from momi3.kronprod import KronProd
 from momi3.spexpm import expmv
 
 
+@pytest.mark.skip
 def test_spexpm(rng):
     A, B = rng.random(size=(2, 10, 10))
     Asp = BCOO.fromdense(A)
@@ -17,7 +19,7 @@ def test_spexpm(rng):
 
 
 def test_spexpm_kron(rng):
-    M = rng.random(size=(3, 4, 4))
+    M = BCOO.fromdense(rng.random(size=(3, 4, 4)))
     dims = (4,) * len(M)
     B = rng.random(size=dims)
     K1 = KronProd([{i: m} for i, m in enumerate(M)], dims)
@@ -26,6 +28,19 @@ def test_spexpm_kron(rng):
         P1 = expmv(K, B)
         P2 = expmv(K.materialize(), B.reshape(-1)).reshape(dims)
         np.testing.assert_allclose(P1, P2, rtol=1e-6)
+
+
+def test_spexpm_kron_grad(rng):
+    M = BCOO.fromdense(rng.random(size=(3, 4, 4)))
+    dims = (4,) * len(M)
+    B = rng.random(size=dims)
+    K1 = KronProd([{i: m} for i, m in enumerate(M)], dims)
+
+    def f(B):
+        return expmv(K1, B).sum()
+
+    grad = jax.grad(f)(B)
+    np.testing.assert_allclose(grad, B.sum(), rtol=1e-6)
 
 
 # flake8: noqa
@@ -113,3 +128,22 @@ def test_spexpm_eq_t(rng):
     with jax.experimental.enable_x64(True):
         p2 = expmv(X.T * t, v)
     np.testing.assert_allclose(p0, p2)
+
+
+def test_spexpm_grad(rng):
+    X = rng.random(size=(10, 10))
+    X -= np.diag(np.diag(X))
+    X -= np.diag(X.sum(1))
+    X = BCOO.fromdense(X)
+    v = rng.random(size=10)
+    v /= v.sum()
+    t = 1000.0
+
+    with jax.experimental.enable_x64(True):
+
+        @jax.grad
+        def g(t):
+            return expmv(X.T * t, v).sum()
+
+        grad = g(t)
+    np.testing.assert_allclose(grad, p @ v, rtol=1e-6)

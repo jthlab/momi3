@@ -232,7 +232,7 @@ def _lift1(pl, in_axis, Ne, tau, d, Q, M, QQ, RR, W, terminal):
     # now compute the lifted partial likelihood
     # we basically want to contract the partial likelihood along the lifted axis with the matrix
     # Q * exp(d * R) * Qinv. however for numerical & computational reasons, avoid matrix-matrix products or inversion
-    if False:
+    if True:
         ed = jnp.exp(R * d)
         pl_axes = list(range(pl.ndim))
         out_axes = list(pl_axes)

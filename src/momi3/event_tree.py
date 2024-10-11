@@ -207,15 +207,14 @@ class ETBuilder:
         Returns:
             Expected branch length subtending leaf configurations.
         """
-        assert set(X) == set(self._leaves)
+        # assert set(X) == set(self._leaves)
         # initialize leaf node partials
         for pop in self._leaves:
-            XX = X[pop].astype(
-                float
-            )  # int partial likelihoods causes all sorts of problems further down
+            # int partial likelihoods causes all sorts of problems further down
             ns = self.num_samples.get(pop, 0)
+            XX = X.get(pop, jax.nn.one_hot(jnp.array([0]), ns + 1)[0]).astype(float)
             assert XX.shape == (ns + 1,)
-            l0 = XX[0] == 1.0  # & (X[pop][1:] == 0.0).all()
+            l0 = (XX[0] == 1.0).astype(float)  # & (X[pop][1:] == 0.0).all()
             self.nodes[self._leaves[pop]]["state"] = State(pl=XX, phi=0.0, l0=l0)
         # traverse tree starting at leaves and working up
         for u in nx.topological_sort(self._T):
@@ -351,6 +350,8 @@ class ETBuilder:
         b = x.block | y.block  # new blocks, obtained by merging previous blocks
         if rm:
             b -= {rm}
+            if rm in st["epochs"]:
+                st["epochs"] = st["epochs"].delete(rm)
         nn = Node(i=next(self._i), block=b, t=t)
         self.add_node(nn, **st)
         for z in x, y:
