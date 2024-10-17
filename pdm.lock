@@ -2,10 +2,13 @@
 # It is not intended for manual editing.
 
 [metadata]
-groups = ["default", "testing", "gpu", "dev"]
+groups = ["default", "dev", "gpu", "testing"]
 strategy = ["cross_platform", "inherit_metadata"]
-lock_version = "4.4.1"
-content_hash = "sha256:b7fd9f053ddfa0eb08dd2de7b011c663892c6633cf68e4df89180d2cefbff808"
+lock_version = "4.5.0"
+content_hash = "sha256:a4ca521111aa7be3ab4e9c709593e23c13b1e0836a175c3ce4cb99f5e6b58151"
+
+[[metadata.targets]]
+requires_python = ">=3.10,<3.13"
 
 [[package]]
 name = "absl-py"
@@ -25,6 +28,7 @@ summary = "Annotate AST trees with source code positions"
 groups = ["dev"]
 dependencies = [
     "six>=1.12.0",
+    "typing; python_version < \"3.5\"",
 ]
 files = [
     {file = "asttokens-2.4.1-py2.py3-none-any.whl", hash = "sha256:051ed49c3dcae8913ea7cd08e46a606dba30b79993209636c4875bc1d637bc24"},
@@ -36,7 +40,10 @@ name = "attrs"
 version = "23.2.0"
 requires_python = ">=3.7"
 summary = "Classes Without Boilerplate"
-groups = ["default", "testing"]
+groups = ["default", "dev", "testing"]
+dependencies = [
+    "importlib-metadata; python_version < \"3.8\"",
+]
 files = [
     {file = "attrs-23.2.0-py3-none-any.whl", hash = "sha256:99b87a485a5820b23b879f04c2305b44b951b502fd64be915879d77a7e8fc6f1"},
     {file = "attrs-23.2.0.tar.gz", hash = "sha256:935dc3b529c262f6cf76e50877d35a4bd3c1de194fd41f47a2b7ae8f19971f30"},
@@ -297,7 +304,7 @@ name = "cython"
 version = "3.0.10"
 requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
 summary = "The Cython compiler for writing C extensions in the Python language."
-groups = ["testing"]
+groups = ["dev"]
 files = [
     {file = "Cython-3.0.10-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:e876272548d73583e90babda94c1299537006cad7a34e515a06c51b41f8657aa"},
     {file = "Cython-3.0.10-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:adc377aa33c3309191e617bf675fdbb51ca727acb9dc1aa23fc698d8121f7e23"},
@@ -359,7 +366,7 @@ name = "demes"
 version = "0.2.3"
 requires_python = ">=3.7"
 summary = "tools for describing demographic models"
-groups = ["default", "testing"]
+groups = ["default", "dev", "testing"]
 dependencies = [
     "attrs>=20.3.0",
     "ruamel-yaml>=0.15.78",
@@ -388,21 +395,22 @@ files = [
 
 [[package]]
 name = "diffrax"
-version = "0.5.0"
+version = "0.6.0"
 requires_python = "~=3.9"
 summary = "GPU+autodiff-capable ODE/SDE/CDE solvers written in JAX."
 groups = ["default"]
 dependencies = [
     "equinox>=0.11.2",
-    "jax>=0.4.18",
+    "jax>=0.4.28",
     "jaxtyping>=0.2.24",
-    "lineax>=0.0.4",
-    "optimistix>=0.0.6",
+    "lineax>=0.0.5",
+    "optimistix>=0.0.7",
+    "typeguard==2.13.3",
     "typing-extensions>=4.5.0",
 ]
 files = [
-    {file = "diffrax-0.5.0-py3-none-any.whl", hash = "sha256:58b526490fae982fdc9ca2a1138d5dc20300060618fe0060b017d95ce9c84036"},
-    {file = "diffrax-0.5.0.tar.gz", hash = "sha256:2e66701b545798818af34a9132887b354c93b5b47e133c9986e23a7cf600a937"},
+    {file = "diffrax-0.6.0-py3-none-any.whl", hash = "sha256:7a59a796fd91e9c1cb20c37696c9f758681a3f24e72ff354a5a6aa335d3cde3a"},
+    {file = "diffrax-0.6.0.tar.gz", hash = "sha256:937207070bd7fdfe99178e23ec1787a630df7e3969b381e072ca6a14f5e2f3d3"},
 ]
 
 [[package]]
@@ -429,18 +437,18 @@ files = [
 
 [[package]]
 name = "equinox"
-version = "0.11.4"
+version = "0.11.7"
 requires_python = "~=3.9"
 summary = "Elegant easy-to-use neural networks in JAX."
 groups = ["default"]
 dependencies = [
-    "jax>=0.4.13",
+    "jax!=0.4.27,>=0.4.13",
     "jaxtyping>=0.2.20",
     "typing-extensions>=4.5.0",
 ]
 files = [
-    {file = "equinox-0.11.4-py3-none-any.whl", hash = "sha256:a9527b1fe0c4778c3c959d9091b1eea28c3fdcca01790a47e71b47df94889315"},
-    {file = "equinox-0.11.4.tar.gz", hash = "sha256:0033d9731083f402a855b12a0777a80aa8507651f7aa86d9f0f9503bcddfd320"},
+    {file = "equinox-0.11.7-py3-none-any.whl", hash = "sha256:1177354e1795061fbad71535fe54096d8887dc059b4ab7d400fea2d47dfaa283"},
+    {file = "equinox-0.11.7.tar.gz", hash = "sha256:96e0216a9d822ec4b1465b0cbfbab14a36fb7e7d62c55f521287db3aaaa251be"},
 ]
 
 [[package]]
@@ -590,22 +598,79 @@ files = [
 
 [[package]]
 name = "jax"
-version = "0.4.26"
-requires_python = ">=3.9"
+version = "0.4.33"
+requires_python = ">=3.10"
 summary = "Differentiate, compile, and transform Numpy code."
 groups = ["default", "gpu"]
 dependencies = [
+    "jaxlib<=0.4.33,>=0.4.33",
     "ml-dtypes>=0.2.0",
-    "numpy>=1.22",
-    "numpy>=1.23.2; python_version >= \"3.11\"",
+    "numpy>=1.24",
     "numpy>=1.26.0; python_version >= \"3.12\"",
     "opt-einsum",
+    "scipy>=1.10",
     "scipy>=1.11.1; python_version >= \"3.12\"",
-    "scipy>=1.9",
 ]
 files = [
-    {file = "jax-0.4.26-py3-none-any.whl", hash = "sha256:50dc795148ee6b0735b48b477e5abc556aa3a4c7af5d6940dad08024a908b02f"},
-    {file = "jax-0.4.26.tar.gz", hash = "sha256:2cce025d0a279ec630d550524749bc8efe25d2ff47240d2a7d4cfbc5090c5383"},
+    {file = "jax-0.4.33-py3-none-any.whl", hash = "sha256:5f33e30b49060ebc990b1f8d75f89d15b9fec263f6fff34ef1af1d01996d314f"},
+    {file = "jax-0.4.33.tar.gz", hash = "sha256:f0d788692fc0179653066c9e1c64e57311b8c15a389837fd7baf328abefcbb92"},
+]
+
+[[package]]
+name = "jax-cuda12-pjrt"
+version = "0.4.33"
+summary = "JAX XLA PJRT Plugin for NVIDIA GPUs"
+groups = ["gpu"]
+files = [
+    {file = "jax_cuda12_pjrt-0.4.33-py3-none-manylinux2014_aarch64.whl", hash = "sha256:6a9945a8b58fabd040a06850f5ca6bcf94b9ec45b8248afb20c7f2eb809e2cea"},
+    {file = "jax_cuda12_pjrt-0.4.33-py3-none-manylinux2014_x86_64.whl", hash = "sha256:b43f199ec27fd9b3bb79b34ed297894ad50bb7a6eab62012baaa9ea6607b22de"},
+]
+
+[[package]]
+name = "jax-cuda12-plugin"
+version = "0.4.33"
+requires_python = ">=3.10"
+summary = "JAX Plugin for NVIDIA GPUs"
+groups = ["gpu"]
+dependencies = [
+    "jax-cuda12-pjrt==0.4.33",
+]
+files = [
+    {file = "jax_cuda12_plugin-0.4.33-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:80736e03df2a5a0c35e4801f59e4d3c8b94cc8e8a03221763c95dcf7851fd120"},
+    {file = "jax_cuda12_plugin-0.4.33-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:a88cf22061416a97731ef837d56695e73d5ebd26aefc612328eeea510d3ed7e5"},
+    {file = "jax_cuda12_plugin-0.4.33-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:bb81b2f65b1bb8e65b966b6f79985d3b168d495628b694fdf1791cd89696694e"},
+    {file = "jax_cuda12_plugin-0.4.33-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:ad8f8863ee8d5e11a867bd71b37e979939cad64d0f74efd52cdb37292517613e"},
+    {file = "jax_cuda12_plugin-0.4.33-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:750b8147076b17ddff097bd6b38f1db227eba6674eb4e5843dbb007e0b6bec33"},
+    {file = "jax_cuda12_plugin-0.4.33-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:73c54317223aa8a5b46f6821d7cacfb38f4dbd2fc66f2a83a33419b4d72a5211"},
+]
+
+[[package]]
+name = "jax-cuda12-plugin"
+version = "0.4.33"
+extras = ["with_cuda"]
+requires_python = ">=3.10"
+summary = "JAX Plugin for NVIDIA GPUs"
+groups = ["gpu"]
+dependencies = [
+    "jax-cuda12-plugin==0.4.33",
+    "nvidia-cublas-cu12>=12.1.3.1",
+    "nvidia-cuda-cupti-cu12>=12.1.105",
+    "nvidia-cuda-nvcc-cu12>=12.1.105",
+    "nvidia-cuda-runtime-cu12>=12.1.105",
+    "nvidia-cudnn-cu12<10.0,>=9.1",
+    "nvidia-cufft-cu12>=11.0.2.54",
+    "nvidia-cusolver-cu12>=11.4.5.107",
+    "nvidia-cusparse-cu12>=12.1.0.106",
+    "nvidia-nccl-cu12>=2.18.1",
+    "nvidia-nvjitlink-cu12>=12.1.105",
+]
+files = [
+    {file = "jax_cuda12_plugin-0.4.33-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:80736e03df2a5a0c35e4801f59e4d3c8b94cc8e8a03221763c95dcf7851fd120"},
+    {file = "jax_cuda12_plugin-0.4.33-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:a88cf22061416a97731ef837d56695e73d5ebd26aefc612328eeea510d3ed7e5"},
+    {file = "jax_cuda12_plugin-0.4.33-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:bb81b2f65b1bb8e65b966b6f79985d3b168d495628b694fdf1791cd89696694e"},
+    {file = "jax_cuda12_plugin-0.4.33-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:ad8f8863ee8d5e11a867bd71b37e979939cad64d0f74efd52cdb37292517613e"},
+    {file = "jax_cuda12_plugin-0.4.33-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:750b8147076b17ddff097bd6b38f1db227eba6674eb4e5843dbb007e0b6bec33"},
+    {file = "jax_cuda12_plugin-0.4.33-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:73c54317223aa8a5b46f6821d7cacfb38f4dbd2fc66f2a83a33419b4d72a5211"},
 ]
 
 [[package]]
@@ -626,49 +691,49 @@ files = [
 
 [[package]]
 name = "jax"
-version = "0.4.26"
+version = "0.4.33"
 extras = ["cuda12_pip"]
-requires_python = ">=3.9"
+requires_python = ">=3.10"
 summary = "Differentiate, compile, and transform Numpy code."
 groups = ["gpu"]
 dependencies = [
-    "jax==0.4.26",
-    "jaxlib==0.4.26+cuda12.cudnn89",
-    "nvidia-cublas-cu12>=12.1.3.1",
-    "nvidia-cuda-cupti-cu12>=12.1.105",
-    "nvidia-cuda-nvcc-cu12>=12.1.105",
-    "nvidia-cuda-runtime-cu12>=12.1.105",
-    "nvidia-cudnn-cu12<9.0,>=8.9.2.26",
-    "nvidia-cufft-cu12>=11.0.2.54",
-    "nvidia-cusolver-cu12>=11.4.5.107",
-    "nvidia-cusparse-cu12>=12.1.0.106",
-    "nvidia-nccl-cu12>=2.18.1",
-    "nvidia-nvjitlink-cu12>=12.1.105",
+    "jax-cuda12-plugin[with_cuda]<=0.4.33,>=0.4.33",
+    "jax==0.4.33",
+    "jaxlib==0.4.33",
 ]
 files = [
-    {file = "jax-0.4.26-py3-none-any.whl", hash = "sha256:50dc795148ee6b0735b48b477e5abc556aa3a4c7af5d6940dad08024a908b02f"},
-    {file = "jax-0.4.26.tar.gz", hash = "sha256:2cce025d0a279ec630d550524749bc8efe25d2ff47240d2a7d4cfbc5090c5383"},
+    {file = "jax-0.4.33-py3-none-any.whl", hash = "sha256:5f33e30b49060ebc990b1f8d75f89d15b9fec263f6fff34ef1af1d01996d314f"},
+    {file = "jax-0.4.33.tar.gz", hash = "sha256:f0d788692fc0179653066c9e1c64e57311b8c15a389837fd7baf328abefcbb92"},
 ]
 
 [[package]]
 name = "jaxlib"
-version = "0.4.26"
-requires_python = ">=3.9"
+version = "0.4.33"
+requires_python = ">=3.10"
 summary = "XLA library for JAX"
 groups = ["default", "gpu"]
 dependencies = [
     "ml-dtypes>=0.2.0",
-    "numpy>=1.22",
+    "numpy>=1.24",
+    "scipy>=1.10",
     "scipy>=1.11.1; python_version >= \"3.12\"",
-    "scipy>=1.9",
 ]
 files = [
-    {file = "jaxlib-0.4.26+cuda12.cudnn89-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:57f2c607a63e006cd8d2f6a9ce954f03193a8bc1b6aa55c22da9a52ffaf08e0a"},
-    {file = "jaxlib-0.4.26+cuda12.cudnn89-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:813cf1fe3e7ca4dbf5327d6e7b4fc8521e92d8bba073ee645ae0d5d036a25750"},
-    {file = "jaxlib-0.4.26+cuda12.cudnn89-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:d7deed45116e708a4d741b895a302810685e51e97fcbd7eb6980c3e2fbae7a45"},
-    {file = "jaxlib-0.4.26+cuda12.cudnn89-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:f1aaa8a1020411c74187509fca25230a81c2603a2fe708d2d38cb791ad51d60f"},
-    {file = "jaxlib-0.4.26+cuda12.cudnn89-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:fd36985d2352447eff7cc4c5a8b9bf15ad8a4dd1090d5651a5705adbf0a53b51"},
-    {file = "jaxlib-0.4.26+cuda12.cudnn89-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:f4ad7bda341596c6acd6212019feaa8c96ebd0a145c57d9c2c205c2605477332"},
+    {file = "jaxlib-0.4.33-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:c12294ff10e5dcea9a4601833399a8b04aa7d0c8ab6e2c1afde930d36d5d0b20"},
+    {file = "jaxlib-0.4.33-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:0676ac605880ac6aa0ab9946a24a073ee8a1a83baf71cc1d35b71917a99d03d1"},
+    {file = "jaxlib-0.4.33-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:5ba7eaa9722037755833cb70d9a98a049abea13e51dac3719b833dbf42ddf69a"},
+    {file = "jaxlib-0.4.33-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:eaf21b55fd8f046fcd82c8ea956b636b4b11f892341f3fcd3dc29c4ce5ac4857"},
+    {file = "jaxlib-0.4.33-cp310-cp310-win_amd64.whl", hash = "sha256:98e682e0d944ca8af8c05724dc4a14b7aaa87cd67ddb32737861eee7ccdaabb4"},
+    {file = "jaxlib-0.4.33-cp311-cp311-macosx_10_14_x86_64.whl", hash = "sha256:6ee2f8692a5ea32acc63bbcc7390312f553614c22348c7366f08995e8764d839"},
+    {file = "jaxlib-0.4.33-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:82c29635ddc51ba91671ab2be042f4701339df176e792eb6adf50ccabd723606"},
+    {file = "jaxlib-0.4.33-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:9e6e933033cdfaebd018cdb5bfaf735bc164020316fe3ecff6c4b0dcf63f0f95"},
+    {file = "jaxlib-0.4.33-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:400f401498675fd42dcaf0b855f325691951b250d619a8cbc5955f947e2494aa"},
+    {file = "jaxlib-0.4.33-cp311-cp311-win_amd64.whl", hash = "sha256:95fedfb5f10f8bdfa57d81dd09933e78ba297719b40192357685b3aaa4287fef"},
+    {file = "jaxlib-0.4.33-cp312-cp312-macosx_10_14_x86_64.whl", hash = "sha256:43c63e094948f0486505035b55a685b03ddde61705ce585f84b8c1438da20da0"},
+    {file = "jaxlib-0.4.33-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:3e14b4b50a19370312875541509a7ddc1ef8fc0bd95cff9508db9725038e8297"},
+    {file = "jaxlib-0.4.33-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:4af6ee4070650ff120a92ff8454e70e0ef993434f3f3767a0e898cc484b836e2"},
+    {file = "jaxlib-0.4.33-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:054aa0f122725e000b8f8815b1794067ef2ff821588b62e1fab2a1280847f5c6"},
+    {file = "jaxlib-0.4.33-cp312-cp312-win_amd64.whl", hash = "sha256:94e8d7bdd0506e1471d36d5da1e5838711fbd2ce18dffe7b694cad6b56e64e8c"},
 ]
 
 [[package]]
@@ -735,7 +800,9 @@ summary = "An implementation of JSON Schema validation for Python"
 groups = ["default", "testing"]
 dependencies = [
     "attrs>=22.2.0",
+    "importlib-resources>=1.4.0; python_version < \"3.9\"",
     "jsonschema-specifications>=2023.03.6",
+    "pkgutil-resolve-name>=1.3.10; python_version < \"3.9\"",
     "referencing>=0.28.4",
     "rpds-py>=0.7.1",
 ]
@@ -751,6 +818,7 @@ requires_python = ">=3.8"
 summary = "The JSON Schema meta-schemas and vocabularies, exposed as a Registry"
 groups = ["default", "testing"]
 dependencies = [
+    "importlib-resources>=1.4.0; python_version < \"3.9\"",
     "referencing>=0.31.0",
 ]
 files = [
@@ -764,6 +832,9 @@ version = "1.4.5"
 requires_python = ">=3.7"
 summary = "A fast implementation of the Cassowary constraint solver"
 groups = ["default", "testing"]
+dependencies = [
+    "typing-extensions; python_version < \"3.8\"",
+]
 files = [
     {file = "kiwisolver-1.4.5-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:05703cf211d585109fcd72207a31bb170a0f22144d68298dc5e61b3c946518af"},
     {file = "kiwisolver-1.4.5-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:146d14bebb7f1dc4d5fbf74f8a6cb15ac42baadee8912eb84ac0b3b2a3dc6ac3"},
@@ -830,19 +901,19 @@ files = [
 
 [[package]]
 name = "lineax"
-version = "0.0.5"
+version = "0.0.6"
 requires_python = "~=3.9"
 summary = "Linear solvers in JAX and Equinox."
 groups = ["default"]
 dependencies = [
-    "equinox>=0.11.3",
+    "equinox>=0.11.5",
     "jax>=0.4.26",
     "jaxtyping>=0.2.20",
     "typing-extensions>=4.5.0",
 ]
 files = [
-    {file = "lineax-0.0.5-py3-none-any.whl", hash = "sha256:601bcd121b32707642a6bae65188d5925ff6f2c3c46a99954592a6e8be82ac63"},
-    {file = "lineax-0.0.5.tar.gz", hash = "sha256:ed41098dbd94b639287f15682e19cd9ec1dc9ecad6844ee861536044a0e3285c"},
+    {file = "lineax-0.0.6-py3-none-any.whl", hash = "sha256:3538f1085287f312f9f3759dc0c2dd36c1b22e86260ee8976240948b943aa685"},
+    {file = "lineax-0.0.6.tar.gz", hash = "sha256:c3d4863ddb0595b69c19326b97c4cc2498d75a495ce8d34517ae2d7c2da459e6"},
 ]
 
 [[package]]
@@ -877,6 +948,7 @@ requires_python = ">=3.5"
 summary = "Python logging made (stupidly) simple"
 groups = ["default"]
 dependencies = [
+    "aiocontextvars>=0.2.0; python_version < \"3.7\"",
     "colorama>=0.3.4; sys_platform == \"win32\"",
     "win32-setctime>=1.0.0; sys_platform == \"win32\"",
 ]
@@ -895,6 +967,7 @@ dependencies = [
     "contourpy>=1.0.1",
     "cycler>=0.10",
     "fonttools>=4.22.0",
+    "importlib-resources>=3.2.0; python_version < \"3.10\"",
     "kiwisolver>=1.3.1",
     "numpy>=1.21",
     "packaging>=20.0",
@@ -970,19 +1043,27 @@ files = [
 ]
 
 [[package]]
-name = "moments"
-version = "1.1.14"
-requires_python = ">=3.6"
-git = "https://bitbucket.org/simongravel/moments/src/main/"
-ref = "moments-1.1.14"
-revision = "203b0f406ba2f41e8dbd5cdd787aed123013ed7b"
-summary = ""
-groups = ["testing"]
+name = "moments-popgen"
+version = "1.2.2"
+requires_python = "<3.13,>=3.8"
+summary = "Population genetic statistics for evolutionary inference"
+groups = ["dev"]
 dependencies = [
     "cython>=0.25",
+    "demes>=0.2",
     "mpmath>=1.0",
-    "numpy>=1.12.1",
+    "numpy<2.0,>=1.12.1",
     "scipy>=1.3",
+]
+files = [
+    {file = "moments_popgen-1.2.2-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:32d368ae2426cbae99a63f0f606ca2ce66adf5d3e97eacfc08c3f1df4be373b7"},
+    {file = "moments_popgen-1.2.2-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:5910a0437598e020daadafcd327da169a54d394bcfeb78ecd9c2cf976c2fd4e0"},
+    {file = "moments_popgen-1.2.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:1dbefe7243851f8e90cae06b293c3cbcc3cef69dfa6ba96d3fc8097afe3a074c"},
+    {file = "moments_popgen-1.2.2-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:90be5eda793c7ef4bb8e61a37aacfdd5853a7d1294c4b913060441d1e9ba76d6"},
+    {file = "moments_popgen-1.2.2-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:8658bdcb73a2efd80f74aade4d76c9969b84d11c20d027f1cc1cfe3d16b6c100"},
+    {file = "moments_popgen-1.2.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:5226362a4b67dd0d98c8b7a0f473f9143c2f1aed4bdf127229f6d322fb6e9762"},
+    {file = "moments_popgen-1.2.2-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e06b6dcf5fd4bce84f97923e55f457075ec7d2cb9dda41d5a4ea90c798e03ec6"},
+    {file = "moments_popgen-1.2.2.tar.gz", hash = "sha256:8e9215bcac831a31b9f5373f5a567d0cb9daf8daec13ae250febe5d376d58b3c"},
 ]
 
 [[package]]
@@ -1011,7 +1092,7 @@ files = [
 name = "mpmath"
 version = "1.3.0"
 summary = "Python library for arbitrary-precision floating-point arithmetic"
-groups = ["default", "testing"]
+groups = ["default", "dev"]
 files = [
     {file = "mpmath-1.3.0-py3-none-any.whl", hash = "sha256:a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"},
     {file = "mpmath-1.3.0.tar.gz", hash = "sha256:7a28eb2a9774d00c7bc92411c19a89209d5da7c4c9a9e227be8330a23a25b91f"},
@@ -1066,7 +1147,7 @@ requires_python = ">=3.6"
 summary = "Library for nonlinear optimization, wrapping many algorithms for global and local, constrained or unconstrained, optimization"
 groups = ["testing"]
 dependencies = [
-    "numpy>=1.14",
+    "numpy>=1.18.5",
 ]
 files = [
     {file = "nlopt-2.7.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:42b7883704e1285ff40d930699eb7fc7e1341229da33666b4163459cfdf89fb1"},
@@ -1114,7 +1195,7 @@ name = "numpy"
 version = "1.26.4"
 requires_python = ">=3.9"
 summary = "Fundamental package for array computing in Python"
-groups = ["default", "gpu", "testing"]
+groups = ["default", "dev", "gpu", "testing"]
 files = [
     {file = "numpy-1.26.4-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:9ff0f4f29c51e2803569d7a51c2304de5554655a60c5d776e35b4a41413830d0"},
     {file = "numpy-1.26.4-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:2e4ee3380d6de9c9ec04745830fd9e2eccb3e6cf790d39d7b98ffd19b0dd754a"},
@@ -1180,17 +1261,6 @@ files = [
 ]
 
 [[package]]
-name = "nvidia-cuda-nvrtc-cu12"
-version = "12.4.127"
-requires_python = ">=3"
-summary = "NVRTC native runtime libraries"
-groups = ["gpu"]
-files = [
-    {file = "nvidia_cuda_nvrtc_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl", hash = "sha256:a178759ebb095827bd30ef56598ec182b85547f1508941a3d560eb7ea1fbf338"},
-    {file = "nvidia_cuda_nvrtc_cu12-12.4.127-py3-none-win_amd64.whl", hash = "sha256:a961b2f1d5f17b14867c619ceb99ef6fcec12e46612711bcec78eb05068a60ec"},
-]
-
-[[package]]
 name = "nvidia-cuda-runtime-cu12"
 version = "12.4.127"
 requires_python = ">=3"
@@ -1203,17 +1273,17 @@ files = [
 
 [[package]]
 name = "nvidia-cudnn-cu12"
-version = "8.9.7.29"
+version = "9.5.0.50"
 requires_python = ">=3"
 summary = "cuDNN runtime libraries"
 groups = ["gpu"]
 dependencies = [
     "nvidia-cublas-cu12",
-    "nvidia-cuda-nvrtc-cu12",
 ]
 files = [
-    {file = "nvidia_cudnn_cu12-8.9.7.29-py3-none-manylinux1_x86_64.whl", hash = "sha256:adf4f59ed7a1341103822ed8df6e144f4d47ea8b10d9bf0ea0047ba738fd7b02"},
-    {file = "nvidia_cudnn_cu12-8.9.7.29-py3-none-win_amd64.whl", hash = "sha256:4447321a2bdc8bd965084c1824575eb04f47a03ab62bbeb6cce7e9f74c3657f3"},
+    {file = "nvidia_cudnn_cu12-9.5.0.50-py3-none-manylinux2014_aarch64.whl", hash = "sha256:d513b671c2ac19d679fdaaf5d3f723e0a85f412917e6b03a82f5f01bf61ef5a0"},
+    {file = "nvidia_cudnn_cu12-9.5.0.50-py3-none-manylinux2014_x86_64.whl", hash = "sha256:518d6cffad7d707871dfb9af667ddb619144f78d85b07f64c1e52449e6da6b9c"},
+    {file = "nvidia_cudnn_cu12-9.5.0.50-py3-none-win_amd64.whl", hash = "sha256:508c801f70baa8496e79b3338a55f7816488da815c0d55158a7adfc4e073a11e"},
 ]
 
 [[package]]
@@ -1312,20 +1382,20 @@ files = [
 
 [[package]]
 name = "optimistix"
-version = "0.0.6"
+version = "0.0.8"
 requires_python = "~=3.9"
 summary = "Nonlinear optimisation in JAX and Equinox."
 groups = ["default"]
 dependencies = [
-    "equinox>=0.11.1",
-    "jax>=0.4.18",
+    "equinox>=0.11.7",
+    "jax>=0.4.28",
     "jaxtyping>=0.2.23",
-    "lineax>=0.0.4",
+    "lineax>=0.0.6",
     "typing-extensions>=4.5.0",
 ]
 files = [
-    {file = "optimistix-0.0.6-py3-none-any.whl", hash = "sha256:a269a5f63a54abd9eb630d093bd87cd15539a5520e97d828bb6651b2b9d88085"},
-    {file = "optimistix-0.0.6.tar.gz", hash = "sha256:a9dab1052a9579769d7967f420018adf13aa9650d11198a018209dd0ac0b441a"},
+    {file = "optimistix-0.0.8-py3-none-any.whl", hash = "sha256:4efa3e01a1d7047a5b2a14f75e4fb4cbef9281507c667da00b4969153d56ce33"},
+    {file = "optimistix-0.0.8.tar.gz", hash = "sha256:dc544f91e37f8bc6d85e3a50005ded17ce8e7a093306e6caf8add2938ed88397"},
 ]
 
 [[package]]
@@ -1792,7 +1862,7 @@ name = "ruamel-yaml"
 version = "0.18.6"
 requires_python = ">=3.7"
 summary = "ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order"
-groups = ["default", "testing"]
+groups = ["default", "dev", "testing"]
 dependencies = [
     "ruamel-yaml-clib>=0.2.7; platform_python_implementation == \"CPython\" and python_version < \"3.13\"",
 ]
@@ -1806,7 +1876,7 @@ name = "ruamel-yaml-clib"
 version = "0.2.8"
 requires_python = ">=3.6"
 summary = "C version of reader, parser and emitter for ruamel.yaml derived from libyaml"
-groups = ["default", "testing"]
+groups = ["default", "dev", "testing"]
 marker = "platform_python_implementation == \"CPython\" and python_version < \"3.13\""
 files = [
     {file = "ruamel.yaml.clib-0.2.8-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:b42169467c42b692c19cf539c38d4602069d8c1505e97b86387fcf7afb766e1d"},
@@ -1841,7 +1911,7 @@ name = "scipy"
 version = "1.11.4"
 requires_python = ">=3.9"
 summary = "Fundamental algorithms for scientific computing in Python"
-groups = ["default", "gpu", "testing"]
+groups = ["default", "dev", "gpu", "testing"]
 dependencies = [
     "numpy<1.28.0,>=1.21.6",
 ]
@@ -2092,6 +2162,9 @@ name = "wcwidth"
 version = "0.2.13"
 summary = "Measures the displayed width of unicode strings in a terminal"
 groups = ["dev"]
+dependencies = [
+    "backports-functools-lru-cache>=1.2.1; python_version < \"3.2\"",
+]
 files = [
     {file = "wcwidth-0.2.13-py2.py3-none-any.whl", hash = "sha256:3da69048e4540d84af32131829ff948f1e022c1c6bdb8d6102117aac784f6859"},
     {file = "wcwidth-0.2.13.tar.gz", hash = "sha256:72ea0c06399eb286d978fdedb6923a9eb47e1c486ce63e9b4e64fc18303972b5"},

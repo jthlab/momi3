@@ -18,7 +18,7 @@ dependencies = [
     "diffrax>=0.5",
     "frozendict>=2.0.2",
     "gmpy2>=2.1.5",
-    "jax>=0.4.26",
+    "jax<0.4.34",
     "jaxlib>=0.4.4",
     "jaxopt>=0.8.3",
     "joblib>=1.4.0",
@@ -37,7 +37,7 @@ dependencies = [
     "quadax>=0.2.1",
     "jax-dataclasses>=1.6.0",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 readme = "README.rst"
 license = {text = "MIT"}
 classifiers = [
@@ -70,13 +70,13 @@ addopts = "--pdbcls=IPython.terminal.debugger:TerminalPdb"
 testing = [
     "pytest>=8.1.1",
     "pytest-cov>=5.0.0",
-    "moments @ git+https://bitbucket.org/simongravel/moments/src/main/@moments-1.1.14",
     "momi==2.1.20",
     "numpy>=1.26.4",
     "dadi>=2.3.3",
 ]
 dev = [
     "ipython>=8.23.0",
+    "moments-popgen>=1.2.2",
 ]
 
 [[tool.pdm.source]]
