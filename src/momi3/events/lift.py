@@ -110,19 +110,16 @@ class Lift(Event):
         # set up functions for computing migration rates and pop sizes at runtime
         return child_axes, nsp, aux
 
-    def _f_Ne(self, params: dict) -> dict[Population, tuple[float, float]]:
+    def _f_Ne(
+        self, params: dict, t0: float, t1: float
+    ) -> dict[Population, tuple[float, float]]:
         """get the population size at the start and end of the interval"""
         deme_d = {deme["name"]: i for i, deme in enumerate(params["demes"])}
         ret = {}
         for pop in self.epochs:
             i = deme_d[pop]
             j = self.epochs[pop]
-            N0, N1 = tuple(
-                [
-                    _get_size(params["demes"][i], j, traverse(params, path))
-                    for path in (self.t0.path, self.t1.path)
-                ]
-            )
+            N0, N1 = tuple([_get_size(params["demes"][i], j, t) for t in (t0, t1)])
             if params["demes"][i]["epochs"][j]["size_function"] == "constant":
                 ret[pop] = N0
             else:
@@ -156,10 +153,15 @@ class Lift(Event):
         """
         plp = st.pl
         phip = 0.0
-        size_d = self._f_Ne(params)
         t1_val = traverse(params, self.t1.path)
         t0_val = traverse(params, self.t0.path)
-        tau = t1_val - t0_val
+        # if truncating, we have to recompute tau, and also recompute N1=N1(t1) to be N1(tau)
+        trunc = params.get("trunc", t1_val)
+        new_t1_val = jnp.minimum(t1_val, trunc)
+        new_t0_val = jnp.minimum(t0_val, new_t1_val)
+        t0 = new_t0_val
+        t1 = new_t1_val
+        size_d = self._f_Ne(params, t0, t1)
         axes = aux["axes"]
         for mat_type in ("single", "multi"):
             for s in aux["mats"][mat_type]:
@@ -175,7 +177,7 @@ class Lift(Event):
                         plp,
                         i,
                         Ne,
-                        tau,
+                        t1 - t0,
                         mats["d"],
                         mats["Q"],
                         mats["M"],
@@ -189,9 +191,7 @@ class Lift(Event):
                     mats = aux["mats"]["multi"][s]
                     involved_pops = {x for ab in s for x in ab}
                     Ne = {pop: size_d[pop] for pop in involved_pops}
-                    plp, etbl = _liftmulti(
-                        plp, axes, Ne, (t0_val, t1_val), M, mats["cmm"]
-                    )
+                    plp, etbl = _liftmulti(plp, axes, Ne, (t0, t1), M, mats["cmm"])
                 inds = [0] * st.pl.ndim
                 for pop in involved_pops:
                     inds[list(axes).index(pop)] = slice(None)
@@ -226,7 +226,9 @@ def _lift1(pl, in_axis, Ne, tau, d, Q, M, QQ, RR, W, terminal):
         # expected time to coal with pop size N0
         cm = (2 * Ne) / (j * (j - 1) / 2)
         fn = W @ cm
-        etbl = jnp.r_[0, fn, 0]
+        etbl_inf = jnp.r_[0, fn, 0]
+        etbl_noninf, _ = _etbl_R(nv, Ne, tau, W)
+        etbl = jnp.where(jnp.isinf(tau), etbl_inf, etbl_noninf)
         return None, etbl
     etbl, R = _etbl_R(nv, Ne, tau, W)
     # now compute the lifted partial likelihood

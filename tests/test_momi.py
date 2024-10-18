@@ -1,22 +1,17 @@
 import demes
 import jax
 import moments
+import msprime as msp
 import numpy as np
 import pytest
 from scipy.optimize import approx_fprime
 
-from momi3.MOMI import Momi, esfs
+from momi3.momi import Momi3
 from momi3.utils import Parallel_runtime, update
 
 from .demos import ThreeDemes, TwoDemes
 
 jax.config.update("jax_enable_x64", True)
-
-
-def test_esfs(iwm):
-    sample_sizes = {"deme0": 5, "deme1": 3}
-    e = esfs(iwm, sample_sizes)
-    assert e.shape == (6, 4)
 
 
 @pytest.mark.rate0
@@ -27,8 +22,8 @@ def test_two_pop_migration_0():
     demo_m, _ = TwoDemes.Constant(t=t, size=size).migration_sym(t, 0, rate=0.0)
     sampled_demes = ["A", "B"]
     sample_sizes = [4, 6]
-    spec_demo = Momi(demo, sampled_demes, sample_sizes).sfs_spectrum()
-    spec_demo_m = Momi(demo_m, sampled_demes, sample_sizes).sfs_spectrum()
+    spec_demo = Momi3(demo, sampled_demes, sample_sizes).sfs_spectrum()
+    spec_demo_m = Momi3(demo_m, sampled_demes, sample_sizes).sfs_spectrum()
     assert np.allclose(spec_demo_m, spec_demo, rtol=1e-4), np.nanmean(
         np.abs(spec_demo_m - spec_demo) / spec_demo
     )
@@ -43,8 +38,8 @@ def test_two_pop_migration_exp_growth_0():
     demo_m, _ = TwoDemes.Exponential(t=t, g=g, size=size).migration_sym(t, 0, rate=0.0)
     sampled_demes = ["A", "B"]
     sample_sizes = [4, 6]
-    spec_demo = Momi(demo, sampled_demes, sample_sizes).sfs_spectrum()
-    spec_demo_m = Momi(demo_m, sampled_demes, sample_sizes).sfs_spectrum()
+    spec_demo = Momi3(demo, sampled_demes, sample_sizes).sfs_spectrum()
+    spec_demo_m = Momi3(demo_m, sampled_demes, sample_sizes).sfs_spectrum()
     assert np.allclose(spec_demo_m, spec_demo, rtol=1e-4), np.nanmean(
         np.abs(spec_demo_m - spec_demo) / spec_demo
     )
@@ -59,8 +54,8 @@ def test_three_pop_migration_exp_growth_0():
     demo_m, _ = ThreeDemes.Exponential(t=t, g=g, size=size).migrations(rate=0.0)
     sampled_demes = ["A", "B", "C"]
     sample_sizes = [4, 6, 3]
-    spec_demo = Momi(demo, sampled_demes, sample_sizes).sfs_spectrum()
-    spec_demo_m = Momi(demo_m, sampled_demes, sample_sizes).sfs_spectrum()
+    spec_demo = Momi3(demo, sampled_demes, sample_sizes).sfs_spectrum()
+    spec_demo_m = Momi3(demo_m, sampled_demes, sample_sizes).sfs_spectrum()
 
     def l1(x, y):
         return np.abs(x - y).mean()
@@ -111,7 +106,7 @@ def test_grad_speed_momi_moments_gutenkunst(yaml_path):
     demo = demes.load(yaml_path / "gutenkunst_ooa.yml")
     sampled_demes = ["YRI", "CEU", "CHB"]
     sample_sizes = 3 * [n]
-    momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
+    momi = Momi3(demo, sampled_demes, sample_sizes, jitted=True)
     jsfs = momi.simulate(nmut, seed=108)
     print(f"non-zero-entries: {jsfs.nnz}")
 
@@ -152,7 +147,7 @@ def test_pop_shrink_w_mig(yaml_path):
         "logit(rho_2)": -6.074292717977304,
     }
 
-    momi = Momi(demo, sampled_demes, sample_sizes, jitted=True)
+    momi = Momi3(demo, sampled_demes, sample_sizes, jitted=True)
     params = momi._default_params
     params.set_train_all_rhos(True)
     params.set_train_all_etas(True)
@@ -160,12 +155,12 @@ def test_pop_shrink_w_mig(yaml_path):
     params.set_optimization_results(new_vals)
 
     demo = params.demo_graph
-    momi_m = Momi(demo, sampled_demes, sample_sizes, jitted=True)
+    momi_m = Momi3(demo, sampled_demes, sample_sizes, jitted=True)
 
     ddict = params.demo_dict
     ddict["migrations"] = []
     demo_non_mig = demes.Builder.fromdict(ddict).resolve()
-    momi_v = Momi(demo_non_mig, sampled_demes, sample_sizes, jitted=True)
+    momi_v = Momi3(demo_non_mig, sampled_demes, sample_sizes, jitted=True)
 
     jsfs = momi_v.simulate(100, seed=108)
 
@@ -178,6 +173,30 @@ def test_pop_shrink_w_mig(yaml_path):
         print("grad:")
         for i in x[1]:
             print(i, x[1][i])
+
+
+def test_iicr():
+    t = 800.0
+    g = 0.01
+    size = 1e4
+    t1 = np.linspace(0.1, 1000, 12345)
+    demos = []
+    demo_m, _ = TwoDemes.Exponential(t=t, g=g, size=size).migration()
+    demos.append(demo_m)
+    demo_m, _ = TwoDemes.Constant(t=t, size=size).migration_sym()
+    demos.append(demo_m)
+    demo_m, _ = ThreeDemes.Constant(size=size).base()
+    for demo in demos[:1]:
+        for sd in [{"A": 1, "B": 1}, {"A": 2}]:
+            dd = msp.Demography.from_demes(demo).debug()
+            eta1, p1 = dd.coalescence_rate_trajectory(t1.tolist(), sd)
+            m = Momi3(demo, sd)
+            p2 = jax.vmap(m.sf)(t1)
+            eta2 = jax.vmap(m.iicr)(t1)
+            tol = dict(rtol=1e-3, atol=1e-4)
+            np.testing.assert_allclose(p1, p2, **tol)
+            np.testing.assert_allclose(eta1, eta2, **tol)
+            np.testing.assert_allclose(np.corrcoef(p1, p2), 1.0, **tol)
 
 
 if __name__ == "__main__":

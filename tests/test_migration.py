@@ -97,5 +97,5 @@ def test_lift_eq_exp_m0(rng):
         sl[i] = slice(None)
         etbl_nomig[tuple(sl)] += e
 
-    np.testing.assert_allclose(plp_mig, plp_nomig, rtol=1e-5)
-    np.testing.assert_allclose(etbl_mig, etbl_nomig, rtol=1e-5)
+    np.testing.assert_allclose(plp_mig, plp_nomig)
+    np.testing.assert_allclose(etbl_mig, etbl_nomig)

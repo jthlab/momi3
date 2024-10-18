@@ -84,6 +84,7 @@ def _A(s, y, args):
     Q0 = Q_mig + Qd
     if isinstance(y, tuple):
         return Q0 @ y[0] + Q_mut @ y[1], Q0 @ y[1]
+    Q0 += Q_mut
     return Q0 @ y
 
 
@@ -99,7 +100,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     # to be the key.
     Q_mig_T, _ = _Q_mig_mut(dims, axes, params["mig"], aux, tr=True)
 
-    if False:
+    if True:
         # Convert all Q_* to dense
         Q_drift = Q_drift.todense()
         Q_mig = Q_mig.todense()
@@ -123,20 +124,17 @@ def _lift_cm_exp(params, t, pl, axes, aux):
             stepsize_controller=ssc,
             # max_steps=4096,
             max_steps=16384,
-            adjoint=dfx.RecursiveCheckpointAdjoint(checkpoints=10),
+            # adjoint=dfx.RecursiveCheckpointAdjoint(checkpoints=10),
             # adjoint=dfx.BacksolveAdjoint(),
+            adjoint=dfx.DirectAdjoint(),
         )
         # jax.debug.print("number of steps: {}", res.stats["num_steps"])
         return res.ys
 
-    primal_args = (Q_mig_T, Q_mut.T, Q_drift.T, dims, axes, Ne, t, aux)
+    primal_args = (Q_mig_T, 0.0 * Q_mut.T, Q_drift.T, dims, axes, Ne, t, aux)
     plp = solve(pl, primal_args)[0]
-    # compute d/dtheta x(t,theta)|{theta=0} using the forward sensitivity method.
-    # d/dt d/dtheta x(t, theta) = d/dtheta F(x(t, theta), theta) = J_F dx/dtheta + dF/dtheta
-    # dF/dtheta = d(Q @ x)/dtheta = (Q_mut @ x)
-    # the initial condition is d/dtheta(x(0, theta)) = 0.; x(0,theta) = e0
 
-    # for computing branch length, we only need to track the populations that are involved in the migration
+    # branch length computation
     involved = list(params["Ne"].keys())
     sh = tuple([pl.shape[i] if pop in involved else 1 for i, pop in enumerate(axes)])
     z = jnp.zeros(sh)
@@ -148,9 +146,26 @@ def _lift_cm_exp(params, t, pl, axes, aux):
         t,
         aux,
     )
-    res = solve((z, e0), tangent_args)
-    etbls, _ = res
-    etbl = etbls[0]
+
+    if False:
+        # compute d/dtheta x(t,theta)|{theta=0} using the forward sensitivity method.
+        # d/dt d/dtheta x(t, theta) = d/dtheta F(x(t, theta), theta) = J_F dx/dtheta + dF/dtheta
+        # dF/dtheta = d(Q @ x)/dtheta = (Q_mut @ x)
+        # the initial condition is d/dtheta(x(0, theta)) = 0.; x(0,theta) = e0
+
+        # for computing branch length, we only need to track the populations that are involved in the migration
+        res = solve((z, e0), tangent_args)
+        etbl = res[0][0]
+    else:
+
+        @jax.jacfwd
+        def df(theta):
+            ta = list(tangent_args)
+            ta[1] = theta * ta[1]
+            return solve(e0, tuple(ta))
+
+        etbl = df(0.0)[0]
+
     inds = tuple([slice(None) if pop in involved else 0 for pop in axes])
     return plp, etbl[inds]
 

@@ -60,7 +60,11 @@ class Momi3:
         return self.params.constraints
 
     def E_tbl(
-        self, params_d: dict[str, float], num_derived: dict[str, int], aux=None
+        self,
+        params_d: dict[str, float],
+        num_derived: dict[str, int],
+        aux=None,
+        trunc: float = None,
     ) -> float:
         """Compute the expected total branch length of the genealogy for a given set of parameters.
 
@@ -84,6 +88,8 @@ class Momi3:
             # checkify.check(d <= n, f"More derived alleles than samples in {pop}")
             X[pop] = jax.nn.one_hot(jnp.array([d]), n + 1)[0]
         pd = self.params.update(params_d).to_path_dict()
+        if trunc is not None:
+            pd["trunc"] = trunc
         return self._T.execute(pd, X, aux).clip(1e-10)
 
     def E_tau(self, params_d: dict[str, float], aux=None) -> float:
@@ -110,7 +116,7 @@ class Momi3:
         ret = vmap(self._T.execute, in_axes=(None, 0, None))(pd, X_batch, aux)
         return ret[0] - ret[1] - ret[2]
 
-    def expected_sfs(self, params_d: dict[str, float] = {}, use_vmap: bool = True):
+    def expected_sfs(self, params_d: dict[str, float] = {}, _use_vmap: bool = True):
         bs = [range(n + 1) for n in self._num_samples.values()]
         num_derived = jnp.array(list(it.product(*bs)))
 
@@ -118,13 +124,29 @@ class Momi3:
             d = dict(zip(self._num_samples, ds))
             return self.E_tbl(params_d, dict(d), self._T.auxd)
 
-        if use_vmap:
+        if _use_vmap:
             etbls = vmap(f)(num_derived)
         else:
             etbls = lax.map(f, num_derived)
         tau = self.E_tau(params_d)
         sh = tuple(n + 1 for n in self._num_samples.values())
         return (etbls / tau).reshape(sh)
+
+    def sf(self, t: float, params_d: dict[str, float] = {}):
+        if sum(self._num_samples.values()) != 2:
+            raise ValueError(
+                "I only know how to compute the IICR for samples of size n=2"
+            )
+        r = jax.jacfwd(self.E_tbl, argnums=(3,))(
+            params_d, self._num_samples, self._T.auxd, t
+        )[0].squeeze()
+        return 1.0 - r
+
+    def iicr(self, t: float, params_d: dict[str, float] = {}):
+        def f(t):
+            return -jnp.log(self.sf(t, params_d))
+
+        return jax.jacfwd(f)(t).squeeze()
 
     def loglik(
         self,

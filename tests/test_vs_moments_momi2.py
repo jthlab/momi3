@@ -44,7 +44,7 @@ class Momi_vs_Moments:
     def momi_sfs(self):
         dG = self.momi_graph
         momi = Momi3(dG, num_samples=dict(zip(self.sampled_demes, self.sample_sizes)))
-        return momi.expected_sfs(use_vmap=False)
+        return momi.expected_sfs(_use_vmap=False)
 
     @cached_property
     def moments_sfs(self):
