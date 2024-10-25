@@ -62,13 +62,13 @@ class Upsample(Event):
         assert out_axes[self.pop] == n + 1
         out_axes[self.pop] = self.m + 1
         i = list(in_axes).index(self.pop)
-        return out_axes, nsp, {i: Bplus}
+        return out_axes, nsp, {i: (B, Bplus)}
 
     def execute(self, st: State, params: dict, aux: dict) -> State:
         if aux is None:
             # no bounding was possible/necessary, so setup set aux to None.
             return st
-        ((i, Bplus),) = aux.items()
+        ((i, (B, Bplus)),) = aux.items()
         d = st.pl.ndim
         pl_inds = list(range(d))
         out_inds = list(pl_inds)

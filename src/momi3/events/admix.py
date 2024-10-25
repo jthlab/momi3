@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import Callable, TypeVar
 
 import jax.numpy as jnp
+import jaxopt
+import lineax as lx
 import numpy as np
 
 from momi3.common import Axes, PopCounter, Population, State, oe_einsum, unique_strs
@@ -83,6 +85,7 @@ class Pulse(Event):
             )  # [nw1+nw2+1, n + 1]
             # B x = y, where x is the downsampled vector and y is the original vector.
             # i.e. x solves the least squares problem min ||Bx - y||^2
+            aux["B"] = B
             aux["Bplus"] = np.linalg.pinv(B, rcond=1e-5)  # [n+1, nw1+nw2+1]
         return out_axes, new_ns, aux
 
@@ -124,14 +127,36 @@ class Pulse(Event):
         # C splits dest into a and b, and then b merges with source via H3
         ein_args = (st.pl, pl_inds, C, C_inds, aux["H3"], H3_inds)
         i = out_inds.index(self.source)
+        out_inds[i] = c
+        plp = oe_einsum(*ein_args, out_inds)
+
         if "Bplus" in aux:  # and finally we hypergeom downsample
-            out_inds[i] = d
-            B_inds = [d, c]
-            ein_args += (aux["Bplus"], B_inds)
-            plp = oe_einsum(*ein_args, out_inds)
-        else:
-            out_inds[i] = c
-            plp = oe_einsum(*ein_args, out_inds)
+            # solve B+ X = Y for Y = plp
+            B = jnp.asarray(aux["B"])
+            op = lx.MatrixLinearOperator(B)
+
+            def f(y):
+                return lx.linear_solve(
+                    op, y, solver=lx.AutoLinearSolver(well_posed=None)
+                )
+
+            res = jnp.apply_along_axis(f, i, plp)
+            plp1 = res.value
+
+            qp = jaxopt.BoxCDQP()
+            # min (1/2)||Bx - y|| s.t. 0<=x<=1 = 1/2 x.T B.T B x - B^T y
+            n = plp.shape[i]
+
+            def g(yx0):
+                y, x0 = jnp.array_split(yx0, [n])
+                params_obj = (B.T @ B, -B.T @ y)
+                params_ineq = (jnp.zeros_like(x0), jnp.ones_like(x0))
+                res = qp.run(x0, params_obj=params_obj, params_ineq=params_ineq)
+                return res.params
+
+            plp2 = jnp.apply_along_axis(g, i, jnp.concatenate([plp, plp1], axis=i))
+            plp = plp2
+
         return st._replace(pl=plp)
 
 
