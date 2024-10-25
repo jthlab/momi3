@@ -25,7 +25,6 @@ dependencies = [
     "msprime>=1.2.0",
     "networkx>=3.0",
     "numpy>=1.23.0",
-    "opt_einsum>=3.3.0",
     "optax>=0.1.5",
     "pandas>=2.2.2",
     "scipy>=1.11.4",
