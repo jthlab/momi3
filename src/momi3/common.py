@@ -1,15 +1,13 @@
 "miscellaneous shared functions that don't fit anywhere else"
 from collections import namedtuple
-from functools import partial
 from secrets import token_hex
 from typing import NamedTuple, OrderedDict, Sequence, TypeVar
 
-import opt_einsum
 from jax import numpy as jnp
 from jax.tree_util import register_pytree_node_class
 from jax.util import safe_zip
 
-oe_einsum = partial(opt_einsum.contract, optimize="optimal", backend="jax")
+oe_einsum = jnp.einsum
 
 
 def Ne_t(Ne0, Ne1, t0, t1, t):
