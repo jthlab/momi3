@@ -90,7 +90,7 @@ class Momi3:
         pd = self.params.update(params_d).to_path_dict()
         if trunc is not None:
             pd["trunc"] = trunc
-        return self._T.execute(pd, X, aux).clip(1e-10)
+        return self._T.execute(pd, X, aux)
 
     def E_tau(self, params_d: dict[str, float], aux=None) -> float:
         """Compute the expected total branch length of the genealogy for a given set of parameters.

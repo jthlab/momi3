@@ -117,8 +117,8 @@ class Momi_vs_Moments:
         if "NORMALIZE_ESFS" not in kwargs:
             kwargs["NORMALIZE_ESFS"] = NORMALIZE_ESFS
 
-        m1 = self.get_flatten_spectrum(method1, kwargs["NORMALIZE_ESFS"])
-        m2 = self.get_flatten_spectrum(method2, kwargs["NORMALIZE_ESFS"])
+        m1 = self.get_flatten_spectrum(method1, kwargs["NORMALIZE_ESFS"]).clip(1e-8)
+        m2 = self.get_flatten_spectrum(method2, kwargs["NORMALIZE_ESFS"]).clip(1e-8)
         ape = absolute_percent_error(m1, m2)
 
         if run_type == "pytest":

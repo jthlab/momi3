@@ -3,7 +3,6 @@ import itertools as it
 import math
 from copy import deepcopy
 from dataclasses import dataclass
-from functools import partial
 from typing import TypeVar
 
 import networkx as nx
@@ -11,18 +10,9 @@ from jax import numpy as jnp
 from jax import vmap
 from jax.scipy.linalg import expm
 
-from momi3.common import (
-    Axes,
-    Ne_t,
-    PopCounter,
-    Population,
-    State,
-    Time,
-    oe_einsum,
-    traverse,
-)
-from momi3.math_functions import exp_integral, exp_integralEGPS, expm1d
+from momi3.common import Axes, PopCounter, Population, State, Time, oe_einsum, traverse
 from momi3.migration import lift_cm, lift_cm_aux
+from momi3.pexp import PExp
 from momi3.utils import W_matrix, moran_eigensystem, rate_matrix
 
 from .event import Event
@@ -110,20 +100,21 @@ class Lift(Event):
         # set up functions for computing migration rates and pop sizes at runtime
         return child_axes, nsp, aux
 
-    def _f_Ne(
-        self, params: dict, t0: float, t1: float
-    ) -> dict[Population, tuple[float, float]]:
-        """get the population size at the start and end of the interval"""
-        deme_d = {deme["name"]: i for i, deme in enumerate(params["demes"])}
+    def _etas(self, params: dict) -> dict[Population, tuple[float, float]]:
         ret = {}
-        for pop in self.epochs:
-            i = deme_d[pop]
-            j = self.epochs[pop]
-            N0, N1 = tuple([_get_size(params["demes"][i], j, t) for t in (t0, t1)])
-            if params["demes"][i]["epochs"][j]["size_function"] == "constant":
-                ret[pop] = N0
-            else:
-                ret[pop] = (N0, N1)
+        for pop in params["demes"]:
+            if pop["name"] not in self.epochs:
+                continue
+            t = []
+            N0 = []
+            N1 = []
+            for e in pop["epochs"][::-1]:
+                t.append(e["end_time"])
+                N0.append(2 * e["end_size"])
+                N1.append(2 * e["start_size"])
+            t.append(pop["start_time"])
+
+            ret[pop["name"]] = PExp(N0=jnp.array(N0), N1=jnp.array(N1), t=jnp.array(t))
         return ret
 
     def _migmat(
@@ -153,15 +144,8 @@ class Lift(Event):
         """
         plp = st.pl
         phip = 0.0
-        t1_val = traverse(params, self.t1.path)
-        t0_val = traverse(params, self.t0.path)
-        # if truncating, we have to recompute tau, and also recompute N1=N1(t1) to be N1(tau)
-        trunc = params.get("trunc", t1_val)
-        new_t1_val = jnp.minimum(t1_val, trunc)
-        new_t0_val = jnp.minimum(t0_val, new_t1_val)
-        t0 = new_t0_val
-        t1 = new_t1_val
-        size_d = self._f_Ne(params, t0, t1)
+        t0, t1 = [traverse(params, t.path) for t in (self.t0, self.t1)]
+        etas = self._etas(params)
         axes = aux["axes"]
         for mat_type in ("single", "multi"):
             for s in aux["mats"][mat_type]:
@@ -172,12 +156,13 @@ class Lift(Event):
                     pop = s
                     involved_pops = {pop}
                     i = list(axes).index(pop)
-                    Ne = size_d[pop]
+                    eta = etas[pop]
                     plp, etbl = _lift1(
                         plp,
                         i,
-                        Ne,
-                        t1 - t0,
+                        eta,
+                        t0,
+                        t1,
                         mats["d"],
                         mats["Q"],
                         mats["M"],
@@ -190,8 +175,7 @@ class Lift(Event):
                     M = self._migmat(params, s)
                     mats = aux["mats"]["multi"][s]
                     involved_pops = {x for ab in s for x in ab}
-                    Ne = {pop: size_d[pop] for pop in involved_pops}
-                    plp, etbl = _liftmulti(plp, axes, Ne, (t0, t1), M, mats["cmm"])
+                    plp, etbl = _liftmulti(plp, axes, etas, (t0, t1), M, mats["cmm"])
                 inds = [0] * st.pl.ndim
                 for pop in involved_pops:
                     inds[list(axes).index(pop)] = slice(None)
@@ -201,7 +185,7 @@ class Lift(Event):
         return st._replace(pl=plp, phi=st.phi + phip)
 
 
-def _lift1(pl, in_axis, Ne, tau, d, Q, M, QQ, RR, W, terminal):
+def _lift1(pl, in_axis, eta, t0, t1, d, Q, M, QQ, RR, W, terminal):
     """
     Lift a partial likelihood along a single axis.
     Args:
@@ -219,18 +203,9 @@ def _lift1(pl, in_axis, Ne, tau, d, Q, M, QQ, RR, W, terminal):
     # first compute phi, the total branch length. do this first because we need to mulitply by the partial likelihood at
     # the bottom.
     nv = pl.shape[in_axis] - 1
+    etbl, R = _etbl_R(nv, eta, t0, t1, W)
     if terminal:
-        # FIXME assume constant pop size in terminal/stem branch.
-        # this should be enforced by demes anyways, but maybe check earlier in the code.
-        j = jnp.arange(2, nv + 1)
-        # expected time to coal with pop size N0
-        cm = (2 * Ne) / (j * (j - 1) / 2)
-        fn = W @ cm
-        etbl_inf = jnp.r_[0, fn, 0]
-        etbl_noninf, _ = _etbl_R(nv, Ne, tau, W)
-        etbl = jnp.where(jnp.isinf(tau), etbl_inf, etbl_noninf)
         return None, etbl
-    etbl, R = _etbl_R(nv, Ne, tau, W)
     # now compute the lifted partial likelihood
     # we basically want to contract the partial likelihood along the lifted axis with the matrix
     # Q * exp(d * R) * Qinv. however for numerical & computational reasons, avoid matrix-matrix products or inversion
@@ -255,13 +230,13 @@ def _lift1(pl, in_axis, Ne, tau, d, Q, M, QQ, RR, W, terminal):
     return plp, etbl
 
 
-def _liftmulti(pl, axes, Ne, t, mig_mat, cmm):
+def _liftmulti(pl, axes, etas, t, mig_mat, cmm):
     """Lift multiple populations who are migrating continuously."""
-    params = {"Ne": Ne, "mig": mig_mat}
+    params = {"etas": etas, "mig": mig_mat}
     return lift_cm(params, t, pl, axes, cmm)
 
 
-def _etbl_R(nv, Ne, tau, W):
+def _etbl_R(nv, eta, t0, t1, W):
     """Total branch length subtended by the lifted axis.
 
     Args:
@@ -275,70 +250,15 @@ def _etbl_R(nv, Ne, tau, W):
     # N1 = N0 * exp(-g * tau) => g = -log(N1 / N0) / tau
     j = jnp.arange(2, nv + 1)
     jC2 = j * (j - 1) / 2.0
-    f_const = vmap(exp_integral, (None, None, 0))
-    if isinstance(Ne, tuple):
-        N1, N0 = Ne
-        g = -(jnp.log(N0) - jnp.log(N1)) / tau
-        f_exp = vmap(partial(exp_integralEGPS, g), (None, None, 0))
-        # cm = lax.cond(jnp.isclose(g, 0.0), f_const, f_exp, 1 / (2 * N1), tau, jC2)
-        # R = lax.cond(jnp.isclose(g, 0.0), _R_const, partial(_R_exp, g), 2 * N1, tau)
-        cm = jnp.where(
-            jnp.isclose(g, 0.0),
-            f_const(1 / (2 * N1), tau, jC2),
-            f_exp(1 / (2 * N1), tau, jC2),
-        )
-        R = jnp.where(
-            jnp.isclose(g, 0.0), _R_const(2 * N1, tau), partial(_R_exp, g)(2 * N1, tau)
-        )
-        # for calculating the approximation below
-        Ne = N0
-    else:
-        cm = f_const(1 / (2 * Ne), tau, jC2)
-        R = _R_const(2 * Ne, tau)
-    # the basic quantities, which we may approximate below
-    fn = W @ cm
+    R = eta.R(t1) - eta.R(t0)
+    etjj = vmap(eta.exp_integral, (None, None, 0))(t0, t1, jC2)
+    fn = W @ etjj
     k = j - 1
     e_tmrca_min_tau = ((k / nv) * fn).sum()
-    # the expected number of coalescent events is ~= a * nC2 * tau. If this is almost zero,
-    # then there are no coalescences in the interval, so the expected total branch length is
-    # tau subtending nv lineages of size 1.
-    e = jnp.eye(nv - 1)[0]
-    no_coal = jnp.isclose(jC2[-1] / 2 / Ne * tau, 0.0)
-    fn = jnp.where(no_coal, nv * tau * e, fn)
-    e_tmrca_min_tau = jnp.where(no_coal, tau, e_tmrca_min_tau)
     # now compute the remaining branch lengths
+    tau = t1 - t0
     etbl = jnp.r_[0, fn, jnp.where(jnp.isinf(tau), 0, tau - e_tmrca_min_tau)]
     return etbl, R
-
-
-def _R_exp(g, N0, tau):
-    tau0 = jnp.isclose(tau, 0.0)
-    tau_safe = jnp.where(tau0, 1.0, tau)
-    ret = jnp.where(tau0, 0.0, expm1d(tau_safe * g) * tau_safe / N0)
-    return ret
-
-
-def _R_const(N0, tau):
-    return tau / N0
-
-
-def _get_size(deme, j, t):
-    "get the size at time t for a epoch j defined by start and end times and sizes"
-    # time runs backwards for us
-    ep = deme["epochs"][j]
-    if ep["size_function"] == "constant":
-        return ep["start_size"]
-    Ne0 = ep["start_size"]
-    if j == 0:
-        # this key may not exist if the epoch goes back to infinity, but then the size function would have
-        # to be constant, so we would already have returned
-        t1 = deme["start_time"]
-    else:
-        t1 = deme["epochs"][j - 1]["end_time"]
-    Ne1 = ep["end_size"]
-    t0 = ep["end_time"]
-    # start_size = end_size * exp(g * (end_time - start_time)) => g = log(Ne0/Ne1) / (t0-t1)
-    return Ne_t(Ne0, Ne1, t0, t1, t)
 
 
 @dataclass(frozen=True, kw_only=True)

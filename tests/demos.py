@@ -176,7 +176,7 @@ class TwoDemes:
     class Exponential:
         def __init__(self, size=1, t=1.0, g=1.0, size_scale=1.25):
             # Two demes, exponential population size, no migration
-            tgA = t / 2
+            tgA = t / 1
             tgB = t / 3
             gA = 2 * g
             gB = g

@@ -10,10 +10,6 @@ from jax.util import safe_zip
 oe_einsum = jnp.einsum
 
 
-def Ne_t(Ne0, Ne1, t0, t1, t):
-    return Ne0 * (Ne1 / Ne0) ** ((t1 - t) / (t1 - t0))
-
-
 def traverse(params, path):
     for i in path:
         params = params[i]

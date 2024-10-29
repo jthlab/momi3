@@ -6,10 +6,9 @@ import jax.numpy as jnp
 import scipy.sparse as sps
 from jax import jacfwd
 from jax.experimental.sparse import BCOO
-from loguru import logger
 from scipy.sparse.linalg._expm_multiply import _expm_multiply_simple
 
-from .common import Axes, Ne_t, Population
+from .common import Axes, Population
 from .kronprod import GroupedKronProd
 from .momints import _drift, _migration, _mutation
 
@@ -52,28 +51,29 @@ def _e0_like(pl):
 
 
 def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
-    Ne = params["Ne"]
-    all(not isinstance(Ne[pop], tuple) for pop in Ne)
-    if False:
-        logger.debug("using sparse matrix exponentiation for {}", aux)
-        f = _lift_cm_const
-    else:
-        logger.debug("using diffeq solver for {}", aux)
-        f = _lift_cm_exp
-    return f(params, t, pl, axes, aux)
+    # Ne = params["Ne"]
+    # all(not isinstance(Ne[pop], tuple) for pop in Ne)
+    # if False:
+    #     logger.debug("using sparse matrix exponentiation for {}", aux)
+    #     f = _lift_cm_const
+    # else:
+    #     logger.debug("using diffeq solver for {}", aux)
+    #     f = _lift_cm_exp
+    return _lift_cm_exp(params, t, pl, axes, aux)
 
 
 def _A(s, y, args):
-    Q_mig, Q_mut, Q_drift, dims, axes, Ne, t, aux = args
+    Q_mig, Q_mut, Q_drift, dims, axes, etas, t, aux = args
     coal = {}
-    for pop in Ne:
+    for pop in etas:
         i = list(axes).index(pop)
-        if isinstance(Ne[pop], tuple):
-            N0, N1 = Ne[pop]
-            coal[i] = 1.0 / (4 * Ne_t(N0, N1, t[0], t[1], s))
-        else:
-            # Ne is a float, signifying constant Ne
-            coal[i] = 1.0 / (4 * Ne[pop])
+        coal[i] = etas[pop](s) / 2
+        # if isinstance(Ne[pop], tuple):
+        #     N0, N1 = Ne[pop]
+        #     coal[i] = 1.0 / (4 * Ne_t(N0, N1, t[0], t[1], s))
+        # else:
+        #     # Ne is a float, signifying constant Ne
+        #     coal[i] = 1.0 / (4 * Ne[pop])
     # multiply each entry of the drift tensor by the coalescent rate
     new_A = []
     for Ai in Q_drift.A:
@@ -92,8 +92,8 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     # population sizes are changing, so we have to use a differential
     # equation solver
     dims = pl.shape
-    Ne = params["Ne"]
-    Q_drift = _Q_drift(dims, axes, {p: 1.0 for p in Ne}, aux)
+    etas = params["etas"]
+    Q_drift = _Q_drift(dims, axes, {p: 1.0 for p in etas}, aux)
     Q_mig, Q_mut = _Q_mig_mut(dims, axes, params["mig"], aux, tr=False)
     # WORKAROUND: calling Q_mig.T below gives me an error, impossibly deep stack trace having to do with diffrax,
     # bcoo_sparse, vjp, etc. etc. "manually" transposing before multiplying with any traced migration params seems
@@ -109,7 +109,8 @@ def _lift_cm_exp(params, t, pl, axes, aux):
 
     solver = dfx.Kvaerno3()
     term = dfx.ODETerm(_A)
-    ssc = dfx.PIDController(rtol=1e-6, atol=1e-6)
+    jump_ts = jnp.sort(jnp.concatenate([eta.t for eta in etas.values()]))
+    ssc = dfx.PIDController(jump_ts=jump_ts, rtol=1e-6, atol=1e-6)
 
     def solve(y0, args):
         res = dfx.diffeqsolve(
@@ -117,7 +118,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
             solver,
             t0=t[0],
             t1=t[1],
-            dt0=(t[1] - t[0]) / 10,
+            dt0=(t[1] - t[0]) / 100,
             # dt0=1.,
             y0=y0,
             args=args,
@@ -131,18 +132,18 @@ def _lift_cm_exp(params, t, pl, axes, aux):
         # jax.debug.print("number of steps: {}", res.stats["num_steps"])
         return res.ys
 
-    primal_args = (Q_mig_T, 0.0 * Q_mut.T, Q_drift.T, dims, axes, Ne, t, aux)
+    primal_args = (Q_mig_T, 0.0 * Q_mut.T, Q_drift.T, dims, axes, etas, t, aux)
     plp = solve(pl, primal_args)[0]
 
     # branch length computation
-    involved = list(params["Ne"].keys())
+    involved = list(params["etas"].keys())
     sh = tuple([pl.shape[i] if pop in involved else 1 for i, pop in enumerate(axes)])
     z = jnp.zeros(sh)
     e0 = z.at[(0,) * z.ndim].set(1.0)
     tangent_args = tuple([X._replace(dims=sh) for X in (Q_mig, Q_mut, Q_drift)]) + (
         sh,
         axes,
-        Ne,
+        etas,
         t,
         aux,
     )

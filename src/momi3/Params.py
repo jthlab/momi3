@@ -47,8 +47,7 @@ class Params(UserDict):
         # Create time keys dictionary: tau_0, tau_1, ..., tau_p.
         # time_0 < time_1 < ... < time_p
         # tkeys[time_i] = tau_i
-        ts = set(float(node.t.t) for node in T.nodes())
-        ts = sorted(list(ts))
+        ts = sorted(list(T.times))
         self._time_keys = tkeys = dict(zip(ts, [f"tau_{i}" for i in range(len(ts))]))
 
         # iter size, rate and prop parameters.

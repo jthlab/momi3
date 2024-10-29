@@ -40,41 +40,55 @@ def _all_events(demo: demes.Graph) -> Iterable[dict]:
         for j, e in enumerate(deme["epochs"]):
             # size change events
             path = ("demes", i, "epochs", j, "end_time")
-            t = Time(e["end_time"], path=path)
+            t = e["end_time"]
             yield dict(
-                t=t, pop=name, size_function=e["size_function"], ev=EventType.EPOCH, i=j
+                t=t,
+                path=path,
+                pop=name,
+                size_function=e["size_function"],
+                ev=EventType.EPOCH,
+                i=j,
             )
         if deme["ancestors"]:
             # merge events
             path = ("demes", i, "start_time")
-            t = Time(deme["start_time"], path=path)
             yield dict(
-                t=t, pop=name, ancestors=deme["ancestors"], i=i, ev=EventType.MERGE
+                t=deme["start_time"],
+                path=path,
+                pop=name,
+                ancestors=deme["ancestors"],
+                i=i,
+                ev=EventType.MERGE,
             )
         else:
             # deme has no ancestors, so it must extend infinitely back into the past
             assert math.isinf(deme["start_time"])
             path = ("demes", i, "start_time")
             yield dict(
-                t=Time(t=math.inf, path=path),
+                t=math.inf,
+                path=path,
                 pop=name,
                 ev=EventType.POPULATION_START,
             )
     # pulse admixtures
     for j, p in enumerate(d["pulses"]):
         path = ("pulses", j, "time")
-        t = Time(p["time"], path=path)
-        yield dict(t=t, i=j, pop=p["dest"], sources=p["sources"], ev=EventType.PULSE)
+        yield dict(
+            t=p["time"],
+            path=path,
+            i=j,
+            pop=p["dest"],
+            sources=p["sources"],
+            ev=EventType.PULSE,
+        )
     # migration start and stop
     for j, m in enumerate(d["migrations"]):
         y = dict(i=j, source=m["source"], pop=m["dest"])
         # start and end are backwards for us since we are working in reverse time
         path = ("migrations", j, "end_time")
-        t = Time(m["end_time"], path=path)
-        yield y | dict(t=t, ev=EventType.MIGRATION_START)
+        yield y | dict(t=m["end_time"], path=path, ev=EventType.MIGRATION_START)
         path = ("migrations", j, "start_time")
-        t = Time(m["start_time"], path=path)
-        yield y | dict(t=t, ev=EventType.MIGRATION_END)
+        yield y | dict(t=m["start_time"], path=path, ev=EventType.MIGRATION_END)
 
 
 class Node(NamedTuple):
@@ -106,9 +120,15 @@ class ETBuilder:
         self._T = nx.DiGraph()
         self._num_samples = num_samples
         # initialize the event tree
+        self._times = {}
         self._init_event_tree()
         # compute aux information for each node
         self._setup()
+
+    def _add_time(self, t, path):
+        tm = Time(t, path=path)
+        self._times.setdefault(t, set()).add(tm)
+        return tm
 
     def _init_event_tree(self):
         # initialize the event tree
@@ -118,7 +138,7 @@ class ETBuilder:
         for j, deme in enumerate(self._demo.demes):
             # add initial leaf nodes for each population
             path = ("demes", j, "epochs", -1, "end_time")
-            t = Time(deme.epochs[-1].end_time, path=path)
+            t = self._add_time(deme.epochs[-1].end_time, path=path)
             node = Node(i=next(self._i), block=frozenset([deme.name]), t=t)
             # attached to each node are attributes that track the population size and migration rates. (these are the
             # two model attributes that persist over time).
@@ -373,20 +393,25 @@ class ETBuilder:
 
         # iterate over all events in the sort order specified above
         for d in sorted(_all_events(self._demo), key=keyfun):
-            u = self._lift(d["pop"], d["t"])
-            assert u.t == d["t"]
+            # register times of all events, including epochs
+            t = self._add_time(d["t"], d["path"])
 
-            # an epoch event just updates the state in that node.
+            # if epoch, nothing to do. epochs are handled by the lifting events.
             if d["ev"] == EventType.EPOCH:
-                nn = self.node_like(u)
-                self.nodes[nn]["epochs"] = self.nodes[nn]["epochs"].set(
-                    d["pop"], d["i"]
-                )
-                self.add_edge(u, nn)
+                continue
+                # nn = self.node_like(u)
+                # self.nodes[nn]["epochs"] = self.nodes[nn]["epochs"].set(
+                #     d["pop"], d["i"]
+                # )
+                # self.add_edge(u, nn)
+
+            # otherwise, lift the population to current time and process event
+            u = self._lift(d["pop"], t)
+            assert u.t == t
 
             # migrations update state, and also merge nodes in the event tree
-            elif d["ev"] == EventType.MIGRATION_START:
-                v = self._lift(d["source"], d["t"])
+            if d["ev"] == EventType.MIGRATION_START:
+                v = self._lift(d["source"], t)
                 # sanity checks
                 key = (d["source"], d["pop"])
                 if v is u:
@@ -431,7 +456,7 @@ class ETBuilder:
                     def f_p(params, i=d["i"], j=j):
                         return params["pulses"][i]["proportions"][j]
 
-                    self._pulse(source=s, dest=d["pop"], t=d["t"], f_p=f_p)
+                    self._pulse(source=s, dest=d["pop"], t=t, f_p=f_p)
 
             elif d["ev"] == EventType.MERGE:
                 # the population merges with ancestral population(s). we model this as a sequence of pulses,
@@ -444,11 +469,11 @@ class ETBuilder:
                         # at the j-th pulse a fraction 1 - p of the population remains to be admixed
                         return deme["proportions"][j] / (1 - p)
 
-                    self._pulse(source=s, dest=d["pop"], t=d["t"], f_p=f_p)
+                    self._pulse(source=s, dest=d["pop"], t=t, f_p=f_p)
                 # the remaining ancestor merges with last ancestor
                 s = d["ancestors"][-1]
-                u = self._lift(d["pop"], d["t"])
-                v = self._lift(s, d["t"])
+                u = self._lift(d["pop"], t)
+                v = self._lift(s, t)
                 nn = self._merge_nodes(u, v, rm=d["pop"])
                 evc = events.Split1 if u is v else events.Split2
                 self.nodes[nn]["event"] = evc(donor=d["pop"], recipient=s)
@@ -458,7 +483,8 @@ class ETBuilder:
 
             elif d["ev"] == EventType.POPULATION_START:
                 # the population extends infinitely far back into the past. basically just a lifting event.
-                self._lift(d["pop"], d["t"])
+                pass
+                # self._lift(d["pop"], t)
 
             else:
                 raise RuntimeError(f"unknown event type {d['ev']}")
@@ -503,6 +529,10 @@ class ETBuilder:
     @property
     def leaves(self):
         return self._leaves
+
+    @property
+    def times(self):
+        return self._times
 
 
 class Momi:
