@@ -24,20 +24,21 @@ class PExp(NamedTuple):
 
     @property
     def a(self):
-        "eta(t) = a[i] exp(-(t-t[i]) b[i])"
-        return 1 / self.N0
+        "eta(t) = a[i] exp(-(t[i + 1] - t)) b[i]) = 1 / (2 Ne(t))"
+        return 1 / 2 / self.N1
 
     @property
     def b(self):
-        "eta(t) = a[i] exp((t-t[i]) b[i])"
-        return jnp.log(self.N0 / self.N1) / (self.t[1:] - self.t[:-1])
+        "eta(t) = a[i] exp(-(t[i + 1]-t) b[i]) = 1 / (2 Ne(t))"
+        # eta(t[i]) = a[i] exp(-b[i] dt[i]) = 1 / 2 / self.N0 =>
+        return -jnp.log(1 / 2 / self.N0 / self.a) / jnp.diff(self.t)
 
     def __call__(self, u: jnp.ndarray):
         r"Evaluate eta(u)."
         t = self.t
         i = jnp.maximum(jnp.searchsorted(t, u) - 1, 0)  # t[j] <= u < t[j + 1]
-        x = (u - t[i]) / (t[i + 1] - t[i])
-        return 1.0 / (self.N0[i] * (self.N1[i] / self.N0[i]) ** x)
+        x = (t[i + 1] - u) / (t[i + 1] - t[i])
+        return self.N1[i] * (self.N0[i] / self.N1[i]) ** x
 
     def R(self, u: jnp.ndarray):
         r"Evaluate R(u) = \int_0^u eta(s) ds"
@@ -45,7 +46,8 @@ class PExp(NamedTuple):
         b = self.b
         t = self.t
         dt = jnp.diff(jnp.minimum(t, u))
-        integrals = a * jnp.expm1(dt * b) / b
+        ui = jnp.where(u < t[:-1], t[:-1], jnp.where(t[1:] < u, t[1:], u))
+        integrals = a / b * jnp.exp(-b * (t[1:] - ui)) * -jnp.expm1(-b * dt)
         const = jnp.isclose(self.N0, self.N1)
         integrals = jnp.where(const, a * dt, integrals)
         return integrals.sum()
@@ -63,13 +65,13 @@ class PExp(NamedTuple):
         def f(N0i, N1i, ti, ti1):
             # \int_ti^ti1 exp(-c R(t)) dt
             # = \int_ti^ti1 exp(-c R(ti) - c \int_ti^t eta(s) ds) dt
-            # = \int_ti^ti1 exp(-c R(ti) - c \int_ti^t (1/N0) ds) dt, if N0=N1
-            # = exp(-c R(ti)) \int_ti^ti1 exp(-c (t - ti) (1/N0) ds) dt
+            # = \int_ti^ti1 exp(-c R(ti) - c \int_ti^t (1/2N0) ds) dt, if N0=N1
+            # = exp(-c R(ti)) \int_ti^ti1 exp(-c (t - ti) (1/2N0) ds) dt
             # = exp(-c R(ti)) (N0/c) -expm1(-c / N0) dt)
             i1 = (
                 jnp.exp(-c * (self.R(ti) - Rt0))
-                * (N0i / c)
-                * -jnp.expm1(-c / N0i * (ti1 - ti))
+                * (2 * N0i / c)
+                * -jnp.expm1(-c / (2 * N0i) * (ti1 - ti))
             )
             x1 = jnp.linspace(ti, ti1, 1000)
             x2 = jnp.linspace(x1[1], x1[-1], 1000)

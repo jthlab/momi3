@@ -110,8 +110,8 @@ class Lift(Event):
             N1 = []
             for e in pop["epochs"][::-1]:
                 t.append(e["end_time"])
-                N0.append(2 * e["end_size"])
-                N1.append(2 * e["start_size"])
+                N0.append(e["end_size"])
+                N1.append(e["start_size"])
             t.append(pop["start_time"])
 
             ret[pop["name"]] = PExp(N0=jnp.array(N0), N1=jnp.array(N1), t=jnp.array(t))

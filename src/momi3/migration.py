@@ -63,11 +63,11 @@ def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
 
 
 def _A(s, y, args):
-    Q_mig, Q_mut, Q_drift, dims, axes, etas, t, aux = args
+    Q_mig, Q_mut, Q_drift, dims, axes, etas, aux, theta = args
     coal = {}
     for pop in etas:
         i = list(axes).index(pop)
-        coal[i] = etas[pop](s) / 2
+        coal[i] = 1 / (4 * etas[pop](s))
         # if isinstance(Ne[pop], tuple):
         #     N0, N1 = Ne[pop]
         #     coal[i] = 1.0 / (4 * Ne_t(N0, N1, t[0], t[1], s))
@@ -81,10 +81,9 @@ def _A(s, y, args):
         ((i, Aij),) = Ai.items()
         new_A.append({i: coal[i] * Aij})
     Qd = Q_drift._replace(A=new_A)
-    Q0 = Q_mig + Qd
+    Q0 = Q_mig + Qd + theta * Q_mut
     if isinstance(y, tuple):
         return Q0 @ y[0] + Q_mut @ y[1], Q0 @ y[1]
-    Q0 += Q_mut
     return Q0 @ y
 
 
@@ -132,7 +131,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
         # jax.debug.print("number of steps: {}", res.stats["num_steps"])
         return res.ys
 
-    primal_args = (Q_mig_T, 0.0 * Q_mut.T, Q_drift.T, dims, axes, etas, t, aux)
+    primal_args = (Q_mig_T, Q_mut.T, Q_drift.T, dims, axes, etas, aux, 0.0)
     plp = solve(pl, primal_args)[0]
 
     # branch length computation
@@ -144,28 +143,31 @@ def _lift_cm_exp(params, t, pl, axes, aux):
         sh,
         axes,
         etas,
-        t,
         aux,
+        0.0,
     )
 
-    if False:
-        # compute d/dtheta x(t,theta)|{theta=0} using the forward sensitivity method.
-        # d/dt d/dtheta x(t, theta) = d/dtheta F(x(t, theta), theta) = J_F dx/dtheta + dF/dtheta
-        # dF/dtheta = d(Q @ x)/dtheta = (Q_mut @ x)
-        # the initial condition is d/dtheta(x(0, theta)) = 0.; x(0,theta) = e0
+    # compute d/dtheta x(t,theta)|{theta=0} using the forward sensitivity method.
+    # we have x'(t, theta) = Q(t, theta) @ x(t, theta) and therefore
+    # d/dtheta x'(t, theta) = dQ/dtheta @ x + Q @ (dx/dtheta)
+    # = (Q_mut @ x) + Q(t) @ (dx/dtheta)
+    # d/dt dx(t,theta)/dtheta d/dtheta x'(t,theta) = dQ/dtheta @ x + Q @ (dx/dtheta)
+    #   = (Q_mut @ x) + Q(t) @ (dx/dtheta)
+    # dF/dtheta = d(Q @ x)/dtheta = (Q_mut @ x)
+    # the initial condition is d/dtheta(x(0, theta)) = 0.; x(0,theta) = e0
 
-        # for computing branch length, we only need to track the populations that are involved in the migration
-        res = solve((z, e0), tangent_args)
-        etbl = res[0][0]
-    else:
+    # for computing branch length, we only need to track the populations that are involved in the migration
+    res = solve((z, e0), tangent_args)
+    etbl = res[0][0]
 
-        @jax.jacfwd
-        def df(theta):
-            ta = list(tangent_args)
-            ta[1] = theta * ta[1]
-            return solve(e0, tuple(ta))
+    # @jax.jacfwd
+    # def df(theta):
+    #     ta = tangent_args[:-1] + (theta,)
+    #     return solve(e0, ta)
 
-        etbl = df(0.0)[0]
+    # etbl2 = df(0.0)[0]
+
+    # breakpoint()
 
     inds = tuple([slice(None) if pop in involved else 0 for pop in axes])
     return plp, etbl[inds]
