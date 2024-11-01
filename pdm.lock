@@ -5,7 +5,7 @@
 groups = ["default", "dev", "gpu", "testing"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:a4ca521111aa7be3ab4e9c709593e23c13b1e0836a175c3ce4cb99f5e6b58151"
+content_hash = "sha256:f6c685f1bb4519a45ef1de7c1393074ff94313e64121c83b3b335d6951f9fff7"
 
 [[metadata.targets]]
 requires_python = ">=3.10,<3.13"
@@ -437,8 +437,8 @@ files = [
 
 [[package]]
 name = "equinox"
-version = "0.11.7"
-requires_python = "~=3.9"
+version = "0.11.8"
+requires_python = ">=3.9"
 summary = "Elegant easy-to-use neural networks in JAX."
 groups = ["default"]
 dependencies = [
@@ -447,8 +447,8 @@ dependencies = [
     "typing-extensions>=4.5.0",
 ]
 files = [
-    {file = "equinox-0.11.7-py3-none-any.whl", hash = "sha256:1177354e1795061fbad71535fe54096d8887dc059b4ab7d400fea2d47dfaa283"},
-    {file = "equinox-0.11.7.tar.gz", hash = "sha256:96e0216a9d822ec4b1465b0cbfbab14a36fb7e7d62c55f521287db3aaaa251be"},
+    {file = "equinox-0.11.8-py3-none-any.whl", hash = "sha256:552292b473956693e8e8973bdae9b58aaec54fd48e192921beb82995e3a9c995"},
+    {file = "equinox-0.11.8.tar.gz", hash = "sha256:d1e91a05e41bb9538db72a8e15d26daf958348c26714533434c88c5ec0c0b0ef"},
 ]
 
 [[package]]
@@ -598,13 +598,13 @@ files = [
 
 [[package]]
 name = "jax"
-version = "0.4.33"
+version = "0.4.35"
 requires_python = ">=3.10"
 summary = "Differentiate, compile, and transform Numpy code."
 groups = ["default", "gpu"]
 dependencies = [
-    "jaxlib<=0.4.33,>=0.4.33",
-    "ml-dtypes>=0.2.0",
+    "jaxlib<=0.4.35,>=0.4.34",
+    "ml-dtypes>=0.4.0",
     "numpy>=1.24",
     "numpy>=1.26.0; python_version >= \"3.12\"",
     "opt-einsum",
@@ -612,47 +612,47 @@ dependencies = [
     "scipy>=1.11.1; python_version >= \"3.12\"",
 ]
 files = [
-    {file = "jax-0.4.33-py3-none-any.whl", hash = "sha256:5f33e30b49060ebc990b1f8d75f89d15b9fec263f6fff34ef1af1d01996d314f"},
-    {file = "jax-0.4.33.tar.gz", hash = "sha256:f0d788692fc0179653066c9e1c64e57311b8c15a389837fd7baf328abefcbb92"},
+    {file = "jax-0.4.35-py3-none-any.whl", hash = "sha256:fa99e909a31424abfec750019a6dd36f6acc18a6e7d40e2c0086b932cc351325"},
+    {file = "jax-0.4.35.tar.gz", hash = "sha256:c0c986993026b10bf6f607fecb7417377460254640766ce40f1fef3fd139c12e"},
 ]
 
 [[package]]
 name = "jax-cuda12-pjrt"
-version = "0.4.33"
+version = "0.4.35"
 summary = "JAX XLA PJRT Plugin for NVIDIA GPUs"
-groups = ["gpu"]
+groups = ["default", "gpu"]
 files = [
-    {file = "jax_cuda12_pjrt-0.4.33-py3-none-manylinux2014_aarch64.whl", hash = "sha256:6a9945a8b58fabd040a06850f5ca6bcf94b9ec45b8248afb20c7f2eb809e2cea"},
-    {file = "jax_cuda12_pjrt-0.4.33-py3-none-manylinux2014_x86_64.whl", hash = "sha256:b43f199ec27fd9b3bb79b34ed297894ad50bb7a6eab62012baaa9ea6607b22de"},
+    {file = "jax_cuda12_pjrt-0.4.35-py3-none-manylinux2014_aarch64.whl", hash = "sha256:81980f1696749351364d7999ee5cb21bedd9d14daa01b40eb60d20f2210da11c"},
+    {file = "jax_cuda12_pjrt-0.4.35-py3-none-manylinux2014_x86_64.whl", hash = "sha256:0ffe7e1ba65659bd5738c2cc5addaf0a56205d2188eec5da194b63c068e1fdd2"},
 ]
 
 [[package]]
 name = "jax-cuda12-plugin"
-version = "0.4.33"
+version = "0.4.35"
 requires_python = ">=3.10"
 summary = "JAX Plugin for NVIDIA GPUs"
-groups = ["gpu"]
+groups = ["default", "gpu"]
 dependencies = [
-    "jax-cuda12-pjrt==0.4.33",
+    "jax-cuda12-pjrt==0.4.35",
 ]
 files = [
-    {file = "jax_cuda12_plugin-0.4.33-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:80736e03df2a5a0c35e4801f59e4d3c8b94cc8e8a03221763c95dcf7851fd120"},
-    {file = "jax_cuda12_plugin-0.4.33-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:a88cf22061416a97731ef837d56695e73d5ebd26aefc612328eeea510d3ed7e5"},
-    {file = "jax_cuda12_plugin-0.4.33-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:bb81b2f65b1bb8e65b966b6f79985d3b168d495628b694fdf1791cd89696694e"},
-    {file = "jax_cuda12_plugin-0.4.33-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:ad8f8863ee8d5e11a867bd71b37e979939cad64d0f74efd52cdb37292517613e"},
-    {file = "jax_cuda12_plugin-0.4.33-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:750b8147076b17ddff097bd6b38f1db227eba6674eb4e5843dbb007e0b6bec33"},
-    {file = "jax_cuda12_plugin-0.4.33-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:73c54317223aa8a5b46f6821d7cacfb38f4dbd2fc66f2a83a33419b4d72a5211"},
+    {file = "jax_cuda12_plugin-0.4.35-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:30290570a8a0547e59c1fd927aefb693d4a4fe15aae23c0a1e5c34eed82bef49"},
+    {file = "jax_cuda12_plugin-0.4.35-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:5fcc47ef49cb8ff5ceaa67d143a18b22c78456a0967d243963312901d978e96e"},
+    {file = "jax_cuda12_plugin-0.4.35-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:982c9b6fcc6f7a64cb4cb19aa2f9f98cfc29faac28ef04721b4617da76d81949"},
+    {file = "jax_cuda12_plugin-0.4.35-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:1752de1060f4671be6da47b88c1e0bcb1d2fe9e99958e95aa375a9b17dfa1656"},
+    {file = "jax_cuda12_plugin-0.4.35-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:767e53cd0ab0f543f7ac64c74e326b4e7145ca6424d0e7128373e5777012e6d9"},
+    {file = "jax_cuda12_plugin-0.4.35-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:80aa5e628e8e9dd4f89b767f73900152033c3bf6d5f49dc2081e93f9bac1c9dc"},
 ]
 
 [[package]]
 name = "jax-cuda12-plugin"
-version = "0.4.33"
+version = "0.4.35"
 extras = ["with_cuda"]
 requires_python = ">=3.10"
 summary = "JAX Plugin for NVIDIA GPUs"
-groups = ["gpu"]
+groups = ["default", "gpu"]
 dependencies = [
-    "jax-cuda12-plugin==0.4.33",
+    "jax-cuda12-plugin==0.4.35",
     "nvidia-cublas-cu12>=12.1.3.1",
     "nvidia-cuda-cupti-cu12>=12.1.105",
     "nvidia-cuda-nvcc-cu12>=12.1.105",
@@ -665,12 +665,12 @@ dependencies = [
     "nvidia-nvjitlink-cu12>=12.1.105",
 ]
 files = [
-    {file = "jax_cuda12_plugin-0.4.33-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:80736e03df2a5a0c35e4801f59e4d3c8b94cc8e8a03221763c95dcf7851fd120"},
-    {file = "jax_cuda12_plugin-0.4.33-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:a88cf22061416a97731ef837d56695e73d5ebd26aefc612328eeea510d3ed7e5"},
-    {file = "jax_cuda12_plugin-0.4.33-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:bb81b2f65b1bb8e65b966b6f79985d3b168d495628b694fdf1791cd89696694e"},
-    {file = "jax_cuda12_plugin-0.4.33-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:ad8f8863ee8d5e11a867bd71b37e979939cad64d0f74efd52cdb37292517613e"},
-    {file = "jax_cuda12_plugin-0.4.33-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:750b8147076b17ddff097bd6b38f1db227eba6674eb4e5843dbb007e0b6bec33"},
-    {file = "jax_cuda12_plugin-0.4.33-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:73c54317223aa8a5b46f6821d7cacfb38f4dbd2fc66f2a83a33419b4d72a5211"},
+    {file = "jax_cuda12_plugin-0.4.35-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:30290570a8a0547e59c1fd927aefb693d4a4fe15aae23c0a1e5c34eed82bef49"},
+    {file = "jax_cuda12_plugin-0.4.35-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:5fcc47ef49cb8ff5ceaa67d143a18b22c78456a0967d243963312901d978e96e"},
+    {file = "jax_cuda12_plugin-0.4.35-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:982c9b6fcc6f7a64cb4cb19aa2f9f98cfc29faac28ef04721b4617da76d81949"},
+    {file = "jax_cuda12_plugin-0.4.35-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:1752de1060f4671be6da47b88c1e0bcb1d2fe9e99958e95aa375a9b17dfa1656"},
+    {file = "jax_cuda12_plugin-0.4.35-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:767e53cd0ab0f543f7ac64c74e326b4e7145ca6424d0e7128373e5777012e6d9"},
+    {file = "jax_cuda12_plugin-0.4.35-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:80aa5e628e8e9dd4f89b767f73900152033c3bf6d5f49dc2081e93f9bac1c9dc"},
 ]
 
 [[package]]
@@ -691,24 +691,41 @@ files = [
 
 [[package]]
 name = "jax"
-version = "0.4.33"
+version = "0.4.35"
+extras = ["cuda12"]
+requires_python = ">=3.10"
+summary = "Differentiate, compile, and transform Numpy code."
+groups = ["default"]
+dependencies = [
+    "jax-cuda12-plugin[with_cuda]<=0.4.35,>=0.4.34",
+    "jax==0.4.35",
+    "jaxlib==0.4.34",
+]
+files = [
+    {file = "jax-0.4.35-py3-none-any.whl", hash = "sha256:fa99e909a31424abfec750019a6dd36f6acc18a6e7d40e2c0086b932cc351325"},
+    {file = "jax-0.4.35.tar.gz", hash = "sha256:c0c986993026b10bf6f607fecb7417377460254640766ce40f1fef3fd139c12e"},
+]
+
+[[package]]
+name = "jax"
+version = "0.4.35"
 extras = ["cuda12_pip"]
 requires_python = ">=3.10"
 summary = "Differentiate, compile, and transform Numpy code."
 groups = ["gpu"]
 dependencies = [
-    "jax-cuda12-plugin[with_cuda]<=0.4.33,>=0.4.33",
-    "jax==0.4.33",
-    "jaxlib==0.4.33",
+    "jax-cuda12-plugin[with_cuda]<=0.4.35,>=0.4.34",
+    "jax==0.4.35",
+    "jaxlib==0.4.34",
 ]
 files = [
-    {file = "jax-0.4.33-py3-none-any.whl", hash = "sha256:5f33e30b49060ebc990b1f8d75f89d15b9fec263f6fff34ef1af1d01996d314f"},
-    {file = "jax-0.4.33.tar.gz", hash = "sha256:f0d788692fc0179653066c9e1c64e57311b8c15a389837fd7baf328abefcbb92"},
+    {file = "jax-0.4.35-py3-none-any.whl", hash = "sha256:fa99e909a31424abfec750019a6dd36f6acc18a6e7d40e2c0086b932cc351325"},
+    {file = "jax-0.4.35.tar.gz", hash = "sha256:c0c986993026b10bf6f607fecb7417377460254640766ce40f1fef3fd139c12e"},
 ]
 
 [[package]]
 name = "jaxlib"
-version = "0.4.33"
+version = "0.4.34"
 requires_python = ">=3.10"
 summary = "XLA library for JAX"
 groups = ["default", "gpu"]
@@ -719,21 +736,21 @@ dependencies = [
     "scipy>=1.11.1; python_version >= \"3.12\"",
 ]
 files = [
-    {file = "jaxlib-0.4.33-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:c12294ff10e5dcea9a4601833399a8b04aa7d0c8ab6e2c1afde930d36d5d0b20"},
-    {file = "jaxlib-0.4.33-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:0676ac605880ac6aa0ab9946a24a073ee8a1a83baf71cc1d35b71917a99d03d1"},
-    {file = "jaxlib-0.4.33-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:5ba7eaa9722037755833cb70d9a98a049abea13e51dac3719b833dbf42ddf69a"},
-    {file = "jaxlib-0.4.33-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:eaf21b55fd8f046fcd82c8ea956b636b4b11f892341f3fcd3dc29c4ce5ac4857"},
-    {file = "jaxlib-0.4.33-cp310-cp310-win_amd64.whl", hash = "sha256:98e682e0d944ca8af8c05724dc4a14b7aaa87cd67ddb32737861eee7ccdaabb4"},
-    {file = "jaxlib-0.4.33-cp311-cp311-macosx_10_14_x86_64.whl", hash = "sha256:6ee2f8692a5ea32acc63bbcc7390312f553614c22348c7366f08995e8764d839"},
-    {file = "jaxlib-0.4.33-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:82c29635ddc51ba91671ab2be042f4701339df176e792eb6adf50ccabd723606"},
-    {file = "jaxlib-0.4.33-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:9e6e933033cdfaebd018cdb5bfaf735bc164020316fe3ecff6c4b0dcf63f0f95"},
-    {file = "jaxlib-0.4.33-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:400f401498675fd42dcaf0b855f325691951b250d619a8cbc5955f947e2494aa"},
-    {file = "jaxlib-0.4.33-cp311-cp311-win_amd64.whl", hash = "sha256:95fedfb5f10f8bdfa57d81dd09933e78ba297719b40192357685b3aaa4287fef"},
-    {file = "jaxlib-0.4.33-cp312-cp312-macosx_10_14_x86_64.whl", hash = "sha256:43c63e094948f0486505035b55a685b03ddde61705ce585f84b8c1438da20da0"},
-    {file = "jaxlib-0.4.33-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:3e14b4b50a19370312875541509a7ddc1ef8fc0bd95cff9508db9725038e8297"},
-    {file = "jaxlib-0.4.33-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:4af6ee4070650ff120a92ff8454e70e0ef993434f3f3767a0e898cc484b836e2"},
-    {file = "jaxlib-0.4.33-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:054aa0f122725e000b8f8815b1794067ef2ff821588b62e1fab2a1280847f5c6"},
-    {file = "jaxlib-0.4.33-cp312-cp312-win_amd64.whl", hash = "sha256:94e8d7bdd0506e1471d36d5da1e5838711fbd2ce18dffe7b694cad6b56e64e8c"},
+    {file = "jaxlib-0.4.34-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:b7a212a3cb5c6acc201c32ae4f4b5f5a9ac09457fbb77ba8db5ce7e7d4adc214"},
+    {file = "jaxlib-0.4.34-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:45d719a2ce0ebf21255a277b71d756f3609b7b5be70cddc5d88fd58c35219de0"},
+    {file = "jaxlib-0.4.34-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:3e60bc826933082e99b19b87c21818a8d26fcdb01f418d47cedff554746fd6cc"},
+    {file = "jaxlib-0.4.34-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:d840e64b85f8865404d6d225b9bb340e158df1457152a361b05680e24792b232"},
+    {file = "jaxlib-0.4.34-cp310-cp310-win_amd64.whl", hash = "sha256:b0001c8f0e2b1c7bc99e4f314b524a340d25653505c1a1484d4041a9d3617f6f"},
+    {file = "jaxlib-0.4.34-cp311-cp311-macosx_10_14_x86_64.whl", hash = "sha256:8ee3f93836e53c86556ccd9449a4ea43516ee05184d031a71dd692e81259f7d9"},
+    {file = "jaxlib-0.4.34-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:c9d3adcae43a33aad4332be9c2aedc5ef751d1e755f917a5afb30c7872eacaa8"},
+    {file = "jaxlib-0.4.34-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:571ef03259835458111596a71a2f4a6fabf4ec34595df4cea555035362ac5bf0"},
+    {file = "jaxlib-0.4.34-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:3bcfa639ca3cfaf86c8ceebd5fc0d47300fd98a078014a1d0cc03133e1523d5f"},
+    {file = "jaxlib-0.4.34-cp311-cp311-win_amd64.whl", hash = "sha256:133070d4fec5525ffea4dc72956398c1cf647a04dcb37f8a935ee82af78d9965"},
+    {file = "jaxlib-0.4.34-cp312-cp312-macosx_10_14_x86_64.whl", hash = "sha256:c7b3e724a30426a856070aba0192b5d199e95b4411070e7ad96ad8b196877b10"},
+    {file = "jaxlib-0.4.34-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:096f0ca309d41fa692a9d1f2f9baab1c5c8ca0749876ebb3f748e738a27c7ff4"},
+    {file = "jaxlib-0.4.34-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:1a30771d85fa77f9ab8f18e63240f455ab3a3f87660ed7b8d5eea6ceecbe5c1e"},
+    {file = "jaxlib-0.4.34-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:48272e9034ff868d4328cf0055a07882fd2be93f59dfb6283af7de491f9d1290"},
+    {file = "jaxlib-0.4.34-cp312-cp312-win_amd64.whl", hash = "sha256:901cb4040ed24eae40071d8114ea8d10dff436277fa74a1a5b9e7206f641151c"},
 ]
 
 [[package]]
@@ -1232,7 +1249,7 @@ name = "nvidia-cublas-cu12"
 version = "12.4.5.8"
 requires_python = ">=3"
 summary = "CUBLAS native runtime libraries"
-groups = ["gpu"]
+groups = ["default", "gpu"]
 files = [
     {file = "nvidia_cublas_cu12-12.4.5.8-py3-none-manylinux2014_x86_64.whl", hash = "sha256:2fc8da60df463fdefa81e323eef2e36489e1c94335b5358bcb38360adf75ac9b"},
     {file = "nvidia_cublas_cu12-12.4.5.8-py3-none-win_amd64.whl", hash = "sha256:5a796786da89203a0657eda402bcdcec6180254a8ac22d72213abc42069522dc"},
@@ -1243,7 +1260,7 @@ name = "nvidia-cuda-cupti-cu12"
 version = "12.4.127"
 requires_python = ">=3"
 summary = "CUDA profiling tools runtime libs."
-groups = ["gpu"]
+groups = ["default", "gpu"]
 files = [
     {file = "nvidia_cuda_cupti_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl", hash = "sha256:9dec60f5ac126f7bb551c055072b69d85392b13311fcc1bcda2202d172df30fb"},
     {file = "nvidia_cuda_cupti_cu12-12.4.127-py3-none-win_amd64.whl", hash = "sha256:5688d203301ab051449a2b1cb6690fbe90d2b372f411521c86018b950f3d7922"},
@@ -1254,7 +1271,7 @@ name = "nvidia-cuda-nvcc-cu12"
 version = "12.4.131"
 requires_python = ">=3"
 summary = "CUDA nvcc"
-groups = ["gpu"]
+groups = ["default", "gpu"]
 files = [
     {file = "nvidia_cuda_nvcc_cu12-12.4.131-py3-none-manylinux2014_x86_64.whl", hash = "sha256:e4c9a35435c3b0e36c6397c5696334c9ea6650e524736cbd1c5d345ea099bb04"},
     {file = "nvidia_cuda_nvcc_cu12-12.4.131-py3-none-win_amd64.whl", hash = "sha256:aadd9fb307352bbcd5bc89b5f98c10cd78000915094882d97321f5fe36441742"},
@@ -1265,7 +1282,7 @@ name = "nvidia-cuda-runtime-cu12"
 version = "12.4.127"
 requires_python = ">=3"
 summary = "CUDA Runtime native Libraries"
-groups = ["gpu"]
+groups = ["default", "gpu"]
 files = [
     {file = "nvidia_cuda_runtime_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl", hash = "sha256:64403288fa2136ee8e467cdc9c9427e0434110899d07c779f25b5c068934faa5"},
     {file = "nvidia_cuda_runtime_cu12-12.4.127-py3-none-win_amd64.whl", hash = "sha256:09c2e35f48359752dfa822c09918211844a3d93c100a715d79b59591130c5e1e"},
@@ -1276,7 +1293,7 @@ name = "nvidia-cudnn-cu12"
 version = "9.5.0.50"
 requires_python = ">=3"
 summary = "cuDNN runtime libraries"
-groups = ["gpu"]
+groups = ["default", "gpu"]
 dependencies = [
     "nvidia-cublas-cu12",
 ]
@@ -1291,7 +1308,7 @@ name = "nvidia-cufft-cu12"
 version = "11.2.1.3"
 requires_python = ">=3"
 summary = "CUFFT native runtime libraries"
-groups = ["gpu"]
+groups = ["default", "gpu"]
 files = [
     {file = "nvidia_cufft_cu12-11.2.1.3-py3-none-manylinux2014_x86_64.whl", hash = "sha256:f083fc24912aa410be21fa16d157fed2055dab1cc4b6934a0e03cba69eb242b9"},
     {file = "nvidia_cufft_cu12-11.2.1.3-py3-none-win_amd64.whl", hash = "sha256:d802f4954291101186078ccbe22fc285a902136f974d369540fd4a5333d1440b"},
@@ -1302,7 +1319,7 @@ name = "nvidia-cusolver-cu12"
 version = "11.6.1.9"
 requires_python = ">=3"
 summary = "CUDA solver native runtime libraries"
-groups = ["gpu"]
+groups = ["default", "gpu"]
 dependencies = [
     "nvidia-cublas-cu12",
     "nvidia-cusparse-cu12",
@@ -1318,7 +1335,7 @@ name = "nvidia-cusparse-cu12"
 version = "12.3.1.170"
 requires_python = ">=3"
 summary = "CUSPARSE native runtime libraries"
-groups = ["gpu"]
+groups = ["default", "gpu"]
 dependencies = [
     "nvidia-nvjitlink-cu12",
 ]
@@ -1332,7 +1349,7 @@ name = "nvidia-nccl-cu12"
 version = "2.21.5"
 requires_python = ">=3"
 summary = "NVIDIA Collective Communication Library (NCCL) Runtime"
-groups = ["gpu"]
+groups = ["default", "gpu"]
 files = [
     {file = "nvidia_nccl_cu12-2.21.5-py3-none-manylinux2014_x86_64.whl", hash = "sha256:8579076d30a8c24988834445f8d633c697d42397e92ffc3f63fa26766d25e0a0"},
 ]
@@ -1342,7 +1359,7 @@ name = "nvidia-nvjitlink-cu12"
 version = "12.4.127"
 requires_python = ">=3"
 summary = "Nvidia JIT LTO Library"
-groups = ["gpu"]
+groups = ["default", "gpu"]
 files = [
     {file = "nvidia_nvjitlink_cu12-12.4.127-py3-none-manylinux2014_x86_64.whl", hash = "sha256:06b3b9b25bf3f8af351d664978ca26a16d2c5127dbd53c0497e28d1fb9611d57"},
     {file = "nvidia_nvjitlink_cu12-12.4.127-py3-none-win_amd64.whl", hash = "sha256:fd9020c501d27d135f983c6d3e244b197a7ccad769e34df53a42e276b0e25fa1"},
