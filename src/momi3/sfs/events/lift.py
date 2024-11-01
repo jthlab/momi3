@@ -10,11 +10,12 @@ from jax import numpy as jnp
 from jax import vmap
 from jax.scipy.linalg import expm
 
-from momi3.common import Axes, PopCounter, Population, State, Time, oe_einsum, traverse
+from momi3.common import Axes, PopCounter, Population, Time, oe_einsum, traverse
 from momi3.migration import lift_cm, lift_cm_aux
 from momi3.pexp import PExp
 from momi3.utils import W_matrix, moran_eigensystem, rate_matrix
 
+from ..state import State
 from .event import Event
 
 T = TypeVar("T")

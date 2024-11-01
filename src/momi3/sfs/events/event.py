@@ -5,8 +5,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from momi3.common import Axes, PopCounter, Population, State, T, oe_einsum
+from momi3.common import Axes, PopCounter, Population, T, oe_einsum
 from momi3.math_functions import log_hypergeom
+
+from ..state import State
 
 
 @dataclass(frozen=True, kw_only=True)

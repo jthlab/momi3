@@ -9,9 +9,10 @@ import jaxopt
 import lineax as lx
 import numpy as np
 
-from momi3.common import Axes, PopCounter, Population, State, oe_einsum, unique_strs
+from momi3.common import Axes, PopCounter, Population, oe_einsum, unique_strs
 from momi3.math_functions import binom_pmf_safe, convolve_sum, log_hypergeom
 
+from ..state import State
 from .event import Event
 
 T = TypeVar("T")

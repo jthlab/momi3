@@ -4,9 +4,10 @@ from dataclasses import dataclass
 import numpy as np
 from jax import numpy as jnp
 
-from momi3.common import Axes, PopCounter, Population, State
+from momi3.common import Axes, PopCounter, Population
 from momi3.math_functions import log_hypergeom
 
+from ..state import State
 from .event import Event
 
 

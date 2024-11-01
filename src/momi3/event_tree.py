@@ -1,21 +1,19 @@
-import dataclasses
 import math
 import operator
 from copy import deepcopy
 from enum import Enum
 from functools import reduce, total_ordering
-from itertools import count, product
+from itertools import count
+from types import ModuleType
 from typing import Callable, Iterable, NamedTuple
 
 import demes
-import jax
 import jax.numpy as jnp
 import networkx as nx
 from frozendict import frozendict
 from loguru import logger
 
-from momi3 import events
-from momi3.common import Axes, Population, State, Time, unique_strs
+from momi3.common import Axes, Population, Time, unique_strs
 
 
 @total_ordering
@@ -97,13 +95,13 @@ class Node(NamedTuple):
     t: Time
 
 
-def _check_shape(state: State, ax: Axes) -> None:
-    assert len(state.pl.shape) == len(ax), f"{state.pl.shape} != {ax}"
+def _check_shape(state, ax: Axes) -> None:
+    assert len(state.shape) == len(ax), f"{state.pl.shape} != {ax}"
     for x, (pop, y) in zip(state.pl.shape, ax.items()):
         assert x == y, f"shape mismatch: {pop} has {x} axes, but {y} were expected"
 
 
-class ETBuilder:
+class EventTree:
     """Build an event tree from a demes graph.
 
     Args:
@@ -114,23 +112,28 @@ class ETBuilder:
     def __init__(
         self,
         demo: demes.Graph,
-        num_samples: dict[str, int],
+        events: ModuleType,
     ):
         self._demo = demo
+        self._events = events
         self._T = nx.DiGraph()
-        self._num_samples = num_samples
         # initialize the event tree
         self._times = {}
-        self._init_event_tree()
+        self._init_tree()
         # compute aux information for each node
+        self._build_tree()
         self._setup()
+
+    @property
+    def events(self):
+        return self._events
 
     def _add_time(self, t, path):
         tm = Time(t, path=path)
         self._times.setdefault(t, set()).add(tm)
         return tm
 
-    def _init_event_tree(self):
+    def _init_tree(self):
         # initialize the event tree
         self._i = count(1)
         leaves = self._leaves = {}
@@ -148,33 +151,12 @@ class ETBuilder:
                 migrations=frozendict(),
             )
             leaves[deme.name] = node
-            ns = self.num_samples.get(deme.name, 0)
-            if ns < 4:
-                # for continuous migration, we require that there are at least four nodes. so for now we just enforce
-                # this globally. slightly wasteful if there is not any cm 🤷.
-                v = self.node_like(node)
-                self.add_edge(
-                    node, v, event=events.Downsample(pop=deme.name, m=4, n=ns)
-                )
-        # build the event tree. relatively costly operation, but should still be fast for all the demographies we can
-        # actually analyze
-        self._build()
-
-    @property
-    def num_samples(self):
-        return self._num_samples
 
     def _setup(self):
         # precompute auxiliary information for each event
-        leaves = self._leaves
-        for deme in self._demo.demes:
-            pop = deme.name
-            n = self.num_samples.get(pop, 0)
-            self.nodes[leaves[pop]].update(
-                {"axes": Axes({pop: n + 1}), "ns": {pop: {pop: n}}}
-            )
-
-        auxd = self._auxd = {"nodes": {}, "edges": {}}
+        leaves = self.leaves
+        events = self.events
+        auxd = {"nodes": {}, "edges": {}}
         for u in nx.topological_sort(self._T):
             child_axes = {}
             child_ns = {}
@@ -213,10 +195,9 @@ class ETBuilder:
             ) = ev.setup(child_axes, child_ns)
             auxd["nodes"][u] = aux
             self.nodes[u].update({"axes": new_ax, "ns": new_ns})
+        return auxd
 
-    def execute(
-        self, params: dict, X: dict[Population, jnp.ndarray], auxd: dict
-    ) -> jnp.ndarray:
+    def execute(self, params: dict, auxd: dict) -> jnp.ndarray:
         """Execute the event tree.
 
         Args:
@@ -229,14 +210,8 @@ class ETBuilder:
         """
         # assert set(X) == set(self._leaves)
         # initialize leaf node partials
-        for pop in self._leaves:
-            # int partial likelihoods causes all sorts of problems further down
-            ns = self.num_samples.get(pop, 0)
-            XX = X.get(pop, jax.nn.one_hot(jnp.array([0]), ns + 1)[0]).astype(float)
-            assert XX.shape == (ns + 1,)
-            l0 = (XX[0] == 1.0).astype(float)  # & (X[pop][1:] == 0.0).all()
-            self.nodes[self._leaves[pop]]["state"] = State(pl=XX, phi=0.0, l0=l0)
         # traverse tree starting at leaves and working up
+        events = self.events
         for u in nx.topological_sort(self._T):
             logger.trace("executing node {}", u)
             child_state = {}
@@ -247,7 +222,7 @@ class ETBuilder:
                 # execute the edge event (if any)
                 ev = e.get("event", events.NoOp())
                 new_st = ev.execute(st, params=params, aux=aux)
-                assert isinstance(new_st, State)
+                assert isinstance(new_st, st.__class__)
                 id_ = e.get("id", f"child{i}") + "_state"
                 child_state[id_] = new_st
                 # check that the returned state is consistent with the child axes
@@ -272,7 +247,7 @@ class ETBuilder:
             elif len(child_state) == 2:
                 assert isinstance(ev, (events.MigrationStart, events.Split2))
             new_st = ev.execute(child_state, params=params, aux=aux)
-            assert isinstance(new_st, State)
+            assert isinstance(new_st, st.__class__)
             if new_st.pl is None:
                 assert (
                     self._T.out_degree[u] == 0
@@ -340,7 +315,7 @@ class ETBuilder:
         assert u.t < t
         # create a new node that is the same as u, but with a different time
         v = self.node_like(u, t=t)
-        ev = events.Lift(
+        ev = self.events.Lift(
             t0=u.t,
             t1=v.t,
             epochs=self.nodes[u]["epochs"],
@@ -349,14 +324,14 @@ class ETBuilder:
         self._T.add_edge(u, v, event=ev)
         return v
 
-    def bound(self, bounds):
-        for d in self.nodes, self.edges:
-            for u in d:
-                ev = d[u].get("event")
-                if ev is not None and ev in bounds:
-                    d[u]["event"] = dataclasses.replace(ev, bounds=bounds[ev])
-        self._setup()
-        return self
+    # def bound(self, bounds):
+    #     for d in self.nodes, self.edges:
+    #         for u in d:
+    #             ev = d[u].get("event")
+    #             if ev is not None and ev in bounds:
+    #                 d[u]["event"] = dataclasses.replace(ev, bounds=bounds[ev])
+    #     self._setup()
+    #     return self
 
     def _merge_nodes(self, x: Node, y: Node, rm=None) -> Node:
         """merge nodes x and y, optionally removing rm from the merged block set."""
@@ -378,8 +353,9 @@ class ETBuilder:
             self._T.add_edge(z, nn)
         return nn
 
-    def _build(self):
+    def _build_tree(self):
         """build the event tree"""
+        events = self.events
 
         # this sorting function ensures that:
         # - events are processed (reverse-)chronologically
@@ -493,6 +469,7 @@ class ETBuilder:
 
     def _pulse(self, source: Population, dest: Population, t: Time, f_p: Callable):
         """forward-in-time pulse from source into dest"""
+        events = self.events
         u = self._lift(dest, t)
         v = self._lift(source, t)
         # there are two cases to consider depending on whether they are in the same block or not
@@ -523,67 +500,9 @@ class ETBuilder:
             self.add_edge(x, y, event=events.Rename(old=tr2, new=dest))
 
     @property
-    def auxd(self):
-        return self._auxd
-
-    @property
     def leaves(self):
         return self._leaves
 
     @property
     def times(self):
         return self._times
-
-
-class Momi:
-    def __init__(self, demo: demes.Graph, n_samples: dict[str, int], jit: bool = False):
-        self._demo = demo
-        self._n_samples = n_samples
-        self._T = ETBuilder(demo, n_samples)
-        self._f = self._T.execute
-        if jit:
-            self._f = jax.jit(self._f)
-
-    def esfs_tensor_prod(self, X: dict[Population, jnp.ndarray], params=None) -> float:
-        """Compute the expected tensor product for a given demographic model.
-
-        Args:
-            X: input tensor mapping populations to leaf node partial likelihoods
-        """
-        for pop in self._n_samples:
-            if pop not in X:
-                raise RuntimeError(f"missing leaf node partial likelihood for {pop}")
-            assert X[pop].shape == (self._n_samples[pop] + 1,)
-        if params is None:
-            params = self._demo.asdict()
-        # todo: merge params with runtime overrides
-        return self._f(params, X, self._T.auxd)
-
-    def _sfs_entries(self, num_deriveds: dict):
-        return jax.vmap(self.sfs_entry, 0)(num_deriveds)
-
-    def sfs_spectrum(self):
-        bs = [jnp.arange(self._n_samples[pop] + 1) for pop in self._n_samples]
-        mutant_sizes = jnp.array(list(product(*bs)))
-
-        num_deriveds = {}
-        for i, pop in enumerate(self._n_samples):
-            num_deriveds[pop] = mutant_sizes[:, i]
-
-        ret = self._sfs_entries(num_deriveds)
-        spectrum = jnp.zeros([self._n_samples[pop] + 1 for pop in self._n_samples])
-        for b, val in zip(mutant_sizes[1:-1], ret[1:-1]):
-            spectrum = spectrum.at[tuple(b)].set(val)
-
-        return spectrum
-
-
-if __name__ == "__main__":
-    b = demes.Builder()
-    b.add_deme("anc", epochs=[dict(start_size=1, end_time=1)])
-    b.add_deme("A", epochs=[dict(start_size=1)], ancestors=["anc"])
-    b.add_deme("B", epochs=[dict(start_size=1)], ancestors=["anc"])
-    b.add_pulse(sources=["A"], dest="B", time=0.5, proportions=[0.5])
-    g = b.resolve()
-    m = Momi(g, n_samples={"A": 10, "B": 10})
-    print(m.sfs_entry(num_derived={"A": 1, "B": 5}))

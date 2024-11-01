@@ -1,7 +1,7 @@
 "miscellaneous shared functions that don't fit anywhere else"
 from collections import namedtuple
 from secrets import token_hex
-from typing import NamedTuple, OrderedDict, Sequence, TypeVar
+from typing import OrderedDict, Sequence, TypeVar
 
 from jax import numpy as jnp
 from jax.tree_util import register_pytree_node_class
@@ -36,6 +36,7 @@ PopCounter = dict[
     Population, dict[Population, int]
 ]  # Maps populations to the populations they are ancestral to, and the sample size of each
 Block = frozenset[Population]
+Path = tuple[str | int, ...]
 
 
 @register_pytree_node_class
@@ -51,20 +52,6 @@ class Axes(OrderedDict[Population, int]):
     @classmethod
     def tree_unflatten(cls, keys, values):
         return OrderedDict(safe_zip(keys, values))
-
-
-class State(NamedTuple):
-    """The state of a node in the event tree:
-
-    Attributes:
-        pl: the likelihood of the subtended leaf alleles conditional on the number of derived alleles at this node
-        phi: the total expected branch length subtending the leaf alleles
-        l0: do the leaves beneath this pl all have zero derived alleles?
-    """
-
-    pl: jnp.ndarray
-    phi: float
-    l0: bool
 
 
 T = TypeVar("T")

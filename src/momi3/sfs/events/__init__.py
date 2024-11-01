@@ -2,7 +2,9 @@ from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
 
-from ..common import Axes, PopCounter, Population, State, T
+from momi3.common import Axes, PopCounter, Population, T
+
+from ..state import State
 from .admix import Admix, Pulse
 from .downsample import Downsample
 from .event import Event
