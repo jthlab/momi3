@@ -63,7 +63,7 @@ def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
 
 
 def _A(s, y, args):
-    Q_mig, Q_mut, Q_drift, dims, axes, etas, aux, theta = args
+    Q_mig, Q_mut, Q_drift, dims, axes, aux, etas = args
     coal = {}
     for pop in etas:
         i = list(axes).index(pop)
@@ -81,7 +81,7 @@ def _A(s, y, args):
         ((i, Aij),) = Ai.items()
         new_A.append({i: coal[i] * Aij})
     Qd = Q_drift._replace(A=new_A)
-    Q0 = Q_mig + Qd + theta * Q_mut
+    Q0 = Q_mig + Qd
     if isinstance(y, tuple):
         return Q0 @ y[0] + Q_mut @ y[1], Q0 @ y[1]
     return Q0 @ y
@@ -108,44 +108,32 @@ def _lift_cm_exp(params, t, pl, axes, aux):
 
     solver = dfx.Kvaerno3()
     term = dfx.ODETerm(_A)
-    jump_ts = jnp.sort(jnp.concatenate([eta.t for eta in etas.values()]))
-    ssc = dfx.PIDController(jump_ts=jump_ts, rtol=1e-6, atol=1e-6)
 
     def solve(y0, args):
+        etas = args[-1]
+        jump_ts = jnp.sort(jnp.concatenate([eta.t for eta in etas.values()]))
+        ssc = dfx.PIDController(jump_ts=jump_ts, rtol=1e-6, atol=1e-6)
         res = dfx.diffeqsolve(
             term,
             solver,
             t0=t[0],
             t1=t[1],
-            dt0=(t[1] - t[0]) / 100,
-            # dt0=1.,
+            # dt0=(t[1] - t[0]) / 100,
+            dt0=None,
             y0=y0,
             args=args,
             stepsize_controller=ssc,
-            # max_steps=4096,
-            max_steps=16384,
-            # adjoint=dfx.RecursiveCheckpointAdjoint(checkpoints=10),
+            max_steps=4096,
+            # max_steps=16384,
+            adjoint=dfx.RecursiveCheckpointAdjoint(checkpoints=10),
             # adjoint=dfx.BacksolveAdjoint(),
-            adjoint=dfx.DirectAdjoint(),
+            # adjoint=dfx.DirectAdjoint(),
         )
         # jax.debug.print("number of steps: {}", res.stats["num_steps"])
         return res.ys
 
-    primal_args = (Q_mig_T, Q_mut.T, Q_drift.T, dims, axes, etas, aux, 0.0)
+    primal_args = (Q_mig_T, Q_mut.T, Q_drift.T, dims, axes, aux, etas)
     plp = solve(pl, primal_args)[0]
-
-    # branch length computation
-    involved = list(params["etas"].keys())
-    sh = tuple([pl.shape[i] if pop in involved else 1 for i, pop in enumerate(axes)])
-    z = jnp.zeros(sh)
-    e0 = z.at[(0,) * z.ndim].set(1.0)
-    tangent_args = tuple([X._replace(dims=sh) for X in (Q_mig, Q_mut, Q_drift)]) + (
-        sh,
-        axes,
-        etas,
-        aux,
-        0.0,
-    )
 
     # compute d/dtheta x(t,theta)|{theta=0} using the forward sensitivity method.
     # we have x'(t, theta) = Q(t, theta) @ x(t, theta) and therefore
@@ -157,17 +145,21 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     # the initial condition is d/dtheta(x(0, theta)) = 0.; x(0,theta) = e0
 
     # for computing branch length, we only need to track the populations that are involved in the migration
+    involved = list(etas.keys())
+    sh = tuple([pl.shape[i] if pop in involved else 1 for i, pop in enumerate(axes)])
+    z = jnp.zeros(sh)
+    e0 = z.at[(0,) * z.ndim].set(1.0)
+
+    etas = {k: v.reverse() for k, v in etas.items()}
+    tangent_args = tuple([X._replace(dims=sh) for X in (Q_mig, Q_mut, Q_drift)]) + (
+        sh,
+        axes,
+        aux,
+        etas,
+    )
+    # time runs backwards here!
     res = solve((z, e0), tangent_args)
     etbl = res[0][0]
-
-    # @jax.jacfwd
-    # def df(theta):
-    #     ta = tangent_args[:-1] + (theta,)
-    #     return solve(e0, ta)
-
-    # etbl2 = df(0.0)[0]
-
-    # breakpoint()
 
     inds = tuple([slice(None) if pop in involved else 0 for pop in axes])
     return plp, etbl[inds]

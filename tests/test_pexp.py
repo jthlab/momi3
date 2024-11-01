@@ -1,3 +1,4 @@
+import jax.numpy as jnp
 import numpy as np
 import pytest
 from scipy.integrate import quad
@@ -28,7 +29,7 @@ def test_pexp_call(rpexp, rng):
 def test_pexp_R0():
     "test using quadrature that PExp(N0, N1, r).R(t) is the integral of PExp(N0, N1, r)(t) from 0 to t"
     pe = PExp(
-        t=np.array([0.0, 1.0, 2.0]), N0=np.array([1.0, 1.0]), N1=np.array([2, 2.0])
+        t=jnp.array([0.0, 1.0, 2.0]), N0=jnp.array([1.0, 1.0]), N1=jnp.array([2, 2.0])
     )
     np.testing.assert_allclose(pe(0.0), 1.0)
     np.testing.assert_allclose(pe(1.0), 2.0)
@@ -83,3 +84,9 @@ def test_pexp_exp_integral_const(rng):
     for u in rng.uniform(0.0, 10.0, 10):
         pe = PExp(N0, N0, t)
         np.testing.assert_allclose(pe.R(u), u / 2 / N0, rtol=1e-5)
+
+
+def test_pexp_reverse(rpexp, rng):
+    "test that pexp.reverse(t[-1] - s) == pexp(s)"
+    for s in rng.uniform(rpexp.t[0], rpexp.t[-1], 10):
+        np.testing.assert_allclose(rpexp(s), rpexp.reverse()(rpexp.t[-1] - s))

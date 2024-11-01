@@ -22,6 +22,11 @@ class PExp(NamedTuple):
     N1: jnp.ndarray
     t: jnp.ndarray
 
+    def reverse(self):
+        r"Return a new PExp object with time reversed."
+        # won't work if self.t[-1] = inf, but we should not ever hit this case
+        return PExp(self.N1[::-1], self.N0[::-1], self.t[-1] - self.t[::-1])
+
     @property
     def a(self):
         "eta(t) = a[i] exp(-(t[i + 1] - t)) b[i]) = 1 / (2 Ne(t))"

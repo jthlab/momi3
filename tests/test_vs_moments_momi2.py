@@ -722,6 +722,26 @@ def test_two_pop_five_pulses(run_type="pytest", **kwargs):
 
 @pytest.mark.migration
 @pytest.mark.exponential
+def test_two_pop_exponential_migration0(run_type="pytest", **kwargs):
+    g = 0.025
+    size = 1000.0
+    rate = 0.0
+    t = 100.0
+    m = TwoDemes.Exponential(t=t, size=size, g=g, size_top=1e-8)
+    _, model0 = m.base()
+    demo, model1 = m.migration(tstart=t, rate=rate)
+    sampled_demes = ["A", "B"]
+    sample_sizes = [10, 6]
+    mvm = Momi_vs_Moments(demo, model1, sampled_demes, sample_sizes)
+    mvm.momi2_model = model0
+    print("two-pop exp growth w/ migration")
+    mvm.compare("momi2", "momi3", run_type, **kwargs)
+    mvm.compare("momi3", "moments", run_type, **kwargs)
+    mvm.compare("momi2", "moments", run_type, **kwargs)
+
+
+@pytest.mark.migration
+@pytest.mark.exponential
 def test_two_pop_exponential_migration(run_type="pytest", **kwargs):
     g = 0.025
     size = 1000.0

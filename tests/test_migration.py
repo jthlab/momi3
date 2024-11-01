@@ -1,3 +1,4 @@
+import jax.numpy as jnp
 import numpy as np
 from moments import Integration, Jackknife
 from pytest import fixture
@@ -85,15 +86,15 @@ def test_lift_eq_exp_m0(rng):
     "test that jointly lifting a 2-tensor with exponential population size is the same as lifting with migration=0"
     n_A = 7
     n_B = 4
-    t = np.array([0.0, 21.2e3])
+    t = jnp.array([0.0, 21.2e3])
     pl = rng.uniform(
         size=(n_A + 1, n_B + 1)
     )  # 5 is the minimum size for the migration matrices
     axes = Axes(zip("AB", pl.shape))
     aux = lift_cm_aux(axes, [("A", "B")])
     etas = dict(
-        A=PExp(t=t, N0=np.array([12300]), N1=np.array([12300])),
-        B=PExp(t=t, N0=np.array([54090]), N1=np.array([510])),
+        A=PExp(t=t, N0=jnp.array([12300]), N1=jnp.array([12300])),
+        B=PExp(t=t, N0=jnp.array([54090]), N1=jnp.array([510])),
     )
     params = {
         "etas": etas,
