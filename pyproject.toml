@@ -35,8 +35,9 @@ dependencies = [
     "loguru>=0.7.2",
     "quadax>=0.2.1",
     "jax-dataclasses>=1.6.0",
-    "lineax>=0.0.6",
+    "lineax>=0.0.7",
     "equinox>=0.11.8",
+    "optimistix>=0.0.9",
 ]
 requires-python = ">=3.10,<3.13"
 readme = "README.rst"
@@ -75,10 +76,6 @@ testing = [
     "numpy>=1.26.4",
     "dadi>=2.3.3",
 ]
-dev = [
-    "ipython>=8.23.0",
-    "moments-popgen>=1.2.2",
-]
 
 [[tool.pdm.source]]
 name = "jax"
@@ -90,3 +87,6 @@ verify_ssl = true
 name = "nvidia"
 url = "https://pypi.ngc.nvidia.com"
 verify_ssl = true
+
+[dependency-groups]
+dev = ["ipython>=8.23.0", "moments-popgen>=1.2.2", "stdpopsim>=0.2.0"]
