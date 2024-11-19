@@ -4,11 +4,13 @@ import demes
 import momi as momi2
 import numpy as np
 
+N0 = 1e4
+
 
 class SingleDeme:
     class Constant:
-        def __init__(self, size=1.0):
-            model1 = momi2.DemographicModel(N_e=size, muts_per_gen=1)
+        def __init__(self, size=1.0 * N0):
+            model1 = momi2.DemographicModel(N_e=size, muts_per_gen=1e-8)
             model1.add_leaf("A", N=size)
             self.model1 = model1
 
@@ -26,9 +28,9 @@ class SingleDeme:
 
     class Exponential:
         # Single deme, exponential population size
-        def __init__(self, size=1.0, t=1.0, g=1.0):
+        def __init__(self, size=1.0 * N0, t=1.0 * 2 * N0, g=0.01):
             size_end = size * exp(-g * t)
-            model1 = momi2.DemographicModel(N_e=size_end, muts_per_gen=1)
+            model1 = momi2.DemographicModel(N_e=size_end, muts_per_gen=1e-8)
             model1.add_leaf("A", g=g, N=size)
             model1.set_size("A", g=0.0, t=t)
             self.model1 = model1
@@ -60,18 +62,18 @@ class SingleDeme:
 class TwoDemes:
     class Constant:
         # Two demes, Constant population sizes
-        def __init__(self, size=1.0, t=1.0):
+        def __init__(self, size=1.0 * N0, t=1.0 * 2 * N0):
             # momi2 model
-            model1 = momi2.DemographicModel(N_e=size, muts_per_gen=1)
+            model1 = momi2.DemographicModel(N_e=size, muts_per_gen=1e-8)
             model1.add_leaf("A", N=size)
-            model1.add_leaf("B", N=size)
+            model1.add_leaf("B", N=2 * size)
             model1.move_lineages("B", "A", t=t, N=size)
             self.model1 = model1
 
             b = demes.Builder()
             b.add_deme("AB", epochs=[dict(start_size=size, end_time=t)])
             b.add_deme("A", epochs=[dict(start_size=size)], ancestors=["AB"])
-            b.add_deme("B", epochs=[dict(start_size=size)], ancestors=["AB"])
+            b.add_deme("B", epochs=[dict(start_size=2 * size)], ancestors=["AB"])
             self.b = b
 
             self.t = t
@@ -84,7 +86,7 @@ class TwoDemes:
 
             return g, model1
 
-        def pulse(self, tp=0.5, p=0.1):
+        def pulse(self, tp=0.5 * 2 * N0, p=0.1):
             model1 = self.model1
             model1.move_lineages("B", "A", t=tp, p=p)
 
@@ -94,7 +96,7 @@ class TwoDemes:
 
             return g, model1
 
-        def two_pulses(self, tp1=0.25, tp2=0.75, p1=0.1, p2=0.1):
+        def two_pulses(self, tp1=0.25 * 2 * N0, tp2=0.75 * 2 * N0, p1=0.1, p2=0.2):
             model1 = self.model1
             model1.move_lineages("B", "A", t=tp1, p=p1)
             model1.move_lineages("A", "B", t=tp2, p=p2)
@@ -127,7 +129,7 @@ class TwoDemes:
 
             return g, model1
 
-        def migration(self, tstart=1.0, tend=0.0, rate=0.05):
+        def migration(self, tstart=1.0 * 2 * N0, tend=0.0 * 2 * N0, rate=0.01):
             model1 = None
 
             b = self.b
@@ -138,7 +140,7 @@ class TwoDemes:
 
             return g, model1
 
-        def migration_twophase(self, tstart=1.0, tend=0.0, rate=0.05):
+        def migration_twophase(self, tstart=1.0 * 2 * N0, tend=0.0 * 2 * N0, rate=0.01):
             model1 = None
             b = self.b
             b.add_migration(
@@ -150,7 +152,7 @@ class TwoDemes:
             g = b.resolve()
             return g, model1
 
-        def migration_sym(self, tstart=1, tend=0.0, rate=0.05):
+        def migration_sym(self, tstart=1 * 2 * N0, tend=0.0 * 2 * N0, rate=0.05):
             model1 = None
 
             b = self.b
@@ -161,7 +163,14 @@ class TwoDemes:
 
             return g, model1
 
-        def migration_sym_pulse(self, tp=0.5, p=0.1, tstart=1, tend=0.0, rate=0.05):
+        def migration_sym_pulse(
+            self,
+            tp=0.5 * 2 * N0,
+            p=0.1,
+            tstart=1 * 2 * N0,
+            tend=0.0 * 2 * N0,
+            rate=0.05,
+        ):
             model1 = None
 
             b = self.b
@@ -174,7 +183,9 @@ class TwoDemes:
             return g, model1
 
     class Exponential:
-        def __init__(self, size=1, t=1.0, g=1.0, size_scale=1.25):
+        def __init__(
+            self, size=1 * N0, t=1.0 * 2 * N0, g=0.01, size_scale=1.25, size_top=None
+        ):
             # Two demes, exponential population size, no migration
             tgA = t / 1
             tgB = t / 3
@@ -231,7 +242,7 @@ class TwoDemes:
 
             return g, model1
 
-        def pulse(self, tp=0.25, p=0.1):
+        def pulse(self, tp=0.25 * 2 * N0, p=0.1):
             model1 = self.model1
             model1.move_lineages("B", "A", t=tp, p=p)
 
@@ -241,7 +252,7 @@ class TwoDemes:
 
             return g, model1
 
-        def two_pulses(self, tp1=0.25, tp2=0.75, p1=0.1, p2=0.1):
+        def two_pulses(self, tp1=0.25 * 2 * N0, tp2=0.75 * 2 * N0, p1=0.1, p2=0.1):
             model1 = self.model1
             model1.move_lineages("B", "A", t=tp1, p=p1)
             model1.move_lineages("A", "B", t=tp2, p=p2)
@@ -253,7 +264,7 @@ class TwoDemes:
 
             return g, model1
 
-        def migration(self, tstart=1, tend=0.0, rate=0.05):
+        def migration(self, tstart=1 * 2 * N0, tend=0.0 * 2 * N0, rate=0.05):
             model1 = None
 
             b = self.b
@@ -264,7 +275,7 @@ class TwoDemes:
 
             return g, model1
 
-        def migration_sym(self, tstart=1, tend=0.0, rate=0.05):
+        def migration_sym(self, tstart=1 * 2 * N0, tend=0.0 * 2 * N0, rate=0.05):
             model1 = None
 
             b = self.b
@@ -275,7 +286,14 @@ class TwoDemes:
 
             return g, model1
 
-        def pulse_migration(self, tp=0.5, p=0.1, tstart=1.0, tend=0.0, rate=0.05):
+        def pulse_migration(
+            self,
+            tp=0.5 * 2 * N0,
+            p=0.1,
+            tstart=1.0 * 2 * N0,
+            tend=0.0 * 2 * N0,
+            rate=0.05,
+        ):
             model1 = None
 
             b = self.b
@@ -291,7 +309,7 @@ class TwoDemes:
 class ThreeDemes:
     class Constant:
         # Three demes, Constant Size
-        def __init__(self, size=1.0, t1=1.0, t2=2.0):
+        def __init__(self, size=1.0, t1=1.0 * 2 * N0, t2=2.0 * 2 * N0):
             model1 = momi2.DemographicModel(N_e=size, muts_per_gen=1)
             model1.add_leaf("A", N=size)
             model1.add_leaf("B", N=size)
@@ -347,7 +365,9 @@ class ThreeDemes:
 
             return g, model1
 
-        def pulses_migration(self, tp1=0.25, p1=0.1, tp2=0.75, p2=0.1, rate=0.05):
+        def pulses_migration(
+            self, tp1=0.25 * 2 * N0, p1=0.1, tp2=0.75 * 2 * N0, p2=0.1, rate=0.05
+        ):
             model1 = None
 
             b = self.b
@@ -369,7 +389,7 @@ class ThreeDemes:
 
     class Exponential:
         # Three demes, exponential growth
-        def __init__(self, size=1.0, t=1, g=1.0):
+        def __init__(self, size=1.0 * N0, t=1 * 2 * N0, g=0.01):
             tgA = t / 2
             tgB = t / 3
             gA = 2 * g
@@ -449,7 +469,9 @@ class ThreeDemes:
 
             return g, model1
 
-        def pulses_migration(self, tp1=0.25, p1=0.1, tp2=0.75, p2=0.1, rate=0.05):
+        def pulses_migration(
+            self, tp1=0.25 * 2 * N0, p1=0.1, tp2=0.75 * 2 * N0, p2=0.1, rate=0.05
+        ):
             model1 = None
 
             b = self.b
@@ -463,7 +485,7 @@ class ThreeDemes:
 
 class MultiAnc:
     # Three demes, multiple ancestry
-    def __init__(self, size=1.0):
+    def __init__(self, size=1.0 * N0):
         # Multi Ancestry is not implemented in momi2
         self.model1 = None
 
@@ -490,7 +512,7 @@ class MultiAnc:
 
 class FiveDemes:
     # Five Demes
-    def __init__(self, size=1.0, t=1.0):
+    def __init__(self, size=1.0 * N0, t=1.0 * 2 * N0):
         # 5 demes, 2 pulses
         np.random.seed(108)
         Ne1, Ne2, Ne3, Ne4, Ne5, Ne12, Ne123, Ne45, Ne12345 = size * np.random.rand(9)
@@ -534,7 +556,7 @@ class FiveDemes:
 
         return g, model1
 
-    def pulses(self, tp1=0.25, tp2=1.25, p1=0.1, p2=0.1):
+    def pulses(self, tp1=0.25 * 2 * N0, tp2=1.25 * 2 * N0, p1=0.1, p2=0.1):
         model1 = self.model1
         model1.move_lineages("B", "A", t=tp1, p=p1)
         model1.move_lineages("D", "A", t=tp2, p=p2)
@@ -549,7 +571,7 @@ class FiveDemes:
 
 class Experimental:
     class TwoDemesTwoEpochs:
-        def __init__(self, size=1.0, t=1.0, epoch_time=0.5):
+        def __init__(self, size=1.0 * N0, t=1.0 * 2 * N0, epoch_time=0.5):
             b = demes.Builder()
             b.add_deme("AB", epochs=[dict(start_size=size, end_time=t)])
             b.add_deme(
