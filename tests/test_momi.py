@@ -22,8 +22,8 @@ def test_two_pop_migration_0():
     demo_m, _ = TwoDemes.Constant(t=t, size=size).migration_sym(t, 0, rate=0.0)
     sampled_demes = ["A", "B"]
     sample_sizes = [4, 6]
-    spec_demo = Momi3(demo, sampled_demes, sample_sizes).sfs_spectrum()
-    spec_demo_m = Momi3(demo_m, sampled_demes, sample_sizes).sfs_spectrum()
+    spec_demo = Momi3(demo, dict(zip(sampled_demes, sample_sizes))).sfs_spectrum()
+    spec_demo_m = Momi3(demo_m, dict(zip(sampled_demes, sample_sizes))).sfs_spectrum()
     assert np.allclose(spec_demo_m, spec_demo, rtol=1e-4), np.nanmean(
         np.abs(spec_demo_m - spec_demo) / spec_demo
     )
@@ -38,8 +38,8 @@ def test_two_pop_migration_exp_growth_0():
     demo_m, _ = TwoDemes.Exponential(t=t, g=g, size=size).migration_sym(t, 0, rate=0.0)
     sampled_demes = ["A", "B"]
     sample_sizes = [4, 6]
-    spec_demo = Momi3(demo, sampled_demes, sample_sizes).sfs_spectrum()
-    spec_demo_m = Momi3(demo_m, sampled_demes, sample_sizes).sfs_spectrum()
+    spec_demo = Momi3(demo, dict(zip(sampled_demes, sample_sizes))).sfs_spectrum()
+    spec_demo_m = Momi3(demo_m, dict(zip(sampled_demes, sample_sizes))).sfs_spectrum()
     assert np.allclose(spec_demo_m, spec_demo, rtol=1e-4), np.nanmean(
         np.abs(spec_demo_m - spec_demo) / spec_demo
     )
@@ -54,8 +54,8 @@ def test_three_pop_migration_exp_growth_0():
     demo_m, _ = ThreeDemes.Exponential(t=t, g=g, size=size).migrations(rate=0.0)
     sampled_demes = ["A", "B", "C"]
     sample_sizes = [4, 6, 3]
-    spec_demo = Momi3(demo, sampled_demes, sample_sizes).sfs_spectrum()
-    spec_demo_m = Momi3(demo_m, sampled_demes, sample_sizes).sfs_spectrum()
+    spec_demo = Momi3(demo, dict(zip(sampled_demes, sample_sizes))).sfs_spectrum()
+    spec_demo_m = Momi3(demo_m, dict(zip(sampled_demes, sample_sizes))).sfs_spectrum()
 
     def l1(x, y):
         return np.abs(x - y).mean()
@@ -106,7 +106,7 @@ def test_grad_speed_momi_moments_gutenkunst(yaml_path):
     demo = demes.load(yaml_path / "gutenkunst_ooa.yml")
     sampled_demes = ["YRI", "CEU", "CHB"]
     sample_sizes = 3 * [n]
-    momi = Momi3(demo, sampled_demes, sample_sizes, jitted=True)
+    momi = Momi3(demo, dict(zip(sampled_demes, sample_sizes)), jitted=True)
     jsfs = momi.simulate(nmut, seed=108)
     print(f"non-zero-entries: {jsfs.nnz}")
 
@@ -121,7 +121,7 @@ def test_grad_speed_momi_moments_gutenkunst(yaml_path):
     )
 
     moments_times = moments_loglik_with_gradient_time(
-        params, sampled_demes, sample_sizes, jsfs
+        params, dict(zip(sampled_demes, sample_sizes)), jsfs
     )
     moments_times = np.median(moments_times)
 
@@ -147,7 +147,7 @@ def test_pop_shrink_w_mig(yaml_path):
         "logit(rho_2)": -6.074292717977304,
     }
 
-    momi = Momi3(demo, sampled_demes, sample_sizes, jitted=True)
+    momi = Momi3(demo, dict(zip(sampled_demes, sample_sizes)), jitted=True)
     params = momi._default_params
     params.set_train_all_rhos(True)
     params.set_train_all_etas(True)
@@ -155,12 +155,12 @@ def test_pop_shrink_w_mig(yaml_path):
     params.set_optimization_results(new_vals)
 
     demo = params.demo_graph
-    momi_m = Momi3(demo, sampled_demes, sample_sizes, jitted=True)
+    momi_m = Momi3(demo, dict(zip(sampled_demes, sample_sizes)), jitted=True)
 
     ddict = params.demo_dict
     ddict["migrations"] = []
     demo_non_mig = demes.Builder.fromdict(ddict).resolve()
-    momi_v = Momi3(demo_non_mig, sampled_demes, sample_sizes, jitted=True)
+    momi_v = Momi3(demo_non_mig, dict(zip(sampled_demes, sample_sizes)), jitted=True)
 
     jsfs = momi_v.simulate(100, seed=108)
 

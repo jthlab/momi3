@@ -46,16 +46,24 @@ class PExp(NamedTuple):
         return self.N1[i] * (self.N0[i] / self.N1[i]) ** x
 
     def R(self, u: jnp.ndarray):
-        r"Evaluate R(u) = \int_0^u eta(s) ds"
+        r"Evaluate R(u) = \int_t[0]^u eta(s) ds"
         a = self.a
         b = self.b
         t = self.t
-        dt = jnp.diff(jnp.minimum(t, u))
+        dt = jnp.diff(jnp.minimum(u, t))
         ui = jnp.where(u < t[:-1], t[:-1], jnp.where(t[1:] < u, t[1:], u))
-        integrals = a / b * jnp.exp(-b * (t[1:] - ui)) * -jnp.expm1(-b * dt)
         const = jnp.isclose(self.N0, self.N1)
+        b_safe = jnp.where(const, 1.0, b)
+        integrals = (
+            a / b_safe * jnp.exp(-b_safe * (t[1:] - ui)) * -jnp.expm1(-b_safe * dt)
+        )
         integrals = jnp.where(const, a * dt, integrals)
-        return integrals.sum()
+        ret = integrals.sum()
+        # kluge to get the correct one-sided derivative at t=t[0].
+        # R is not differentiable at the timepoints because eta is not continuous
+        # there (in general), but a one-sided derivative for t[0] seems to make sense
+        # and covers an edge case for the iicr code.
+        return jnp.where(jnp.isclose(u, t[0]), (1 / 2 / self(u)) * (u - t[0]), ret)
 
     def exp_integral(self, t0: float, t1: float, c: float = 1.0):
         r"""Compute the integral $\int_t0^t1 exp[-c * (R(t) - R(t0))] dt$ for $R(t) = \int_0^s eta(s) ds$.

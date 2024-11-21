@@ -1,7 +1,7 @@
 """Merge two populations in the same event block"""
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Any
 
 import jax
 import numpy as np
@@ -12,8 +12,6 @@ from momi3.math_functions import log_hypergeom
 
 from ..state import State
 from .event import Event
-
-T = TypeVar("T")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -34,7 +32,9 @@ class Split1(Event):
     def __post_init__(self):
         assert self.donor != self.recipient
 
-    def _setup_impl(self, in_axes: Axes, ns: PopCounter) -> tuple[Axes, PopCounter, T]:
+    def _setup_impl(
+        self, in_axes: Axes, ns: PopCounter
+    ) -> tuple[Axes, PopCounter, Any]:
         """Setup for the split1 lemma.
 
         Args:
@@ -86,7 +86,7 @@ class Split1(Event):
 
         return out_axes, nsp, aux
 
-    def _execute_impl(self, st: State, params: dict, aux: T) -> State:
+    def _execute_impl(self, st: State, params: dict, aux: Any) -> State:
         """Merge pop2 into pop1 when they are both in the same event block.
 
         Args:

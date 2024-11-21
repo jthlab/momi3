@@ -18,7 +18,7 @@ import numpy as np
 import sympy
 from scipy.optimize import LinearConstraint, linprog
 
-from momi3.event_tree import ETBuilder
+from momi3.event_tree import EventTree
 from momi3.polyhedron import project_polyhedron
 
 NoneType = type(None)
@@ -34,7 +34,7 @@ class Params(UserDict):
         add_linear_constraint (func): Adds a new user constraint
     """
 
-    def __init__(self, demo: demes.Graph, T: ETBuilder):
+    def __init__(self, demo: demes.Graph, T: EventTree):
         UserDict.__init__(self)
         self._demo = demo
         self._T = T

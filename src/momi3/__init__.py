@@ -7,6 +7,10 @@ import platformdirs
 import sparse
 from jax.tree_util import register_pytree_node
 
+from .momi import Momi3  # noqa: F401
+
+__all__ = ["Momi3"]
+
 jax.config.update("jax_enable_x64", True)
 jax.config.update("jax_compilation_cache_dir", platformdirs.user_cache_dir("momi3"))
 logging.getLogger("jax").setLevel(logging.INFO)

@@ -19,7 +19,6 @@ dependencies = [
     "frozendict>=2.0.2",
     "gmpy2>=2.1.5",
     "jax[cuda12]>=0.4.35",
-    "jaxlib>=0.4.4",
     "jaxopt>=0.8.3",
     "joblib>=1.4.0",
     "msprime>=1.2.0",
@@ -50,10 +49,6 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/jthlab/momi3/"
 
-[project.optional-dependencies]
-gpu = [
-    "jax[cuda12_pip]>=0.4.26",
-]
 [tool.isort]
 profile = "black"
 known_first_party = "momi3"

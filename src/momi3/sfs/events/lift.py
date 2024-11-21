@@ -3,7 +3,7 @@ import itertools as it
 import math
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Any
 
 import networkx as nx
 from jax import numpy as jnp
@@ -18,10 +18,10 @@ from momi3.utils import W_matrix, moran_eigensystem, rate_matrix
 from ..state import State
 from .event import Event
 
-T = TypeVar("T")
-
 
 def _aux_single(nv):
+    if nv == 0:
+        return
     d, Q = moran_eigensystem(nv)
     M = rate_matrix(nv).toarray()
     QQ, RR = jnp.linalg.qr(Q)
@@ -51,7 +51,7 @@ class Lift(Event):
 
     def _setup_impl(
         self, child_axes: Axes, ns: PopCounter
-    ) -> tuple[Axes, PopCounter, T]:
+    ) -> tuple[Axes, PopCounter, Any]:
         """Compute the matrices needed for lifting.
 
         Args:
@@ -130,7 +130,7 @@ class Lift(Event):
                 ret[(p1, p2)] = params["migrations"][j]["rate"]
         return ret
 
-    def _execute_impl(self, st: State, params: dict, aux: T) -> State:
+    def _execute_impl(self, st: State, params: dict, aux: Any) -> State:
         """Lift partial likelihood.
 
         Args:
@@ -270,15 +270,15 @@ class MigrationStart(Event):
 
     def _setup_impl(
         self, in_axes: dict[str, Axes], ns: PopCounter
-    ) -> tuple[Axes, PopCounter, T]:
+    ) -> tuple[Axes, PopCounter, Any]:
         assert len(in_axes) == 2
         assert in_axes["source_axes"].keys() & in_axes["dest_axes"].keys() == set()
         ax = Axes()
         ax.update(in_axes["source_axes"])
         ax.update(in_axes["dest_axes"])
-        return ax, ns, None
+        return ax, ns, {"out_axes": ax}
 
-    def _execute_impl(self, state: dict[str, State], params: dict, aux: T) -> State:
+    def _execute_impl(self, state: dict[str, State], params: dict, aux: Any) -> State:
         st1 = state["source_state"]
         st2 = state["dest_state"]
         pl1 = st1.pl

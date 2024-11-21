@@ -28,7 +28,7 @@ class SingleDeme:
 
     class Exponential:
         # Single deme, exponential population size
-        def __init__(self, size=1.0 * N0, t=1.0 * 2 * N0, g=0.01):
+        def __init__(self, size=1.0 * N0, t=1.0 * 2 * N0, g=0.0001):
             size_end = size * exp(-g * t)
             model1 = momi2.DemographicModel(N_e=size_end, muts_per_gen=1e-8)
             model1.add_leaf("A", g=g, N=size)
@@ -42,8 +42,8 @@ class SingleDeme:
                     dict(end_time=t, start_size=size_end),
                     dict(
                         end_time=0,
-                        start_size=size_end,
-                        end_size=size,
+                        start_size=size,
+                        end_size=size_end,
                         size_function="exponential",
                     ),
                 ],
@@ -184,10 +184,10 @@ class TwoDemes:
 
     class Exponential:
         def __init__(
-            self, size=1 * N0, t=1.0 * 2 * N0, g=0.01, size_scale=1.25, size_top=None
+            self, size=1 * N0, t=1.0 * 2 * N0, g=0.0001, size_scale=1.25, size_top=None
         ):
             # Two demes, exponential population size, no migration
-            tgA = t / 1
+            tgA = t / 2
             tgB = t / 3
             gA = 2 * g
             gB = g
@@ -201,11 +201,13 @@ class TwoDemes:
             model1.set_size("A", g=0.0, t=tgA, N=sizetopA)
             model1.add_leaf("B", g=gB, N=sizebottomB)
             model1.set_size("B", g=0.0, t=tgB, N=sizetopB)
-            model1.move_lineages("B", "A", t=t, N=size, g=0.0)
+            if size_top is None:
+                size_top = size
+            model1.move_lineages("B", "A", t=t, N=size_top, g=0.0)
             self.model1 = model1
 
             b = demes.Builder(description="demo")
-            b.add_deme("AB", epochs=[dict(end_time=t, start_size=size)])
+            b.add_deme("AB", epochs=[dict(end_time=t, start_size=size_top)])
             b.add_deme(
                 "A",
                 ancestors=["AB"],
@@ -389,7 +391,7 @@ class ThreeDemes:
 
     class Exponential:
         # Three demes, exponential growth
-        def __init__(self, size=1.0 * N0, t=1 * 2 * N0, g=0.01):
+        def __init__(self, size=1.0 * N0, t=1 * 2 * N0, g=0.0001):
             tgA = t / 2
             tgB = t / 3
             gA = 2 * g

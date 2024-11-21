@@ -2,10 +2,11 @@ import os
 from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
-from momi3.common import Axes, PopCounter, Population, T, oe_einsum
+from momi3.common import Axes, PopCounter, Population, oe_einsum
 from momi3.math_functions import log_hypergeom
 
 from ..state import State
@@ -18,7 +19,7 @@ class Event:
 
     def setup(
         self, axes: Axes, ns: Counter[Population, int]
-    ) -> tuple[Axes, PopCounter, T]:
+    ) -> tuple[Axes, PopCounter, Any]:
         ax, ns, aux = self._setup_impl(axes, ns)
         if self.bounds:
             aux["bounds"] = {}
@@ -32,7 +33,7 @@ class Event:
                     ).setup(ax, ns)
         return ax, ns, aux
 
-    def execute(self, st: State, params: dict, aux: T) -> State:
+    def execute(self, st: State, params: dict, aux: Any) -> State:
         st = self._execute_impl(st, params, aux)
         if os.environ.get("MOMI_PRINT_EVENTS"):
             print(self)

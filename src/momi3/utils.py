@@ -21,6 +21,20 @@ from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
 from .math_functions import expm1d, log_hypergeom
+from .pexp import PExp
+
+
+def deme_to_pexp(deme: dict) -> dict:
+    # Convert deme to pexp
+    t = []
+    N0 = []
+    N1 = []
+    for e in deme["epochs"][::-1]:
+        t.append(e["end_time"])
+        N0.append(e["end_size"])
+        N1.append(e["start_size"])
+    t.append(deme["start_time"])
+    return PExp(N0=jnp.array(N0), N1=jnp.array(N1), t=jnp.array(t))
 
 
 @lru_cache(None)

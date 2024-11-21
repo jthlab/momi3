@@ -10,8 +10,8 @@ from momi3.pexp import PExp
 def rpexp(rng):
     N0 = rng.random(10)
     N1 = rng.random(10)
-    t = np.cumsum(rng.random(11))
-    return PExp(N0, N1, t)
+    t = jnp.insert(np.cumsum(rng.random(10)), 0, 0.0)
+    return PExp(jnp.array(N0), jnp.array(N1), jnp.array(t))
 
 
 def test_pexp_call(rpexp, rng):
@@ -90,3 +90,14 @@ def test_pexp_reverse(rpexp, rng):
     "test that pexp.reverse(t[-1] - s) == pexp(s)"
     for s in rng.uniform(rpexp.t[0], rpexp.t[-1], 10):
         np.testing.assert_allclose(rpexp(s), rpexp.reverse()(rpexp.t[-1] - s))
+
+
+# def test_pexp_grad(rpexp):
+#     "test that the gradient at zero is a[0]"
+#     @jax.vmap
+#     def eta(t):
+#         return 1 / 2 / rpexp(t)
+#
+#     dR = jax.vmap(jax.grad(rpexp.R))
+#     for t in (rpexp.t, jnp.linspace(rpexp.t[0], rpexp.t[-1], 10)):
+#         np.testing.assert_allclose(eta(t), dR(t), rtol=1e-5)

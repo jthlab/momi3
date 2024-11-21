@@ -13,7 +13,7 @@ import networkx as nx
 from frozendict import frozendict
 from loguru import logger
 
-from momi3.common import Axes, Population, Time, unique_strs
+from momi3.common import Population, Time, unique_strs
 
 
 @total_ordering
@@ -95,12 +95,6 @@ class Node(NamedTuple):
     t: Time
 
 
-def _check_shape(state, ax: Axes) -> None:
-    assert len(state.shape) == len(ax), f"{state.pl.shape} != {ax}"
-    for x, (pop, y) in zip(state.pl.shape, ax.items()):
-        assert x == y, f"shape mismatch: {pop} has {x} axes, but {y} were expected"
-
-
 class EventTree:
     """Build an event tree from a demes graph.
 
@@ -112,17 +106,18 @@ class EventTree:
     def __init__(
         self,
         demo: demes.Graph,
+        num_samples: dict[str, int],
         events: ModuleType,
     ):
         self._demo = demo
+        self._num_samples = num_samples
         self._events = events
         self._T = nx.DiGraph()
         # initialize the event tree
         self._times = {}
-        self._init_tree()
+        self._init_leaves()
         # compute aux information for each node
         self._build_tree()
-        self._setup()
 
     @property
     def events(self):
@@ -133,7 +128,7 @@ class EventTree:
         self._times.setdefault(t, set()).add(tm)
         return tm
 
-    def _init_tree(self):
+    def _init_leaves(self):
         # initialize the event tree
         self._i = count(1)
         leaves = self._leaves = {}
@@ -152,11 +147,12 @@ class EventTree:
             )
             leaves[deme.name] = node
 
-    def _setup(self):
+    def setup(self):
         # precompute auxiliary information for each event
         leaves = self.leaves
         events = self.events
         auxd = {"nodes": {}, "edges": {}}
+
         for u in nx.topological_sort(self._T):
             child_axes = {}
             child_ns = {}
@@ -226,12 +222,13 @@ class EventTree:
                 id_ = e.get("id", f"child{i}") + "_state"
                 child_state[id_] = new_st
                 # check that the returned state is consistent with the child axes
-                if new_st.pl is None:
+                # FIXME
+                if new_st.terminal:
                     # the final lifting to infinity makes the partial likelihood None
                     assert isinstance(ev, events.Lift)
                     assert ev.terminal
                 else:
-                    _check_shape(new_st, e["axes"])
+                    new_st.check_shape(e["axes"])
             if not child_state:
                 # if no child state, it has to be a leaf node
                 assert u in self._leaves.values()
@@ -248,14 +245,15 @@ class EventTree:
                 assert isinstance(ev, (events.MigrationStart, events.Split2))
             new_st = ev.execute(child_state, params=params, aux=aux)
             assert isinstance(new_st, st.__class__)
-            if new_st.pl is None:
+            # FIXME
+            if new_st.terminal:
                 assert (
                     self._T.out_degree[u] == 0
                 )  # this is the root, i.e. the last event to process
             else:
-                _check_shape(new_st, self.nodes[u]["axes"])
+                new_st.check_shape(self.nodes[u]["axes"])
             self.nodes[u]["state"] = new_st
-        return self.nodes[u]["state"].phi
+        return self.nodes[u]["state"]
 
     @property
     def nodes(self):

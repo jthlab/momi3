@@ -1,4 +1,5 @@
 import itertools as it
+import numbers
 from copy import deepcopy
 
 import demes
@@ -8,6 +9,7 @@ from jax import lax, vmap
 from jax.scipy.special import xlogy
 
 from momi3.common import Path
+from momi3.iicr.event_tree import IicrEventTree
 from momi3.jsfs import JSFS
 
 # from momi3.lineage_sampler import bound_sampler
@@ -20,8 +22,15 @@ def _set_path(d, path, value):
     d[path[-1]] = value
 
 
+def _update_from_paths(d, paths):
+    d = deepcopy(d)
+    for path in paths:
+        _set_path(d, path, paths[path])
+    return d
+
+
 class Momi3:
-    def __init__(self, demo: demes.Graph, num_samples: dict[str, int]):
+    def __init__(self, demo: demes.Graph):
         """
         Initialize the MOMI3 object.
 
@@ -30,20 +39,79 @@ class Momi3:
             n_samples: Dictionary mapping deme names to sample sizes.
         """
         self._demo = demo
+
+    @property
+    def demo(self):
+        return self._demo
+
+    def sfs(self, num_samples: dict[str, int]):
+        return _Momi3Sfs(self._demo, num_samples)
+
+    def iicr(self, num_samples: dict[str, int]):
+        return _Momi3Iicr(self._demo, num_samples)
+
+    def coalescence_rate_trajectory(
+        self, t: jax.Array, lineages: dict[str, int]
+    ) -> tuple[jax.Array, jax.Array]:
+        """Convencience function to compute the coalescence rate trajectory for a given set of lineages.
+
+        Args:
+            t: Array of times at which to compute the coalescence rate.
+            lineages: Dictionary mapping deme names to the number of sampled lineages.
+
+        Returns:
+            Tuple of arrays: (coalescence rate, survival function)
+
+        Note:
+            This function mirrors the `coalescence_rate_trajectory` method of the `msprime.DemographyDebugger` class.
+        """
+        iicr = self.iicr(lineages)
+        return vmap(iicr)(t)
+
+
+class _Momi3Iicr:
+    def __init__(self, demo: demes.Graph, num_samples: dict[str, int]):
+        self._demo = demo
+        self._params_d = jax.tree.map(
+            lambda v: float(v) if isinstance(v, numbers.Number) else v, demo.asdict()
+        )
+        self._num_samples = num_samples
+        self._T = IicrEventTree(self._demo, num_samples)
+        self._aux = self._T.setup()
+
+    def __call__(self, t: float, params: dict[Path, int] = {}) -> float:
+        pd = _update_from_paths(self._params_d, params)
+        for path in params:
+            _set_path(pd, path, params[path])
+        return self._T.execute(pd, t, self._aux)
+
+    def ET(self, params: dict[Path, int] = {}) -> float:
+        "Expected time to first coalescence"
+
+        def f(t):
+            return self.sf(t, params)
+
+        t_max = 1.0
+        while f(t_max) > 1e-7:
+            t_max *= 2
+
+        t = jnp.linspace(0, t_max, 1000)
+        return jnp.trapezoid(vmap(f)(t), t)
+
+
+class _Momi3Sfs:
+    def __init__(self, demo: demes.Graph, num_samples: dict[str, int]):
+        self._demo = demo
         self._params_d = demo.asdict()
         self._num_samples = num_samples
         self._T = SfsEventTree(self._demo, self._num_samples)
-        self._aux = self._T._setup()
+        # self._aux = self._T._setup()
         if not (set(num_samples) <= set(self._T.leaves)):
             setdiff = set(num_samples) - set(self._T.leaves)
             raise ValueError(
                 f"Some sampled populations do not exist in the demography: {setdiff}"
             )
         # self._params = Params(demo=self._demo, T=self._T)
-
-    @property
-    def demo(self):
-        return self._demo
 
     # @property
     # def params(self) -> dict[str, float]:
@@ -85,7 +153,7 @@ class Momi3:
             _set_path(pd, path, params[path])
         return self._T.execute(pd, X, aux)
 
-    def E_tau(self, params: dict[Path, float], aux=None) -> float:
+    def E_tau(self, params: dict[Path, float], aux) -> float:
         """Compute the expected total branch length of the genealogy for a given set of parameters.
 
         Args:
@@ -94,7 +162,6 @@ class Momi3:
         Returns:
             Expected total branch length subtending the given configuration.
         """
-        aux = aux or self._aux
         X_batch = {}
         for pop in self._T.leaves:
             ns = self._num_samples.get(pop, 0)
@@ -126,22 +193,6 @@ class Momi3:
         tau = self.E_tau(params_d)
         sh = tuple(n + 1 for n in self._num_samples.values())
         return (etbls / tau).reshape(sh)
-
-    def sf(self, t: float, params_d: dict[str, float] = {}):
-        if sum(self._num_samples.values()) != 2:
-            raise ValueError(
-                "I only know how to compute the IICR for samples of size n=2"
-            )
-        r = jax.jacfwd(self.E_tbl, argnums=(3,))(
-            params_d, self._num_samples, self._T.auxd, t
-        )[0].squeeze()
-        return 1.0 - r
-
-    def iicr(self, t: float, params_d: dict[str, float] = {}):
-        def f(t):
-            return -jnp.log(self.sf(t, params_d))
-
-        return jax.jacfwd(f)(t).squeeze()
 
     def loglik(
         self,

@@ -53,6 +53,10 @@ class Axes(OrderedDict[Population, int]):
     def tree_unflatten(cls, keys, values):
         return OrderedDict(safe_zip(keys, values))
 
+    @property
+    def n(self):
+        return sum(a - 1 for a in self.values())
+
 
 T = TypeVar("T")
 

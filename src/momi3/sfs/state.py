@@ -15,7 +15,7 @@ class State(NamedTuple):
     pl: jnp.ndarray
     phi: float
     l0: bool
+    terminal: bool
 
-    @property
-    def shape(self):
-        return self.pl.shape
+    def assert_conforms(self, other: "State"):
+        assert self.pl.shape == other.pl.shape
