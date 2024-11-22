@@ -140,7 +140,7 @@ class Lift(momi3.sfs.events.Lift):
         assert st.p.shape == (d,) * n
         C = aux["C"]
 
-        if self.migrations == {}:
+        if self.migrations == {} or self.terminal or jnp.isinf(t1):
             # no migrations, so just lift each population to r and t1
             R = []
             for p in axes:
@@ -160,18 +160,7 @@ class Lift(momi3.sfs.events.Lift):
                 p=p_prime, s=st.s * s_prime, c=st.c + c_prime, terminal=self.terminal
             )
 
-        # migration case. solve diffeq
-        # form migration matrix
-        M = [[0.0] * d for _ in range(d)]
-        for (p1, p2), j in self.migrations.items():
-            m = params["migrations"][j]
-            assert m["source"] == p1 and m["dest"] == p2
-            i1, i2 = map(list(axes).index, (p1, p2))
-            M[i2][i1] = params["migrations"][j]["rate"]
-        # rate of entering coalescent state
-        # rate of coalescing equals assign
-        M = jnp.array(M)
-        M -= jnp.diag(M.sum(1))
+        M, jump_ts = self.migration_matrix(params, aux["axes"])
 
         def rate(t, y, args):
             etas, C = args
@@ -181,15 +170,20 @@ class Lift(momi3.sfs.events.Lift):
         def stats(t, y, args):
             p, s = y
             p /= p.sum()
-            return jnp.sum(p * rate(t, y, args)), s
+            c = jnp.sum(p * rate(t, y, args))
+            return (p, c, s)
 
         def f(t, y, args):
+            # migration matrix at time t
+            etas, C = args
+            M_t = M(t)
+            # transition p forward in time
             p, _ = y
             ds = p * rate(t, y, args)
             # multiply along each axis, equivalnt of direct sum
             dp = sum(
                 map(
-                    lambda i: jnp.apply_along_axis(M.T.__matmul__, i, p),
+                    lambda i: jnp.apply_along_axis(M_t.T.__matmul__, i, p),
                     range(n),
                 )
             )
@@ -200,11 +194,12 @@ class Lift(momi3.sfs.events.Lift):
 
         solver = dfx.Kvaerno3()
         term = dfx.ODETerm(f)
-        jump_ts = jnp.sort(jnp.concatenate([eta.t for eta in etas.values()]))
-
-        final_subsaveat = dfx.SubSaveAt(t1=True)
-        evolving_subsaveat = dfx.SubSaveAt(ts=[u], fn=stats)
-        saveat = dfx.SaveAt(subs=[evolving_subsaveat, final_subsaveat])
+        eta_ts = jnp.concatenate([eta.t for eta in etas.values()])
+        jump_ts = jnp.concatenate([jump_ts, eta_ts])
+        jump_ts = jnp.sort(jump_ts)
+        # final_subsaveat = dfx.SubSaveAt(t1=True)
+        # evolving_subsaveat = dfx.SubSaveAt(ts=[u], fn=stats)
+        saveat = dfx.SaveAt(ts=[u, t1], fn=stats)
         ssc = dfx.PIDController(jump_ts=jump_ts, rtol=1e-6, atol=1e-6)
         args = (etas, C)
         y0 = (st.p, 0.0)
@@ -215,17 +210,16 @@ class Lift(momi3.sfs.events.Lift):
             t1=t1,
             dt0=(t1 - t0) / 1000,
             # dt0=None,
+            args=args,
             y0=y0,
             stepsize_controller=ssc,
             max_steps=16384,
             saveat=saveat,
-            args=args,
         )
-        (cu, su), (p1, s1) = res.ys
-        p1 = p1[0]  # only one time point
+        (_, p1), (cu, _), (su, s1) = res.ys
         p1 /= p1.sum()  # normalize to probability conditional on non-coalescence
-        s_prime = jnp.where(st.t < t0, 1.0, 1.0 - su[0])
-        c_prime = jnp.where(t_isin_t0_t1, cu[0], 0.0)
+        s_prime = jnp.where(st.t < t0, 1.0, 1.0 - su)
+        c_prime = jnp.where(t_isin_t0_t1, cu, 0.0)
         return st._replace(
             p=p1, s=st.s * s_prime, c=st.c + c_prime, terminal=self.terminal
         )

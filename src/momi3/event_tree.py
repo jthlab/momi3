@@ -123,6 +123,60 @@ class EventTree:
     def events(self):
         return self._events
 
+    @property
+    def leaves(self):
+        return self._leaves
+
+    @property
+    def times(self):
+        return self._times
+
+    @property
+    def constraints(self):
+        def path_to_str(path):
+            return path[0] + "".join(f"[{i}]" for i in path[1:])
+
+        cons = set()
+
+        for t0, t1 in self._T.edges():
+            t0.t.t
+            t1.t.t
+            p0, p1 = map(path_to_str, (t0.t.path, t1.t.path))
+            cons.add(f"{p0}<={p1}")
+            cons.add(f"{p0}>=0")
+            cons.add(f"{p1}>=0")
+
+        d = self._demo.asdict()
+
+        for i, deme in enumerate(d["demes"]):
+            base = f"demes[{i}]"
+            cons.add(f"{base}['start_time']>=0")
+            for j, e in enumerate(deme["epochs"]):
+                for k in ["start_time", "end_time", "start_size", "size_function"]:
+                    cons.add(f"{base}['epochs'][{j}]['{k}']>=0")
+            props = []
+            for j in range(len(deme["proportions"])):
+                s = f"{base}['proportions'][{j}]"
+                cons.add(f"{s}>=0")
+                props.append(s)
+            cons.add(f"{'+'.join(props)}==1")
+
+        for j, p in enumerate(d["pulses"]):
+            cons.add(f"pulses[{j}]['time']>=0")
+            for k in range(len(p["proportions"])):
+                props = []
+                s = f"pulses[{j}]['proportions'][{k}]"
+                cons.add(f"{s}>=0")
+            cons.add(f"{'+'.join(props)}==1")
+
+        for j, m in enumerate(d["migrations"]):
+            cons.add(f"migrations[{j}]['start_time']>=0")
+            cons.add(f"migrations[{j}]['end_time']>=0")
+            cons.add(f"migrations[{j}]['end_time']<=migrations[{j}]['start_time']")
+            cons.add(f"migrations[{j}]['rate']>=0")
+
+        return cons
+
     def _add_time(self, t, path):
         tm = Time(t, path=path)
         self._times.setdefault(t, set()).add(tm)
@@ -379,46 +433,50 @@ class EventTree:
                 # )
                 # self.add_edge(u, nn)
 
+            if d["ev"] == EventType.MIGRATION_START:
+                key = (d["source"], d["pop"])
+                u, v = map(self._get_active, key)
+                if u is v:
+                    # these populations are all in the same block
+                    self.nodes[u]["migrations"] = self.nodes[u]["migrations"].set(
+                        key, d["i"]
+                    )
+                    continue
+                u, v = [self._lift(d[k], t) for k in ("pop", "source")]
+                st_u, st_v = [self.nodes[x] for x in (u, v)]
+                # the nodes should be fully disjoint, otherwise they would already be in the same block
+                assert not (st_u["epochs"].keys() & st_v["epochs"].keys())
+                assert not (st_u["migrations"].keys() & st_v["migrations"].keys())
+                nn = self._merge_nodes(u, v)  # now nn has children u and v
+                # per the demes spec, continuous migrations cannot overlap
+                # assert (d["source"], d["pop not in self.nodes[nn]["migrations"]
+                key = (d["source"], d["pop"])
+                self.nodes[nn]["migrations"] = self.nodes[nn]["migrations"].set(
+                    key, d["i"]
+                )
+                self.nodes[nn]["event"] = events.MigrationStart(
+                    source=d["source"], dest=d["pop"]
+                )
+                self.edges[u, nn]["id"] = "dest"
+                self.edges[v, nn]["id"] = "source"
+                continue
+            elif d["ev"] == EventType.MIGRATION_END:
+                continue
+
+            # a state update. the nodes are already in the same block, and remain so even after migration ends.
+            # elif d["ev"] == EventType.MIGRATION_END:
+            #     key = (d["source"], d["pop"])
+            #     nn = self.node_like(u)
+            #     self.nodes[nn]["migrations"] = self.nodes[nn]["migrations"].delete(key)
+            #     self.add_edge(u, nn)
+
             # otherwise, lift the population to current time and process event
             u = self._lift(d["pop"], t)
             assert u.t == t
 
-            # migrations update state, and also merge nodes in the event tree
-            if d["ev"] == EventType.MIGRATION_START:
-                v = self._lift(d["source"], t)
-                # sanity checks
-                key = (d["source"], d["pop"])
-                if v is u:
-                    self.nodes[u]["migrations"] = self.nodes[u]["migrations"].set(
-                        key, d["i"]
-                    )
-                else:
-                    st_u, st_v = [self.nodes[x] for x in (u, v)]
-                    # the nodes should be fully disjoint, otherwise they would already be in the same block
-                    assert not (st_u["epochs"].keys() & st_v["epochs"].keys())
-                    assert not (st_u["migrations"].keys() & st_v["migrations"].keys())
-                    nn = self._merge_nodes(u, v)  # now nn has children u and v
-                    # per the demes spec, continuous migrations cannot overlap
-                    assert key not in self.nodes[nn]["migrations"]
-                    self.nodes[nn]["migrations"] = self.nodes[nn]["migrations"].set(
-                        key, d["i"]
-                    )
-                    self.nodes[nn]["event"] = events.MigrationStart(
-                        source=d["source"], dest=d["pop"]
-                    )
-                    self.edges[u, nn]["id"] = "dest"
-                    self.edges[v, nn]["id"] = "source"
-
-            # a state update. the nodes are already in the same block, and remain so even after migration ends.
-            elif d["ev"] == EventType.MIGRATION_END:
-                key = (d["source"], d["pop"])
-                nn = self.node_like(u)
-                self.nodes[nn]["migrations"] = self.nodes[nn]["migrations"].delete(key)
-                self.add_edge(u, nn)
-
             # pulses function in a similarly to continuous migrations, but they are not recorded in the state since they
             # happen instantly.
-            elif d["ev"] == EventType.PULSE:
+            if d["ev"] == EventType.PULSE:
                 # From https://popsim-consortium.github.io/demes-spec-docs/main/specification.html#example-sequential-application-of-pulses  # noqa: E501
                 # 1. Initialize an array of zeros with length equal to the number of demes.
                 # 2. Set the ancestry proportion of the destination deme to 1.
@@ -496,11 +554,3 @@ class EventTree:
             assert x.block == (u.block | v.block | {tr2}) - {dest}
             y = self.node_like(x, block=u.block | v.block)
             self.add_edge(x, y, event=events.Rename(old=tr2, new=dest))
-
-    @property
-    def leaves(self):
-        return self._leaves
-
-    @property
-    def times(self):
-        return self._times

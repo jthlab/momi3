@@ -19,8 +19,9 @@ jax.config.update("jax_enable_x64", True)
 
 def _idfun(x):
     if isinstance(x, stdpopsim.DemographicModel):
-        return x.description
-    return str(dict(x))
+        return x.id
+    else:
+        return "".join(x)
 
 
 @pytest.mark.parametrize(
@@ -39,8 +40,8 @@ def test_stdpopsim(demo, pops):
     model_times = np.array([e.time for e in demo.model.events])
     t = np.sort(np.unique(np.concatenate([t, model_times])))
     m3 = momi3.momi.Momi3(demo.model.to_demes())
-    c1, p1 = demo.model.debug().coalescence_rate_trajectory(steps=t, lineages=pops)
     c2, p2 = m3.coalescence_rate_trajectory(t, pops)
+    c1, p1 = demo.model.debug().coalescence_rate_trajectory(steps=t, lineages=pops)
     # thle iicr can jump discontinuously at the model times, so the value depends on
     # whether the function is defined to be left- or right-continuous. afaict theres's
     # not really a convention for this so we just ignore the values at the model times
@@ -58,6 +59,7 @@ def test_iicr_star():
     demo.add_population(name="anc", initial_size=1e5)
     demo.add_population_split(time=1e3, derived=pops, ancestral="anc")
     m3 = momi3.momi.Momi3(demo.to_demes())
+    print(m3.iicr({"A": 2}).constraints)
     t = np.append(np.linspace(0.0, 1.1e4, 12345), 1e3)
     t.sort()
     for d in map(Counter, it.combinations_with_replacement(pops, 2)):
@@ -144,12 +146,12 @@ def test_iicr_iwm():
     cons = TwoDemes.Constant()
     demo, _ = cons.migration()
     t = np.linspace(0.0, 1.1 * cons.t, 123456)
+    c2, p2 = Momi3(demo).coalescence_rate_trajectory(t, {"A": 1, "B": 1})
     c1, p1 = (
         msprime.Demography.from_demes(demo)
         .debug()
         .coalescence_rate_trajectory(steps=t, lineages={"A": 1, "B": 1})
     )
-    c2, p2 = Momi3(demo).coalescence_rate_trajectory(t, {"A": 1, "B": 1})
     np.testing.assert_allclose(c1, c2, rtol=1e-4)
     np.testing.assert_allclose(p1, p2, rtol=1e-4)
 

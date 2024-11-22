@@ -1,6 +1,7 @@
 """Lift an event backwards in time"""
 import itertools as it
 import math
+from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
@@ -48,6 +49,37 @@ class Lift(Event):
     @property
     def terminal(self):
         return math.isinf(self.t1.t)
+
+    def migration_matrix(self, params, axes: Axes):
+        M_ij = defaultdict(lambda: lambda _: 0.0)
+        jump_ts = jnp.array([])
+        for p1, p2 in self.migrations:
+            ms = [
+                m for m in params["migrations"] if m["source"] == p1 and m["dest"] == p2
+            ]
+            A = jnp.array([[m["rate"], m["end_time"], m["start_time"]] for m in ms])
+            i = A[:, 1].argsort()
+            r, t_start, t_end = A[i].T
+
+            def f(t, r=r, t_start=t_start, t_end=t_end):
+                j = jnp.searchsorted(t_start, t, side="right") - 1
+                return jnp.where((t_start[j] <= t) & (t < t_end[j]), r[j], 0.0)
+
+            M_ij[p1, p2] = f
+            jump_ts = jnp.concatenate([jump_ts, t_start, t_end])
+
+        def ret(t):
+            a = len(axes)
+            M = [[0.0] * a for _ in range(a)]
+            for (i1, p1), (i2, p2) in it.product(enumerate(axes), repeat=2):
+                M[i2][i1] = M_ij[p1, p2](t)
+            # rate of entering coalescent state
+            # rate of coalescing equals assign
+            M = jnp.array(M)
+            M -= jnp.diag(M.sum(1))
+            return M
+
+        return ret, jump_ts
 
     def _setup_impl(
         self, child_axes: Axes, ns: PopCounter

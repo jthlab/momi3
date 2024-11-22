@@ -44,6 +44,10 @@ class Momi3:
     def demo(self):
         return self._demo
 
+    @property
+    def constraints(self):
+        return self._T.constraints
+
     def sfs(self, num_samples: dict[str, int]):
         return _Momi3Sfs(self._demo, num_samples)
 
@@ -78,6 +82,10 @@ class _Momi3Iicr:
         self._num_samples = num_samples
         self._T = IicrEventTree(self._demo, num_samples)
         self._aux = self._T.setup()
+
+    @property
+    def constraints(self):
+        return self._T.constraints
 
     def __call__(self, t: float, params: dict[Path, int] = {}) -> float:
         pd = _update_from_paths(self._params_d, params)
