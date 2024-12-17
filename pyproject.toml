@@ -49,6 +49,13 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/jthlab/momi3/"
 
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["F722"]
+
+[tool.black]
+line-length = 88
+
 [tool.isort]
 profile = "black"
 known_first_party = "momi3"
