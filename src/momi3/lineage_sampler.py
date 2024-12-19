@@ -9,7 +9,7 @@ import scipy
 from jax.scipy.special import gammaln as gammaln
 
 from momi3 import events
-from momi3.common import traverse
+from momi3.common import get_path
 from momi3.event_tree import ETBuilder
 from momi3.Params import Params
 
@@ -172,8 +172,8 @@ def sample_migration(
 
         mig_params = {"coal": coal, "mig": mig}
 
-        t0 = traverse(demo_dict, ev.t0.path)
-        t1 = traverse(demo_dict, ev.t1.path)
+        t0 = get_path(demo_dict, ev.t0.path)
+        t1 = get_path(demo_dict, ev.t1.path)
         tau = t1 - t0
 
         ret.append(sample_migration_constant(mig_params, tau, n0, seed))
@@ -224,8 +224,8 @@ def sample_lift(
             params[key].value = val
         demo_dict = params._demo_dict
 
-        t0s.append(traverse(demo_dict, ev.t0.path))
-        t1s.append(traverse(demo_dict, ev.t1.path))
+        t0s.append(get_path(demo_dict, ev.t0.path))
+        t1s.append(get_path(demo_dict, ev.t1.path))
 
         sizes = ev._f_Ne(demo_dict)
         for pop in pops:

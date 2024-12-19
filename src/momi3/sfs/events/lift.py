@@ -11,7 +11,7 @@ import networkx as nx
 from jax import numpy as jnp, lax, vmap
 from jax.scipy.linalg import expm
 
-from momi3.common import Axes, PopCounter, Population, Time, oe_einsum, traverse
+from momi3.common import Axes, PopCounter, Population, Time, oe_einsum, get_path
 from ..migration import lift_cm, lift_cm_aux
 from momi3.pexp import PExp
 from momi3.utils import W_matrix, moran_eigensystem, rate_matrix
@@ -197,7 +197,7 @@ class Lift(Event):
         """
         plp = st.pl
         phip = 0.0
-        t0, t1 = [traverse(params, t.path) for t in (self.t0, self.t1)]
+        t0, t1 = [get_path(params, t.path) for t in (self.t0, self.t1)]
         etas = self._etas(params)
         axes = aux["axes"]
         for mat_type in ("single", "multi"):

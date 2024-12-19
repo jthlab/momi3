@@ -11,10 +11,16 @@ from jax.util import safe_zip
 oe_einsum = jnp.einsum
 
 
-def traverse(params, path):
+def get_path(params, path):
     for i in path:
         params = params[i]
     return params
+
+
+def set_path(params, path, value):
+    for i in path[:-1]:
+        params = params[i]
+    params[path[-1]] = value
 
 
 def unique_strs(q: Sequence[str], k: int = 1, ell: int = 8) -> list[str]:
@@ -84,3 +90,7 @@ class Time(TimeTuple):
     def __lt__(self, other: "Time") -> bool:
         assert isinstance(other, Time)
         return self.t < other.t
+
+
+def softplus_inv(y):
+    return y + jnp.log1p(-jnp.exp(-y))

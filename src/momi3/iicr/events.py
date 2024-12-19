@@ -11,7 +11,7 @@ import networkx as nx
 import numpy as np
 
 import momi3.sfs.events
-from momi3.common import Axes, PopCounter, traverse
+from momi3.common import Axes, PopCounter, get_path
 from momi3.event_tree import Population  # noqa: F401
 from momi3.sfs.events import NoOp, Rename  # noqa: F401
 
@@ -131,7 +131,7 @@ class Lift(momi3.sfs.events.Lift):
         n = st.p.ndim
         if n == 0:
             return st._replace(terminal=self.terminal)
-        t0, t1 = [traverse(params, t.path) for t in (self.t0, self.t1)]
+        t0, t1 = [get_path(params, t.path) for t in (self.t0, self.t1)]
         u = jnp.clip(st.t, t0, t1)
         t_isin_t0_t1 = (t0 <= st.t) & (st.t < t1)
         etas = self._etas(params)
