@@ -100,7 +100,8 @@ class EventTree:
 
     Args:
         demo: a demes graph
-        num_samples: a dictionary mapping deme names to the number of samples in that deme.
+        num_samples: a dictionary mapping deme names to the number of samples in that
+            deme.
     """
 
     def __init__(
@@ -192,8 +193,9 @@ class EventTree:
             path = ("demes", j, "epochs", -1, "end_time")
             t = self._add_time(deme.epochs[-1].end_time, path=path)
             node = Node(i=next(self._i), block=frozenset([deme.name]), t=t)
-            # attached to each node are attributes that track the population size and migration rates. (these are the
-            # two model attributes that persist over time).
+            # attached to each node are attributes that track the population size and
+            # migration rates. (these are the two model attributes that persist
+            # over time).
             self.add_node(
                 node,
                 epochs=frozendict({deme.name: len(deme.epochs) - 1}),
@@ -233,10 +235,10 @@ class EventTree:
                 assert u in leaves.values()
                 continue
             if len(child_axes) == 1:
-                # if there is only one child axis, the event expects a single positional argument
+                # if there is only one child axis, the event expects a single argument
                 child_axes = list(child_axes.values())[0]
             else:
-                # the event expects a dictionary indicating which axes belong to which pop
+                # the event expects a dict indicating which axes belong to which pop
                 assert isinstance(ev, (events.MigrationStart, events.Split2))
             (
                 new_ax,
@@ -288,9 +290,9 @@ class EventTree:
                 assert u in self._leaves.values()
                 continue
             aux = auxd["nodes"].get(u)
-            # NoOp.execute accepts only a single state parameter, and returns it. However, there is no possibility of
-            # passing more than one state parameter in, because the only type of event that has multiple children is a
-            # Split2.
+            # NoOp.execute accepts only a single state parameter, and returns it.
+            # However, there is no possibility of passing more than one state parameter
+            # in, because the only type of event that has multiple children is a Split2.
             ev = self.nodes[u].get("event", events.NoOp())
             assert len(child_state) in [1, 2]
             if len(child_state) == 1:
@@ -327,7 +329,8 @@ class EventTree:
         self._T.add_edge(u, v, **kw)
 
     def node_like(self, u, i=None, block=None, t=None, **kw) -> Node:
-        """return a node which has the same blocks, (optionally) time, and attributes as u"""
+        """return a node which has the same blocks, (optionally) time, and attributes
+        as u"""
         if i is None:
             i = next(self._i)
         ret = Node(i=i, block=block or u.block, t=t or u.t)
@@ -399,6 +402,9 @@ class EventTree:
             b -= {rm}
             if rm in st["epochs"]:
                 st["epochs"] = st["epochs"].delete(rm)
+            for m in st["migrations"]:
+                if rm in m:
+                    st["migrations"] = st["migrations"].delete(m)
         nn = Node(i=next(self._i), block=b, t=t)
         self.add_node(nn, **st)
         for z in x, y:
@@ -412,9 +418,10 @@ class EventTree:
         # this sorting function ensures that:
         # - events are processed (reverse-)chronologically
         # - contemporaneous events are processed in the order specified by EventType
-        # - contemporaneous events of the same type are processed according to their order specified by demes.
+        # - contemporaneous events of the same type are processed according to their
+        #   order specified by demes.
         # the last point matters for simultaneous pulses in particular:
-        # https://popsim-consortium.github.io/demes-spec-docs/main/specification.html#example-sequential-application-of-pulses
+        # https://popsim-consortium.github.io/demes-spec-docs/main/specification.html#example-sequential-application-of-pulses  # noqa: E501
         def keyfun(d):
             # TODO explain why d.get('i') is necessary
             return (d["t"], d["ev"], d.get("i"))
@@ -444,7 +451,8 @@ class EventTree:
                     continue
                 u, v = [self._lift(d[k], t) for k in ("pop", "source")]
                 st_u, st_v = [self.nodes[x] for x in (u, v)]
-                # the nodes should be fully disjoint, otherwise they would already be in the same block
+                # the nodes should be fully disjoint, otherwise they would already be in
+                # the same block
                 assert not (st_u["epochs"].keys() & st_v["epochs"].keys())
                 assert not (st_u["migrations"].keys() & st_v["migrations"].keys())
                 nn = self._merge_nodes(u, v)  # now nn has children u and v
@@ -463,7 +471,8 @@ class EventTree:
             elif d["ev"] == EventType.MIGRATION_END:
                 continue
 
-            # a state update. the nodes are already in the same block, and remain so even after migration ends.
+            # a state update. the nodes are already in the same block, and remain so
+            # even after migration ends.
             # elif d["ev"] == EventType.MIGRATION_END:
             #     key = (d["source"], d["pop"])
             #     nn = self.node_like(u)
@@ -474,11 +483,11 @@ class EventTree:
             u = self._lift(d["pop"], t)
             assert u.t == t
 
-            # pulses function in a similarly to continuous migrations, but they are not recorded in the state since they
-            # happen instantly.
+            # pulses function in a similarly to continuous migrations, but they are not
+            # recorded in the state since they happen instantly.
             if d["ev"] == EventType.PULSE:
                 # From https://popsim-consortium.github.io/demes-spec-docs/main/specification.html#example-sequential-application-of-pulses  # noqa: E501
-                # 1. Initialize an array of zeros with length equal to the number of demes.
+                # 1. Initialize an array of zeros with length equal to the num. demes.
                 # 2. Set the ancestry proportion of the destination deme to 1.
                 # 3. For each pulse:
                 #    a. Multiply the array by one (1) minus the sum of proportions.
@@ -491,14 +500,15 @@ class EventTree:
                     self._pulse(source=s, dest=d["pop"], t=t, f_p=f_p)
 
             elif d["ev"] == EventType.MERGE:
-                # the population merges with ancestral population(s). we model this as a sequence of pulses,
-                # followed by admixture.
+                # the population merges with ancestral population(s). we model this as a
+                # sequence of pulses, followed by admixture.
                 for j, s in enumerate(d["ancestors"][:-1]):
 
                     def f_p(params, i=d["i"], j=j):
                         deme = params["demes"][i]
                         p = sum(deme["proportions"][:j])
-                        # at the j-th pulse a fraction 1 - p of the population remains to be admixed
+                        # at the j-th pulse a fraction 1 - p of the population remains
+                        # to be admixed
                         return deme["proportions"][j] / (1 - p)
 
                     self._pulse(source=s, dest=d["pop"], t=t, f_p=f_p)
@@ -509,12 +519,14 @@ class EventTree:
                 nn = self._merge_nodes(u, v, rm=d["pop"])
                 evc = events.Split1 if u is v else events.Split2
                 self.nodes[nn]["event"] = evc(donor=d["pop"], recipient=s)
+                self.nodes[nn]["migrations"]
                 # identify which edge is which for later traversal
                 self.edges[u, nn]["id"] = "donor"
                 self.edges[v, nn]["id"] = "recipient"
 
             elif d["ev"] == EventType.POPULATION_START:
-                # the population extends infinitely far back into the past. basically just a lifting event.
+                # the population extends infinitely far back into the past. basically
+                # just a lifting event.
                 pass
                 # self._lift(d["pop"], t)
 
@@ -528,13 +540,15 @@ class EventTree:
         events = self.events
         u = self._lift(dest, t)
         v = self._lift(source, t)
-        # there are two cases to consider depending on whether they are in the same block or not
+        # there are two cases to consider depending on whether they are in the same
+        # block or not
         if u is v:
             # same block, so we perform the pulse in one tensor contraction
             w = self.node_like(u)
             self.add_edge(u, w, event=events.Pulse(source=source, dest=dest, f_p=f_p))
         else:
-            # different blocks, so we model the pulse as an admixture followed by a split2
+            # different blocks, so we model the pulse as an admixture followed by a
+            # split2
             tr1, tr2 = unique_strs(u.block, 2)
             b = (u.block - {dest}) | {
                 tr1,
@@ -544,7 +558,8 @@ class EventTree:
             self.add_edge(
                 u, w, event=events.Admix(child=dest, parent1=tr1, parent2=tr2, f_p=f_p)
             )
-            # now we need to merge the transient admixed population into the source population
+            # now we need to merge the transient admixed population into the source
+            # population
             x = self._merge_nodes(w, v, rm=tr1)
             self.nodes[x]["event"] = events.Split2(donor=tr1, recipient=source)
             # identify which edge is which for traversal

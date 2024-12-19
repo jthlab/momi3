@@ -1,4 +1,5 @@
 """Merge two populations in different event blocks"""
+
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import TypeVar
@@ -86,4 +87,4 @@ class Split2(Event):
             aux["H"], H_inds, donor_st.pl, donor_inds, recip_st.pl, recip_inds, out_inds
         )
         phip = donor_st.phi * recip_st.l0 + recip_st.phi * donor_st.l0
-        return State(pl=plp, phi=phip, l0=donor_st.l0 * recip_st.l0)
+        return State(pl=plp, phi=phip, l0=donor_st.l0 * recip_st.l0, terminal=False)

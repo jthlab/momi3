@@ -1,12 +1,14 @@
 import itertools as it
 import numbers
 from copy import deepcopy
+from typing import Any
 
 import demes
 import jax
 import jax.numpy as jnp
 from jax import lax, vmap
 from jax.scipy.special import xlogy
+
 
 from momi3.common import Path
 from momi3.iicr.event_tree import IicrEventTree
@@ -120,6 +122,7 @@ class _Momi3Sfs:
                 f"Some sampled populations do not exist in the demography: {setdiff}"
             )
         # self._params = Params(demo=self._demo, T=self._T)
+        self._aux = self._T.setup()
 
     # @property
     # def params(self) -> dict[str, float]:
@@ -159,9 +162,9 @@ class _Momi3Sfs:
         pd = deepcopy(self._params_d)
         for path in params:
             _set_path(pd, path, params[path])
-        return self._T.execute(pd, X, aux)
+        return self._T.execute(pd, X, aux).phi
 
-    def E_tau(self, params: dict[Path, float], aux) -> float:
+    def E_tau(self, params: dict[Path, float], aux: Any) -> float:
         """Compute the expected total branch length of the genealogy for a given set of parameters.
 
         Args:
@@ -184,9 +187,12 @@ class _Momi3Sfs:
         for path in params:
             _set_path(pd, path, params[path])
         ret = vmap(self._T.execute, in_axes=(None, 0, None))(pd, X_batch, aux)
-        return ret[0] - ret[1] - ret[2]
+        phi = ret.phi
+        return phi[0] - phi[1] - phi[2]
 
-    def expected_sfs(self, params_d: dict[str, float] = {}, _use_vmap: bool = True):
+    def expected_sfs(
+        self, params_d: dict[str, float] = {}, aux: Any = None, _use_vmap: bool = True
+    ):
         bs = [range(n + 1) for n in self._num_samples.values()]
         num_derived = jnp.array(list(it.product(*bs)))
 
@@ -198,7 +204,7 @@ class _Momi3Sfs:
             etbls = vmap(f)(num_derived)
         else:
             etbls = lax.map(f, num_derived)
-        tau = self.E_tau(params_d)
+        tau = self.E_tau(params_d, aux=aux)
         sh = tuple(n + 1 for n in self._num_samples.values())
         return (etbls / tau).reshape(sh)
 

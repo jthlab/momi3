@@ -1,4 +1,5 @@
 """Lift an event backwards in time"""
+
 import itertools as it
 import math
 from collections import defaultdict
@@ -7,12 +8,11 @@ from dataclasses import dataclass
 from typing import Any
 
 import networkx as nx
-from jax import numpy as jnp
-from jax import vmap
+from jax import numpy as jnp, lax, vmap
 from jax.scipy.linalg import expm
 
 from momi3.common import Axes, PopCounter, Population, Time, oe_einsum, traverse
-from momi3.migration import lift_cm, lift_cm_aux
+from ..migration import lift_cm, lift_cm_aux
 from momi3.pexp import PExp
 from momi3.utils import W_matrix, moran_eigensystem, rate_matrix
 
@@ -150,17 +150,37 @@ class Lift(Event):
             ret[pop["name"]] = PExp(N0=jnp.array(N0), N1=jnp.array(N1), t=jnp.array(t))
         return ret
 
-    def _migmat(
+    def _migfun(
         self, params: dict, s: list[tuple[Population, Population]]
     ) -> dict[tuple[Population, Population], float]:
         """get the migration matrix for a block"""
-        ret = {}
-        for (p1, p2), j in self.migrations.items():
-            if (p1, p2) in s:
-                m = params["migrations"][j]
-                assert m["source"] == p1 and m["dest"] == p2
-                ret[(p1, p2)] = params["migrations"][j]["rate"]
-        return ret
+        d = {
+            ss: jnp.array(
+                [
+                    [m["end_time"], m["start_time"], m["rate"]]
+                    for m in params["migrations"]
+                    if m["source"] == ss[0] and m["dest"] == ss[1]
+                ]
+            )
+            for ss in s
+        }
+
+        def f(t):
+            ret = {}
+            for ss in d:
+
+                def f(accum, row):
+                    e, s, r = row
+                    return jnp.where((e <= t) & (t < s), r, accum), None
+
+                m_ij, _ = lax.scan(f, 0.0, d[ss])
+                ret[ss] = m_ij
+            return ret
+
+        f.t = jnp.concatenate([a[:, :2] for a in d.values()]).reshape(-1)
+        f.t = jnp.sort(f.t)
+
+        return f
 
     def _execute_impl(self, st: State, params: dict, aux: Any) -> State:
         """Lift partial likelihood.
@@ -205,7 +225,7 @@ class Lift(Event):
                         self.terminal,
                     )
                 else:
-                    M = self._migmat(params, s)
+                    M = self._migfun(params, s)
                     mats = aux["mats"]["multi"][s]
                     involved_pops = {x for ab in s for x in ab}
                     plp, etbl = _liftmulti(plp, axes, etas, (t0, t1), M, mats["cmm"])
@@ -215,7 +235,7 @@ class Lift(Event):
                 pl0 = st.pl[tuple(inds)].squeeze()
                 phip += (pl0 * etbl).sum()
         # print(self.t1, self.t0, axes, phip)
-        return st._replace(pl=plp, phi=st.phi + phip)
+        return st._replace(pl=plp, phi=st.phi + phip, terminal=self.terminal)
 
 
 def _lift1(pl, in_axis, eta, t0, t1, d, Q, M, QQ, RR, W, terminal):
@@ -297,6 +317,7 @@ def _etbl_R(nv, eta, t0, t1, W):
 @dataclass(frozen=True, kw_only=True)
 class MigrationStart(Event):
     "Class marking the starting of a migration event in populations with different partial likelihoods."
+
     source: Population
     dest: Population
 
@@ -320,4 +341,4 @@ class MigrationStart(Event):
         plp = pl1[tup1] * pl2[tup2]
         phip = st2.phi * st1.l0 + st1.phi * st2.l0
         l0p = st1.l0 * st2.l0
-        return State(pl=plp, phi=phip, l0=l0p)
+        return State(pl=plp, phi=phip, l0=l0p, terminal=False)

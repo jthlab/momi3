@@ -15,6 +15,7 @@ from ..state import State
 @dataclass(frozen=True, kw_only=True)
 class Event:
     "Base class for events."
+
     bounds: Axes = None
 
     def setup(
@@ -48,6 +49,7 @@ class Event:
 @dataclass(frozen=True, kw_only=True)
 class Upsample(Event):
     "upsample from m lineages (forwards in time)"
+
     pop: Population
     m: int
 

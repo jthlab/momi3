@@ -1,4 +1,5 @@
 "miscellaneous shared functions that don't fit anywhere else"
+
 from collections import namedtuple
 from secrets import token_hex
 from typing import OrderedDict, Sequence, TypeVar

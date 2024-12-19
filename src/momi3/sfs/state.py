@@ -2,6 +2,8 @@ from typing import NamedTuple
 
 import jax.numpy as jnp
 
+from momi3.common import Axes
+
 
 class State(NamedTuple):
     """The state of a node in the event tree:
@@ -17,5 +19,5 @@ class State(NamedTuple):
     l0: bool
     terminal: bool
 
-    def assert_conforms(self, other: "State"):
-        assert self.pl.shape == other.pl.shape
+    def check_shape(self, axes: Axes):
+        assert self.pl.shape == tuple(axes.values())

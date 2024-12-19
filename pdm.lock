@@ -5,7 +5,7 @@
 groups = ["default", "dev", "testing"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:f2d8b3b32b4f35c702ad6abe120e5881cf61367eae66a043c2dff1aec397d0ca"
+content_hash = "sha256:d8160a8c347a1fae987bd7aa7dc0abdd0f115e0c0860b075c39e11b6861eecc5"
 
 [[metadata.targets]]
 requires_python = ">=3.10,<3.13"
@@ -633,6 +633,20 @@ groups = ["dev"]
 files = [
     {file = "humanize-4.11.0-py3-none-any.whl", hash = "sha256:b53caaec8532bcb2fff70c8826f904c35943f8cecaca29d272d9df38092736c0"},
     {file = "humanize-4.11.0.tar.gz", hash = "sha256:e66f36020a2d5a974c504bd2555cf770621dbdbb6d82f94a6857c0b1ea2608be"},
+]
+
+[[package]]
+name = "importlib-resources"
+version = "6.4.5"
+requires_python = ">=3.8"
+summary = "Read resources from Python packages"
+groups = ["default"]
+dependencies = [
+    "zipp>=3.1.0; python_version < \"3.10\"",
+]
+files = [
+    {file = "importlib_resources-6.4.5-py3-none-any.whl", hash = "sha256:ac29d5f956f01d5e4bb63102a5a19957f1b9175e45649977264a1416783bb717"},
+    {file = "importlib_resources-6.4.5.tar.gz", hash = "sha256:980862a1d16c9e147a59603677fa2aa5fd82b87f223b6cb870695bcfce830065"},
 ]
 
 [[package]]

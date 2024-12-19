@@ -14,6 +14,7 @@ from .event import Event
 @dataclass(frozen=True, kw_only=True)
 class Downsample(Event):
     "downsample from m to n lineages (forwards in time)"
+
     pop: Population
     m: int
     n: int

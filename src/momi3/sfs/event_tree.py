@@ -9,6 +9,9 @@ from .state import State
 
 
 class SfsEventTree(EventTree):
+    def __init__(self, demo, num_samples):
+        super().__init__(demo, num_samples, events)
+
     def _init_leaves(self):
         # initialize leaf sample sizes
         super()._init_leaves()
@@ -26,7 +29,7 @@ class SfsEventTree(EventTree):
         # now proceed with usual setup
         for j, deme in enumerate(self._demo.demes):
             node = self.leaves[deme.name]
-            ns = self.num_samples.get(deme.name, 0)
+            ns = self._num_samples.get(deme.name, 0)
             if ns < 4:
                 v = self.node_like(node)
                 self.add_edge(
@@ -34,16 +37,18 @@ class SfsEventTree(EventTree):
                 )
 
     def execute(
-        self, params: dict, leaf_state: dict[Population, jnp.ndarray], auxd: dict
+        self, params: dict, leaf_state: dict[Population, jnp.ndarray], aux: dict
     ) -> jnp.ndarray:
         for pop in self._leaves:
             # int partial likelihoods causes all sorts of problems further down
-            ns = self.num_samples.get(pop, 0)
+            ns = self._num_samples.get(pop, 0)
             X = leaf_state.get(pop, jax.nn.one_hot(jnp.array([0]), ns + 1)[0]).astype(
                 float
             )
             assert X.shape == (ns + 1,)
             l0 = (X[0] == 1.0).astype(float)  # & (X[pop][1:] == 0.0).all()
-            self.nodes[self._leaves[pop]]["state"] = State(pl=X, phi=0.0, l0=l0)
+            self.nodes[self._leaves[pop]]["state"] = State(
+                pl=X, phi=0.0, l0=l0, terminal=False
+            )
 
-        return super().execute(params, auxd)
+        return super().execute(params, aux)

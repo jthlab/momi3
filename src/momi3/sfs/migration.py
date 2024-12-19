@@ -1,5 +1,3 @@
-import itertools as it
-
 import diffrax as dfx
 import jax
 import jax.numpy as jnp
@@ -8,7 +6,7 @@ from jax import jacfwd
 from jax.experimental.sparse import BCOO
 from scipy.sparse.linalg._expm_multiply import _expm_multiply_simple
 
-from .common import Axes, Population
+from ..common import Axes, Population
 from .kronprod import GroupedKronProd
 from .momints import _drift, _migration, _mutation
 
@@ -63,7 +61,8 @@ def lift_cm(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
 
 
 def _A(s, y, args):
-    Q_mig, Q_mut, Q_drift, dims, axes, aux, etas = args
+    f_Q_mig, Q_mut, Q_drift, dims, axes, aux, etas = args
+    Q_mig = f_Q_mig(s)
     coal = {}
     for pop in etas:
         i = list(axes).index(pop)
@@ -93,25 +92,23 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     dims = pl.shape
     etas = params["etas"]
     Q_drift = _Q_drift(dims, axes, {p: 1.0 for p in etas}, aux)
-    Q_mig, Q_mut = _Q_mig_mut(dims, axes, params["mig"], aux, tr=False)
-    # WORKAROUND: calling Q_mig.T below gives me an error, impossibly deep stack trace having to do with diffrax,
-    # bcoo_sparse, vjp, etc. etc. "manually" transposing before multiplying with any traced migration params seems
-    # to be the key.
-    Q_mig_T, _ = _Q_mig_mut(dims, axes, params["mig"], aux, tr=True)
+    f_Q_mig, Q_mut = _Q_mig_mut(t[0], t[1], dims, axes, params["mig"], aux, tr=False)
+    f_Q_mig_T, _ = _Q_mig_mut(t[0], t[1], dims, axes, params["mig"], aux, tr=True)
 
     if True:
         # Convert all Q_* to dense
         Q_drift = Q_drift.todense()
-        Q_mig = Q_mig.todense()
         Q_mut = Q_mut.todense()
-        Q_mig_T = Q_mig_T.todense()
 
     solver = dfx.Kvaerno3()
     term = dfx.ODETerm(_A)
 
     def solve(y0, args):
+        f_Q_mig = args[0]
         etas = args[-1]
-        jump_ts = jnp.sort(jnp.concatenate([eta.t for eta in etas.values()]))
+        jump_ts = jnp.array([eta.t for eta in etas.values()])
+        jump_ts = jnp.append(jump_ts, f_Q_mig.t)
+        jump_ts = jnp.sort(jump_ts)
         ssc = dfx.PIDController(jump_ts=jump_ts, rtol=1e-6, atol=1e-6)
         res = dfx.diffeqsolve(
             term,
@@ -132,7 +129,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
         # jax.debug.print("number of steps: {}", res.stats["num_steps"])
         return res.ys
 
-    primal_args = (Q_mig_T, Q_mut.T, Q_drift.T, dims, axes, aux, etas)
+    primal_args = (f_Q_mig_T, Q_mut.T, Q_drift.T, dims, axes, aux, etas)
     plp = solve(pl, primal_args)[0]
 
     # compute d/dtheta x(t,theta)|{theta=0} using the forward sensitivity method.
@@ -149,20 +146,26 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     sh = tuple([pl.shape[i] if pop in involved else 1 for i, pop in enumerate(axes)])
     z = jnp.zeros(sh)
     e0 = z.at[(0,) * z.ndim].set(1.0)
-
-    etas = {k: v.reverse() for k, v in etas.items()}
-    tangent_args = tuple([X._replace(dims=sh) for X in (Q_mig, Q_mut, Q_drift)]) + (
+    new_etas = {}
+    for k, v in etas.items():
+        new_etas[k] = lambda x: v(t[0] + t[1] - x)
+        new_etas[k].t = t[0] + t[1] - v.t
+    tangent_args = (f_Q_mig,)
+    tangent_args += tuple([X._replace(dims=sh) for X in (Q_mut, Q_drift)])
+    tangent_args += (
         sh,
         axes,
         aux,
-        etas,
+        new_etas,
     )
     # time runs backwards here!
     res = solve((z, e0), tangent_args)
     etbl = res[0][0]
-
     inds = tuple([slice(None) if pop in involved else 0 for pop in axes])
-    return plp, etbl[inds]
+    etbl = etbl[inds]
+    for x in (0, -1):
+        etbl = etbl.at[(x,) * pl.ndim].set(0.0)
+    return plp, etbl
 
 
 def _lift_cm_const(params: dict, t: tuple[float, float], pl: jnp.ndarray, axes, aux):
@@ -248,22 +251,32 @@ def _Q_drift(
 
 
 def _Q_mig_mut(
-    dims, axes, mig_mat, aux, tr=False
+    t0, t1, dims, axes, mig_mat, aux, tr=False
 ) -> tuple[GroupedKronProd, GroupedKronProd]:
     """construct Q matrix for continuously migrating populations"""
     s = list(aux["mut"])
     i = list(axes).index
     Q_mut = GroupedKronProd([{i(ss): aux["mut"][ss]} for ss in s], dims)
+
     # migration matrix is a bit trickier
-    terms = []
-    for s1, s2 in it.product(s, repeat=2):
-        if (s1, s2) in mig_mat:
-            m_ij = mig_mat[s1, s2]
+    def f_Q_mig(t):
+        if tr:
+            M = mig_mat(t)
+        else:
+            M = mig_mat(-t + t1 + t0)
+        terms = []
+        for (s1, s2), m_ij in M.items():
             u1, u2 = aux["mig"][s1, s2]
+            i1, i2 = map(list(axes).index, (s1, s2))
             if tr:
                 u1, u2 = [{k: v.T for k, v in x.items()} for x in (u1, u2)]
-            i1, i2 = map(list(axes).index, (s1, s2))
             terms.append({i1: m_ij * u1[0], i2: u1[1]})
             terms.append({i2: m_ij * u2[1]})
-    Q_mig = GroupedKronProd(terms, dims)
-    return Q_mig, Q_mut
+        return GroupedKronProd(terms, dims)
+
+    if tr:
+        f_Q_mig.t = mig_mat.t
+    else:
+        f_Q_mig.t = -mig_mat.t + t1 + t0
+
+    return f_Q_mig, Q_mut

@@ -28,6 +28,7 @@ __all__ = [
 @dataclass(frozen=True, kw_only=True)
 class Rename(Event):
     "Rename a population."
+
     old: Population
     new: Population
 
