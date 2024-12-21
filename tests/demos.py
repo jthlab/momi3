@@ -37,7 +37,7 @@ class SingleDeme:
             b.add_deme(
                 "A",
                 epochs=[
-                    dict(end_time=t, start_size=size_end),
+                    dict(end_time=t, start_size=size),
                     dict(
                         end_time=0,
                         start_size=size,

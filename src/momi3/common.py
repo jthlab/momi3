@@ -1,8 +1,7 @@
 "miscellaneous shared functions that don't fit anywhere else"
 
-from collections import namedtuple
 from secrets import token_hex
-from typing import OrderedDict, Sequence, TypeVar
+from typing import OrderedDict, Sequence, NamedTuple
 
 from jax import numpy as jnp
 from jax.tree_util import register_pytree_node_class
@@ -11,13 +10,22 @@ from jax.util import safe_zip
 oe_einsum = jnp.einsum
 
 
-def get_path(params, path):
+# Some type aliases that are used throughout
+Population = str
+PopCounter = dict[
+    Population, dict[Population, int]
+]  # Maps populations to the populations they are ancestral to, and the sample size of each
+Block = frozenset[Population]
+Path = tuple[str | int, ...]
+
+
+def get_path(params, path: Path) -> float:
     for i in path:
         params = params[i]
     return params
 
 
-def set_path(params, path, value):
+def set_path(params, path: Path, value: float):
     for i in path[:-1]:
         params = params[i]
     params[path[-1]] = value
@@ -35,15 +43,6 @@ def unique_strs(q: Sequence[str], k: int = 1, ell: int = 8) -> list[str]:
 
 def unique_str(q, ell: int = 8):
     return unique_strs(q, 1, ell)[0]
-
-
-# Some type aliases that are used throughout
-Population = str
-PopCounter = dict[
-    Population, dict[Population, int]
-]  # Maps populations to the populations they are ancestral to, and the sample size of each
-Block = frozenset[Population]
-Path = tuple[str | int, ...]
 
 
 @register_pytree_node_class
@@ -65,32 +64,18 @@ class Axes(OrderedDict[Population, int]):
         return sum(a - 1 for a in self.values())
 
 
-T = TypeVar("T")
-
-TimeTuple = namedtuple("TimeTuple", "t path")
-
-
-class Time(TimeTuple):
-    def __init__(self, t: float, path: tuple):
-        super().__init__()
-
-    def __str__(self):
-        return f"Time({self.t})"
-
-    def __repr__(self):
-        return str(self)
-
-    def __hash__(self):
-        return hash(self.t)
-
-    def __eq__(self, other: "Time") -> bool:
-        assert isinstance(other, Time)
-        return self.t == other.t
-
-    def __lt__(self, other: "Time") -> bool:
-        assert isinstance(other, Time)
-        return self.t < other.t
+class Time(NamedTuple):
+    t: float
+    path: Path
 
 
-def softplus_inv(y):
+def inv_softplus(y):
     return y + jnp.log1p(-jnp.exp(-y))
+
+
+def inv_softmax(y):
+    "softmax(inv_softmax(softmax(y))) = softmax(y)"
+    # softmax is not invertible. we constrain the returned value to have mean zero.
+    ret = jnp.log(y)
+    ret -= ret.mean()
+    return ret
