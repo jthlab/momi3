@@ -6,21 +6,33 @@ from functools import reduce, total_ordering
 from itertools import count
 from types import ModuleType
 from typing import Callable, Iterable, NamedTuple
+from collections.abc import Collection
 
 import demes
+import jax
 import jax.numpy as jnp
+from jax.scipy.special import logit
 import networkx as nx
 from frozendict import frozendict
 from loguru import logger
 
-from momi3.common import Population, Time, unique_strs
+from momi3.common import (
+    Population,
+    Time,
+    Path,
+    unique_strs,
+    get_path,
+    set_path,
+    inv_softplus,
+    inv_softmax,
+)
 
 
 @total_ordering
 class EventType(Enum):
-    EPOCH = 1
+    MIGRATION_START = 1
     MIGRATION_END = 2
-    MIGRATION_START = 3
+    EPOCH = 3
     PULSE = 4
     MERGE = 5
     POPULATION_START = 6
@@ -113,11 +125,10 @@ class EventTree:
         self._demo = demo
         self._num_samples = num_samples
         self._events = events
+        self._shared_paths = set()
         self._T = nx.DiGraph()
-        # initialize the event tree
-        self._times = {}
+        # initialize leaves and then build the event tree
         self._init_leaves()
-        # compute aux information for each node
         self._build_tree()
 
     @property
@@ -128,60 +139,148 @@ class EventTree:
     def leaves(self):
         return self._leaves
 
-    @property
-    def times(self):
-        return self._times
+    def reparameterize(self, paths: Collection[Path]):
+        assert nx.is_directed_acyclic_graph(self._T)
+        assert nx.number_connected_components(self._T.to_undirected()) == 1
 
-    @property
-    def constraints(self):
-        def path_to_str(path):
-            return path[0] + "".join(f"[{i}]" for i in path[1:])
+        params = self._demo.asdict()
+        paths = set(paths)
+        fd = {}
+        finvd = {}
 
-        cons = set()
+        def is_time_path(path):
+            return path[-1] in ("start_time", "end_time", "time")
 
-        for t0, t1 in self._T.edges():
-            t0.t.t
-            t1.t.t
-            p0, p1 = map(path_to_str, (t0.t.path, t1.t.path))
-            cons.add(f"{p0}<={p1}")
-            cons.add(f"{p0}>=0")
-            cons.add(f"{p1}>=0")
+        def get_path_block(path):
+            return next(s for s in self._shared_paths if path in s)
 
-        d = self._demo.asdict()
+        # validate the list of paths
+        for p in paths:
+            try:
+                get_path(params, p)
+            except KeyError as e:
+                raise ValueError(f"path {p} not found in demes graph") from e
+        # check that the start time of the first deme is not in the list of paths
+        if ("demes", 0, "start_time") in paths:
+            assert math.isinf(demes[0]["start_time"])
+            raise ValueError(
+                "cannot reparameterize the start time of the first deme, "
+                "as it extends infinitely far back in the past"
+            )
 
-        for i, deme in enumerate(d["demes"]):
-            base = f"demes[{i}]"
-            cons.add(f"{base}['start_time']>=0")
-            for j, e in enumerate(deme["epochs"]):
-                for k in ["start_time", "end_time", "start_size", "size_function"]:
-                    cons.add(f"{base}['epochs'][{j}]['{k}']>=0")
-            props = []
-            for j in range(len(deme["proportions"])):
-                s = f"{base}['proportions'][{j}]"
-                cons.add(f"{s}>=0")
-                props.append(s)
-            cons.add(f"{'+'.join(props)}==1")
+        def f_pos(x, _):
+            return jax.nn.softplus(x)
 
-        for j, p in enumerate(d["pulses"]):
-            cons.add(f"pulses[{j}]['time']>=0")
-            for k in range(len(p["proportions"])):
-                props = []
-                s = f"pulses[{j}]['proportions'][{k}]"
-                cons.add(f"{s}>=0")
-            cons.add(f"{'+'.join(props)}==1")
+        def finv_pos(y, params):
+            return inv_softplus(y)
 
-        for j, m in enumerate(d["migrations"]):
-            cons.add(f"migrations[{j}]['start_time']>=0")
-            cons.add(f"migrations[{j}]['end_time']>=0")
-            cons.add(f"migrations[{j}]['end_time']<=migrations[{j}]['start_time']")
-            cons.add(f"migrations[{j}]['rate']>=0")
+        def f_simplex(x, _):
+            return jax.nn.softmax(x)
 
-        return cons
+        def finv_simplex(y, params):
+            return inv_softmax(y)
 
-    def _add_time(self, t, path):
-        tm = Time(t, path=path)
-        self._times.setdefault(t, set()).add(tm)
-        return tm
+        # check no duplication in the path list
+        for path in paths:
+            # only time paths can be multiply referenced
+            if is_time_path(path):
+                try:
+                    other_paths = get_path_block(path) - {path}
+                except StopIteration:
+                    raise ValueError(
+                        f"path {path} not found in shared paths, this is a bug!"
+                    )
+                if other_paths & paths:
+                    raise ValueError(
+                        f"cannot reparameterize {path} and {other_paths} "
+                        "simultaneously, since they are constrained to be equal"
+                    )
+
+        # first match all non-time paths
+        for path in filter(lambda x: not is_time_path(x), paths):
+            if path[-2] == "proportions":
+                raise NotImplementedError(
+                    "I can't reparameterize individual proportions. Instead of passing "
+                    "{path}, pass {path[:-1]} to reparameterize the entire vector."
+                )
+            fp = frozenset([path])
+            match path[-1]:
+                case "proportions":
+                    fd[fp] = f_simplex
+                    finvd[fp] = finv_simplex
+                case "rate" | "start_size" | "end_size":
+                    fd[fp] = f_pos
+                    finvd[fp] = finv_pos
+                case _:
+                    raise ValueError(f"unrecognized path {path}")
+
+        # now handle the time paths which are weirder
+
+        # start at root
+        Tr = self._T.reverse()  # edges pointing away from root
+        nodes = nx.topological_sort(Tr)
+        root = next(nodes)
+        assert root.t.t == math.inf
+        n = next(nodes)  # this is the "crown" of the tree
+        # the crown is special because the time is unbounded above, so it needs to
+        # transform to a positive value
+        path_block = get_path_block(n.t.path)
+        if path_block & paths:
+            fd[path_block] = f_pos
+            finvd[path_block] = finv_pos
+
+        # recurse down the tree. each parameterized time node is expressed in
+        # terms of a fraction of the time of its nearest ancestor.
+        for n in nodes:
+            if n.t.path not in paths:
+                # this time is not in the list of paths to reparameterize
+                continue
+            path_block = get_path_block(n.t.path)
+            if path_block in fd:
+                # this time has already been reparameterized
+                continue
+            p = n
+            while True:
+                ps = list(Tr.predecessors(p))
+                assert len(ps) == 1
+                (p,) = ps
+                if p.t.t > n.t.t:
+                    break
+
+            def f(x, params, parent_path=p.t.path):
+                alpha = jax.nn.sigmoid(x)
+                return alpha * get_path(params, parent_path)
+
+            fd[path_block] = f
+
+            def finv(y, params, parent_path=p.t.path):
+                return logit(y / get_path(params, parent_path))
+
+            finvd[path_block] = finv
+
+        # create return functions that apply the reparameterization and inverse
+        # based on the lists created above.
+        def f_combined(x, params, fd=fd):
+            x = jax.tree.map(jnp.array, x)
+            ret = deepcopy(params)
+            for paths, fp in fd.items():
+                # any times which are identically equal in the base model
+                # are constrained to be equal during reparameterization
+                val = fp(x[paths], params)
+                for path in paths:
+                    set_path(ret, path, val)
+            return ret
+
+        def finv_combined(params, finvd=finvd):
+            ret = {}
+            for paths, fi in finvd.items():
+                path = next(iter(paths))
+                # all paths in the block should be equal
+                y = jnp.array(get_path(params, path))
+                ret[paths] = fi(y, params)
+            return ret
+
+        return f_combined, finv_combined
 
     def _init_leaves(self):
         # initialize the event tree
@@ -190,8 +289,10 @@ class EventTree:
         # Initialize leaf nodes for each population
         for j, deme in enumerate(self._demo.demes):
             # add initial leaf nodes for each population
-            path = ("demes", j, "epochs", -1, "end_time")
-            t = self._add_time(deme.epochs[-1].end_time, path=path)
+            n = len(deme.epochs)
+            path = ("demes", j, "epochs", n - 1, "end_time")
+            t = Time(deme.epochs[n - 1].end_time, path=path)
+            self._shared_paths.add(frozenset([path]))
             node = Node(i=next(self._i), block=frozenset([deme.name]), t=t)
             # attached to each node are attributes that track the population size and
             # migration rates. (these are the two model attributes that persist
@@ -350,6 +451,15 @@ class EventTree:
             if pop in u.block:
                 return u
 
+    def _merge_paths(self, p0: Path, p1: Path):
+        "merge the blocks containing p0 and p1"
+        bl0, bl1 = [next(s for s in self._shared_paths if p in s) for p in (p0, p1)]
+        if bl0 is bl1:
+            return
+        self._shared_paths.remove(bl0)
+        self._shared_paths.remove(bl1)
+        self._shared_paths.add(bl0 | bl1)
+
     def _lift(self, pop: Population, t: Time) -> Node:
         """lift node u to time t.
 
@@ -364,10 +474,10 @@ class EventTree:
             Does nothing if the population is already at time t.
         """
         u = self._get_active(pop)
-        if u.t == t:
-            # no lifting is necessary
+        if u.t.t == t.t:
+            self._merge_paths(u.t.path, t.path)
             return u
-        assert u.t < t
+        assert u.t.t < t.t
         # create a new node that is the same as u, but with a different time
         v = self.node_like(u, t=t)
         ev = self.events.Lift(
@@ -390,8 +500,7 @@ class EventTree:
 
     def _merge_nodes(self, x: Node, y: Node, rm=None) -> Node:
         """merge nodes x and y, optionally removing rm from the merged block set."""
-        assert x.t == y.t
-        t = x.t
+        assert x.t.t == y.t.t
         # OR together the migration sets and epochs dict
         st = {
             k: reduce(operator.or_, [self.nodes[z][k] for z in (x, y)])
@@ -405,7 +514,7 @@ class EventTree:
             for m in st["migrations"]:
                 if rm in m:
                     st["migrations"] = st["migrations"].delete(m)
-        nn = Node(i=next(self._i), block=b, t=t)
+        nn = Node(i=next(self._i), block=b, t=x.t)
         self.add_node(nn, **st)
         for z in x, y:
             self._T.add_edge(z, nn)
@@ -429,10 +538,12 @@ class EventTree:
         # iterate over all events in the sort order specified above
         for d in sorted(_all_events(self._demo), key=keyfun):
             # register times of all events, including epochs
-            t = self._add_time(d["t"], d["path"])
-
+            t = Time(d["t"], d["path"])
+            self._shared_paths.add(frozenset([t.path]))
+            u = self._lift(d["pop"], t)
+            assert u.t.t == t.t
             # if epoch, nothing to do. epochs are handled by the lifting events.
-            if d["ev"] == EventType.EPOCH:
+            if d["ev"] in (EventType.EPOCH, EventType.MIGRATION_END):
                 continue
                 # nn = self.node_like(u)
                 # self.nodes[nn]["epochs"] = self.nodes[nn]["epochs"].set(
@@ -440,16 +551,15 @@ class EventTree:
                 # )
                 # self.add_edge(u, nn)
 
-            if d["ev"] == EventType.MIGRATION_START:
+            elif d["ev"] == EventType.MIGRATION_START:
                 key = (d["source"], d["pop"])
-                u, v = map(self._get_active, key)
+                v = self._lift(d["source"], t)
                 if u is v:
                     # these populations are all in the same block
                     self.nodes[u]["migrations"] = self.nodes[u]["migrations"].set(
                         key, d["i"]
                     )
                     continue
-                u, v = [self._lift(d[k], t) for k in ("pop", "source")]
                 st_u, st_v = [self.nodes[x] for x in (u, v)]
                 # the nodes should be fully disjoint, otherwise they would already be in
                 # the same block
@@ -468,8 +578,6 @@ class EventTree:
                 self.edges[u, nn]["id"] = "dest"
                 self.edges[v, nn]["id"] = "source"
                 continue
-            elif d["ev"] == EventType.MIGRATION_END:
-                continue
 
             # a state update. the nodes are already in the same block, and remain so
             # even after migration ends.
@@ -479,13 +587,10 @@ class EventTree:
             #     self.nodes[nn]["migrations"] = self.nodes[nn]["migrations"].delete(key)
             #     self.add_edge(u, nn)
 
-            # otherwise, lift the population to current time and process event
-            u = self._lift(d["pop"], t)
-            assert u.t == t
-
             # pulses function in a similarly to continuous migrations, but they are not
             # recorded in the state since they happen instantly.
-            if d["ev"] == EventType.PULSE:
+
+            elif d["ev"] == EventType.PULSE:
                 # From https://popsim-consortium.github.io/demes-spec-docs/main/specification.html#example-sequential-application-of-pulses  # noqa: E501
                 # 1. Initialize an array of zeros with length equal to the num. demes.
                 # 2. Set the ancestry proportion of the destination deme to 1.
@@ -514,7 +619,6 @@ class EventTree:
                     self._pulse(source=s, dest=d["pop"], t=t, f_p=f_p)
                 # the remaining ancestor merges with last ancestor
                 s = d["ancestors"][-1]
-                u = self._lift(d["pop"], t)
                 v = self._lift(s, t)
                 nn = self._merge_nodes(u, v, rm=d["pop"])
                 evc = events.Split1 if u is v else events.Split2
