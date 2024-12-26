@@ -5,7 +5,7 @@
 groups = ["default", "dev", "testing"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:d8160a8c347a1fae987bd7aa7dc0abdd0f115e0c0860b075c39e11b6861eecc5"
+content_hash = "sha256:fa2b0a12bd8a6210d6d2e62d42c03986f294f93deb72c96c143e2af99ed4b64b"
 
 [[metadata.targets]]
 requires_python = ">=3.10,<3.13"
@@ -16,6 +16,7 @@ version = "2.1.0"
 requires_python = ">=3.7"
 summary = "Abseil Python Common Libraries, see https://github.com/abseil/abseil-py."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "absl-py-2.1.0.tar.gz", hash = "sha256:7820790efbb316739cde8b4e19357243fc3608a152024288513dd968d7d959ff"},
     {file = "absl_py-2.1.0-py3-none-any.whl", hash = "sha256:526a04eadab8b4ee719ce68f204172ead1027549089702d99b9059f129ff1308"},
@@ -26,6 +27,7 @@ name = "appdirs"
 version = "1.4.4"
 summary = "A small Python module for determining appropriate platform-specific dirs, e.g. a \"user data dir\"."
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128"},
     {file = "appdirs-1.4.4.tar.gz", hash = "sha256:7d5d0167b2b1ba821647616af46a749d1c653740dd0d2415100fe26e27afdf41"},
@@ -36,6 +38,7 @@ name = "asciitree"
 version = "0.3.3"
 summary = "Draws ASCII trees."
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "asciitree-0.3.3.tar.gz", hash = "sha256:4aa4b9b649f85e3fcb343363d97564aa1fb62e249677f2e18a96765145cc0f6e"},
 ]
@@ -45,6 +48,7 @@ name = "asttokens"
 version = "2.4.1"
 summary = "Annotate AST trees with source code positions"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "six>=1.12.0",
     "typing; python_version < \"3.5\"",
@@ -60,6 +64,7 @@ version = "24.2.0"
 requires_python = ">=3.7"
 summary = "Classes Without Boilerplate"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "importlib-metadata; python_version < \"3.8\"",
 ]
@@ -74,6 +79,7 @@ version = "1.7.0"
 requires_python = ">=3.8"
 summary = "Efficiently computes derivatives of NumPy code."
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "numpy",
 ]
@@ -88,6 +94,7 @@ version = "2.0.1"
 requires_python = ">=3.8"
 summary = "A decorator for caching properties in classes."
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "cached_property-2.0.1-py3-none-any.whl", hash = "sha256:f617d70ab1100b7bcf6e42228f9ddcb78c676ffa167278d9f730d1c2fba69ccb"},
     {file = "cached_property-2.0.1.tar.gz", hash = "sha256:484d617105e3ee0e4f1f58725e72a8ef9e93deee462222dbd51cd91230897641"},
@@ -99,6 +106,7 @@ version = "0.1.87"
 requires_python = ">=3.9"
 summary = "Chex: Testing made fun, in JAX!"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "absl-py>=0.9.0",
     "jax>=0.4.27",
@@ -119,6 +127,7 @@ version = "0.9.0"
 requires_python = ">=3.7"
 summary = "Clarabel Conic Interior Point Solver for Rust / Python"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "numpy",
     "scipy",
@@ -140,7 +149,7 @@ version = "0.4.6"
 requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
 summary = "Cross-platform colored terminal text."
 groups = ["default", "dev", "testing"]
-marker = "sys_platform == \"win32\" or platform_system == \"Windows\""
+marker = "sys_platform == \"win32\" and python_version >= \"3.10\" and python_version < \"3.13\" or platform_system == \"Windows\" and python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
@@ -152,6 +161,7 @@ version = "1.3.0"
 requires_python = ">=3.9"
 summary = "Python library for calculating contours of 2D quadrilateral grids"
 groups = ["default", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "numpy>=1.23",
 ]
@@ -198,6 +208,7 @@ version = "7.6.4"
 requires_python = ">=3.9"
 summary = "Code coverage measurement for Python"
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "coverage-7.6.4-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:5f8ae553cba74085db385d489c7a792ad66f7f9ba2ee85bfa508aeb84cf0ba07"},
     {file = "coverage-7.6.4-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:8165b796df0bd42e10527a3f493c592ba494f16ef3c8b531288e3d0d72c1f6f0"},
@@ -240,6 +251,7 @@ extras = ["toml"]
 requires_python = ">=3.9"
 summary = "Code coverage measurement for Python"
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "coverage==7.6.4",
     "tomli; python_full_version <= \"3.11.0a6\"",
@@ -281,34 +293,35 @@ files = [
 
 [[package]]
 name = "cvxpy"
-version = "1.5.3"
-requires_python = ">=3.8"
+version = "1.6.0"
+requires_python = ">=3.9"
 summary = "A domain-specific language for modeling convex optimization problems in Python."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "clarabel>=0.5.0",
-    "ecos>=2",
-    "numpy>=1.15",
+    "numpy>=1.20",
     "osqp>=0.6.2",
     "scipy>=1.1.0",
     "scs>=3.2.4.post1",
 ]
 files = [
-    {file = "cvxpy-1.5.3-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:8af2372d16ff03b6e325be25f5fae907fa0f8f284c629e4cace479794d9b1988"},
-    {file = "cvxpy-1.5.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:4f648bc3a2046349b6455a924a145e8d37f055f1e25661d46cfc96f258053dea"},
-    {file = "cvxpy-1.5.3-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:88f790d67ce30bf9ad5e267a89f665f4caccf18a1a6bb110edd8097c55a383df"},
-    {file = "cvxpy-1.5.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4897024ee50d5ba47508bbee761703b8db46a76442e3da83e2640021199a3d2c"},
-    {file = "cvxpy-1.5.3-cp310-cp310-win_amd64.whl", hash = "sha256:3de937f03be371f37814d0bb9ccea8b93f6c49b38d3be3e6e54cb0016249494f"},
-    {file = "cvxpy-1.5.3-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:bfa9713c0b378383674c56b82f2b16ea746d0fdb5682a4ee8d25ce21a9a46bb4"},
-    {file = "cvxpy-1.5.3-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:ec4c8208d125d2c709964ae5783a07fc0fc847caafaaf738719d70f1b122e913"},
-    {file = "cvxpy-1.5.3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:45aa9bbff2b695801ee72e4152f8745ef1308304d1137f07f4ac2f3bd92e19a1"},
-    {file = "cvxpy-1.5.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7d202584bda28e47e84034eab41d88b5f42a696854407386a121429c0e687f85"},
-    {file = "cvxpy-1.5.3-cp311-cp311-win_amd64.whl", hash = "sha256:031208910db7cb1679e553fda6878760d2b191e07b130365f2cd8a9489677c77"},
-    {file = "cvxpy-1.5.3-cp312-cp312-macosx_10_9_universal2.whl", hash = "sha256:ba61d01b4a095eeedf2244feea2bc4225c4f1a38ece716ec338183f0e2c7b72e"},
-    {file = "cvxpy-1.5.3-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:7ee652f36cbe04aae292423f031156390251a0fbc55e53b808a24172bf95677b"},
-    {file = "cvxpy-1.5.3-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:62ae140c573462f2007795d7042875848560d7a4fe5e090285b32f268b078f67"},
-    {file = "cvxpy-1.5.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:70bcd7207b02afd052fa993c262a0601ad8d39fa2f901b227b34fea7b17dca1a"},
-    {file = "cvxpy-1.5.3-cp312-cp312-win_amd64.whl", hash = "sha256:3d8b619c2053d5f127dbd5aa9ceb5a5bdffaa3fa6c5519617364279a183b75bc"},
+    {file = "cvxpy-1.6.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:45fa557789ff5d9ecdf88dee15c47dbd2f79fa47aa4d71e939126ad654e43484"},
+    {file = "cvxpy-1.6.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:aaff709f5a12a5984b33303a0db5c129aeeba39c98001b630e6943d0cd5a53ed"},
+    {file = "cvxpy-1.6.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:376e43113f19c2e448b5a1fc06e276eae0952e398c6b76092b2fd21c8e14333f"},
+    {file = "cvxpy-1.6.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:32bbc9ad7c4423a68e8ec0ac7b59187937d0472e9a331e84c811c89c24799512"},
+    {file = "cvxpy-1.6.0-cp310-cp310-win_amd64.whl", hash = "sha256:fe295d5eff0f7adab80fca54e2796da878827432f4f97f5d87e47208d52e0aab"},
+    {file = "cvxpy-1.6.0-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:99f3f72d84b6424dcbac582f9d50853ab0b473ef63087f1afefd0ddebd94999f"},
+    {file = "cvxpy-1.6.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:5f8c2535541baca557a170a90fad5722f413f9898d3b6111f5f0d46707009b02"},
+    {file = "cvxpy-1.6.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:96de6ec5d2cb7ca2c2f767d8a8485ef9c7fb0269f5668d52210c8d7c32dda610"},
+    {file = "cvxpy-1.6.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ccc3fc4a54126e90c858eee6d2d729afe954d9fab09d23ec92551728ce1e490c"},
+    {file = "cvxpy-1.6.0-cp311-cp311-win_amd64.whl", hash = "sha256:94da5c6897db0718376153ac51a40d6cd6e33b4cc033d99783c506db794caeca"},
+    {file = "cvxpy-1.6.0-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:3ad0a0928dbd051d3e3b34bf76b078ee3e3b3b3418a86e406c048f9c06196ffa"},
+    {file = "cvxpy-1.6.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:bc013ce8f868c2c25917a79c33e78ca6da7e9f4a498a35c3172a57a5d2626851"},
+    {file = "cvxpy-1.6.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8a4305e85cc4c916a560818f03fe61521492c7cd4d43783e9e8713ed9dd6854d"},
+    {file = "cvxpy-1.6.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:12067d6a540037c0bf2d936961b84482002a231f37a994b5c9adff71360ba7a2"},
+    {file = "cvxpy-1.6.0-cp312-cp312-win_amd64.whl", hash = "sha256:ca12f4045e6118a296e2fdbc451d4fa5f4c3bb1f4e8a770e5065b070144b9342"},
+    {file = "cvxpy-1.6.0.tar.gz", hash = "sha256:679a9531877dfe0e2defabe106bc62a3e7ea094a7fcfcb797e121127ff8ff39a"},
 ]
 
 [[package]]
@@ -317,6 +330,7 @@ version = "0.12.1"
 requires_python = ">=3.8"
 summary = "Composable style cycles"
 groups = ["default", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "cycler-0.12.1-py3-none-any.whl", hash = "sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30"},
     {file = "cycler-0.12.1.tar.gz", hash = "sha256:88bb128f02ba341da8ef447245a9e138fae777f6a23943da4540077d3601eb1c"},
@@ -328,6 +342,7 @@ version = "3.0.11"
 requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
 summary = "The Cython compiler for writing C extensions in the Python language."
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "Cython-3.0.11-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:44292aae17524abb4b70a25111fe7dec1a0ad718711d47e3786a211d5408fdaa"},
     {file = "Cython-3.0.11-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a75d45fbc20651c1b72e4111149fed3b33d270b0a4fb78328c54d965f28d55e1"},
@@ -359,10 +374,11 @@ files = [
 
 [[package]]
 name = "dadi"
-version = "2.3.7"
+version = "2.4.0"
 requires_python = ">=3.7"
 summary = "Fit population genetic models of demography and selection using diffusion approximations to the allele frequency spectrum"
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "demes",
     "matplotlib",
@@ -371,8 +387,8 @@ dependencies = [
     "scipy",
 ]
 files = [
-    {file = "dadi-2.3.7-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:58ffc4a54db32e6b5a0b67caa821e2b3e6f98cbc5a8efbbb454dcf2968956e12"},
-    {file = "dadi-2.3.7.tar.gz", hash = "sha256:b3ed7016d44ec7952041b0399c73ecd6c251bfdf8bd8fabebe30cb65d814384a"},
+    {file = "dadi-2.4.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:5c3bc70e654176d29b0f7a989ab40b51aac794100b41c43d3db3a55cd8179346"},
+    {file = "dadi-2.4.0.tar.gz", hash = "sha256:e7edc9767b6cfd268e7939513e8f8f04c0e2f01e5505ff582e7ce6c8a98c255c"},
 ]
 
 [[package]]
@@ -381,6 +397,7 @@ version = "5.1.1"
 requires_python = ">=3.5"
 summary = "Decorators for Humans"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "decorator-5.1.1-py3-none-any.whl", hash = "sha256:b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186"},
     {file = "decorator-5.1.1.tar.gz", hash = "sha256:637996211036b6385ef91435e4fae22989472f9d571faba8927ba8253acbc330"},
@@ -392,6 +409,7 @@ version = "0.2.3"
 requires_python = ">=3.7"
 summary = "tools for describing demographic models"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "attrs>=20.3.0",
     "ruamel-yaml>=0.15.78",
@@ -407,6 +425,7 @@ version = "0.4.0"
 requires_python = ">=3.7"
 summary = "drawing tools for Demes demographic models"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "demes>=0.2.0",
     "matplotlib>=3.3.1",
@@ -420,13 +439,14 @@ files = [
 
 [[package]]
 name = "diffrax"
-version = "0.6.0"
+version = "0.6.2"
 requires_python = "~=3.9"
 summary = "GPU+autodiff-capable ODE/SDE/CDE solvers written in JAX."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
-    "equinox>=0.11.2",
-    "jax>=0.4.28",
+    "equinox>=0.11.10",
+    "jax>=0.4.38",
     "jaxtyping>=0.2.24",
     "lineax>=0.0.5",
     "optimistix>=0.0.7",
@@ -434,46 +454,25 @@ dependencies = [
     "typing-extensions>=4.5.0",
 ]
 files = [
-    {file = "diffrax-0.6.0-py3-none-any.whl", hash = "sha256:7a59a796fd91e9c1cb20c37696c9f758681a3f24e72ff354a5a6aa335d3cde3a"},
-    {file = "diffrax-0.6.0.tar.gz", hash = "sha256:937207070bd7fdfe99178e23ec1787a630df7e3969b381e072ca6a14f5e2f3d3"},
-]
-
-[[package]]
-name = "ecos"
-version = "2.0.14"
-summary = "This is the Python package for ECOS: Embedded Cone Solver. See Github page for more information."
-groups = ["default"]
-dependencies = [
-    "numpy>=1.6",
-    "scipy>=0.9",
-]
-files = [
-    {file = "ecos-2.0.14-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:d16f8c97c42a18be77530b4d0090d8dd38105ae311518fc58a66c5c403d79672"},
-    {file = "ecos-2.0.14-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f9a977976ec618261456d6c9cd4ec7b7745607e448e78cd0c851190c6cc515ef"},
-    {file = "ecos-2.0.14-cp310-cp310-win_amd64.whl", hash = "sha256:f2e8ab314609117f7e96bb83db7458f011ab0496c61078e146a8f5c8244e70b2"},
-    {file = "ecos-2.0.14-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:dc90b54eaae16ead128bfdd95e04bf808b73578bdf40ed652c55aa36a6d02e42"},
-    {file = "ecos-2.0.14-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7a8be3b4856838ae351fec40fb3589181d52b41cf75bf4d35342686a508c37a6"},
-    {file = "ecos-2.0.14-cp311-cp311-win_amd64.whl", hash = "sha256:7495b3031ccc2d4cec72cdb40aed8a2d1fdd734fe40519b7e6047aead5e811cf"},
-    {file = "ecos-2.0.14-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:4a7e2704a3ef9acfb8146d594deff9942d3a0f0d0399de8fe2e0bd95e8b0855c"},
-    {file = "ecos-2.0.14-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f3cbb1a66ecf10955a1a4bcd6b99db55148000cb79fd176bfac26d98b21a4814"},
-    {file = "ecos-2.0.14-cp312-cp312-win_amd64.whl", hash = "sha256:718eb62afb8e45426bcc365ebaf3ca9f610afcbb754de6073ef5f104da8fca1f"},
-    {file = "ecos-2.0.14.tar.gz", hash = "sha256:64b3201c0e0a7f0129050557c4ac50b00031e80a10534506dba1200c8dc1efe4"},
+    {file = "diffrax-0.6.2-py3-none-any.whl", hash = "sha256:05f14cbdc1146867f35dd2468a5f3a8cd666c0faff42d8e1cb953f47add05d22"},
+    {file = "diffrax-0.6.2.tar.gz", hash = "sha256:50fde010792a2e9d6105fdf2242e024dd779da27c618b56b92c244cd842bd3d1"},
 ]
 
 [[package]]
 name = "equinox"
-version = "0.11.8"
-requires_python = ">=3.9"
+version = "0.11.11"
+requires_python = ">=3.10"
 summary = "Elegant easy-to-use neural networks in JAX."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
-    "jax!=0.4.27,>=0.4.13",
+    "jax>=0.4.38",
     "jaxtyping>=0.2.20",
     "typing-extensions>=4.5.0",
 ]
 files = [
-    {file = "equinox-0.11.8-py3-none-any.whl", hash = "sha256:552292b473956693e8e8973bdae9b58aaec54fd48e192921beb82995e3a9c995"},
-    {file = "equinox-0.11.8.tar.gz", hash = "sha256:d1e91a05e41bb9538db72a8e15d26daf958348c26714533434c88c5ec0c0b0ef"},
+    {file = "equinox-0.11.11-py3-none-any.whl", hash = "sha256:49e9674f9bff0cde7ebcfbf2cdf4585c9231eb377eda31168bbf6467f88241e5"},
+    {file = "equinox-0.11.11.tar.gz", hash = "sha256:648072c1384adc3528930a3bf089246fd77aa873310a19f1f21c08e7681f95a7"},
 ]
 
 [[package]]
@@ -482,6 +481,7 @@ version = "1.10.0"
 requires_python = ">=3.10"
 summary = "Collection of common python utils"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "etils-1.10.0-py3-none-any.whl", hash = "sha256:0777fe60a234b4c65ca53470fc64f2dd2d0c6bca7fcc623fdaa8d7fa5a317098"},
     {file = "etils-1.10.0.tar.gz", hash = "sha256:4eaa9d7248fd4eeb75e44d47ca29875a5ccea044cc14a17435794bf8ac116a05"},
@@ -494,6 +494,7 @@ extras = ["epy"]
 requires_python = ">=3.10"
 summary = "Collection of common python utils"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "etils==1.10.0",
     "typing-extensions",
@@ -509,7 +510,7 @@ version = "1.2.2"
 requires_python = ">=3.7"
 summary = "Backport of PEP 654 (exception groups)"
 groups = ["dev", "testing"]
-marker = "python_version < \"3.11\""
+marker = "python_version >= \"3.10\" and python_version < \"3.11\""
 files = [
     {file = "exceptiongroup-1.2.2-py3-none-any.whl", hash = "sha256:3111b9d131c238bec2f8f516e123e14ba243563fb135d3fe885990585aa7795b"},
     {file = "exceptiongroup-1.2.2.tar.gz", hash = "sha256:47c2edf7c6738fafb49fd34290706d1a1a2f4d1c6df275526b62cbb4aa5393cc"},
@@ -521,6 +522,7 @@ version = "2.1.0"
 requires_python = ">=3.8"
 summary = "Get the currently executing AST node of a frame, and other information"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "executing-2.1.0-py2.py3-none-any.whl", hash = "sha256:8d63781349375b5ebccc3142f4b30350c0cd9c79f921cde38be2be4637e98eaf"},
     {file = "executing-2.1.0.tar.gz", hash = "sha256:8ea27ddd260da8150fa5a708269c4a10e76161e2496ec3e587da9e3c0fe4b9ab"},
@@ -532,7 +534,7 @@ version = "0.19"
 requires_python = ">=3.6"
 summary = "A python package that provides useful locks"
 groups = ["dev"]
-marker = "sys_platform != \"emscripten\""
+marker = "python_version >= \"3.10\" and python_version < \"3.13\" and sys_platform != \"emscripten\""
 files = [
     {file = "fasteners-0.19-py3-none-any.whl", hash = "sha256:758819cb5d94cdedf4e836988b74de396ceacb8e2794d21f82d131fd9ee77237"},
     {file = "fasteners-0.19.tar.gz", hash = "sha256:b4f37c3ac52d8a445af3a66bce57b33b5e90b97c696b7b984f530cf8f0ded09c"},
@@ -544,6 +546,7 @@ version = "4.54.1"
 requires_python = ">=3.8"
 summary = "Tools to manipulate font files"
 groups = ["default", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "fonttools-4.54.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:7ed7ee041ff7b34cc62f07545e55e1468808691dddfd315d51dd82a6b37ddef2"},
     {file = "fonttools-4.54.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:41bb0b250c8132b2fcac148e2e9198e62ff06f3cc472065dff839327945c5882"},
@@ -579,6 +582,7 @@ version = "2.4.6"
 requires_python = ">=3.6"
 summary = "A simple immutable dictionary"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "frozendict-2.4.6-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:c3a05c0a50cab96b4bb0ea25aa752efbfceed5ccb24c007612bc63e51299336f"},
     {file = "frozendict-2.4.6-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:f5b94d5b07c00986f9e37a38dd83c13f5fe3bf3f1ccc8e88edea8fe15d6cd88c"},
@@ -599,6 +603,7 @@ version = "2.2.1"
 requires_python = ">=3.7"
 summary = "gmpy2 interface to GMP, MPFR, and MPC for Python 3.7+"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "gmpy2-2.2.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:431d599e1542b6e0b3618d3e296702c25215c97fb461d596e27adbe69d765dc6"},
     {file = "gmpy2-2.2.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:5e51848975837751d1038e82d006e8bb488b179f093ba7fc8a59e1d8a2c61663"},
@@ -630,6 +635,7 @@ version = "4.11.0"
 requires_python = ">=3.9"
 summary = "Python humanize utilities"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "humanize-4.11.0-py3-none-any.whl", hash = "sha256:b53caaec8532bcb2fff70c8826f904c35943f8cecaca29d272d9df38092736c0"},
     {file = "humanize-4.11.0.tar.gz", hash = "sha256:e66f36020a2d5a974c504bd2555cf770621dbdbb6d82f94a6857c0b1ea2608be"},
@@ -641,6 +647,7 @@ version = "6.4.5"
 requires_python = ">=3.8"
 summary = "Read resources from Python packages"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "zipp>=3.1.0; python_version < \"3.10\"",
 ]
@@ -655,6 +662,7 @@ version = "2.0.0"
 requires_python = ">=3.7"
 summary = "brain-dead simple config-ini parsing"
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "iniconfig-2.0.0-py3-none-any.whl", hash = "sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374"},
     {file = "iniconfig-2.0.0.tar.gz", hash = "sha256:2d91e135bf72d31a410b17c16da610a82cb55f6b0477d1a902134b24a455b8b3"},
@@ -662,10 +670,11 @@ files = [
 
 [[package]]
 name = "ipython"
-version = "8.29.0"
+version = "8.31.0"
 requires_python = ">=3.10"
 summary = "IPython: Productive Interactive Computing"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "colorama; sys_platform == \"win32\"",
     "decorator",
@@ -680,18 +689,19 @@ dependencies = [
     "typing-extensions>=4.6; python_version < \"3.12\"",
 ]
 files = [
-    {file = "ipython-8.29.0-py3-none-any.whl", hash = "sha256:0188a1bd83267192123ccea7f4a8ed0a78910535dbaa3f37671dca76ebd429c8"},
-    {file = "ipython-8.29.0.tar.gz", hash = "sha256:40b60e15b22591450eef73e40a027cf77bd652e757523eebc5bd7c7c498290eb"},
+    {file = "ipython-8.31.0-py3-none-any.whl", hash = "sha256:46ec58f8d3d076a61d128fe517a51eb730e3aaf0c184ea8c17d16e366660c6a6"},
+    {file = "ipython-8.31.0.tar.gz", hash = "sha256:b6a2274606bec6166405ff05e54932ed6e5cfecaca1fc05f2cacde7bb074d70b"},
 ]
 
 [[package]]
 name = "jax"
-version = "0.4.35"
+version = "0.4.38"
 requires_python = ">=3.10"
 summary = "Differentiate, compile, and transform Numpy code."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
-    "jaxlib<=0.4.35,>=0.4.34",
+    "jaxlib<=0.4.38,>=0.4.38",
     "ml-dtypes>=0.4.0",
     "numpy>=1.24",
     "numpy>=1.26.0; python_version >= \"3.12\"",
@@ -700,50 +710,49 @@ dependencies = [
     "scipy>=1.11.1; python_version >= \"3.12\"",
 ]
 files = [
-    {file = "jax-0.4.35-py3-none-any.whl", hash = "sha256:fa99e909a31424abfec750019a6dd36f6acc18a6e7d40e2c0086b932cc351325"},
-    {file = "jax-0.4.35.tar.gz", hash = "sha256:c0c986993026b10bf6f607fecb7417377460254640766ce40f1fef3fd139c12e"},
+    {file = "jax-0.4.38-py3-none-any.whl", hash = "sha256:78987306f7041ea8500d99df1a17c33ed92620c2268c4c3677fb24e06712be64"},
+    {file = "jax-0.4.38.tar.gz", hash = "sha256:43bae65881628319e0a2148e8f81a202fbc2b8d048e35c7cb1df2416672fa4a8"},
 ]
 
 [[package]]
 name = "jax-cuda12-pjrt"
-version = "0.4.35"
+version = "0.4.38"
 summary = "JAX XLA PJRT Plugin for NVIDIA GPUs"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
-    {file = "jax_cuda12_pjrt-0.4.35-py3-none-manylinux2014_aarch64.whl", hash = "sha256:81980f1696749351364d7999ee5cb21bedd9d14daa01b40eb60d20f2210da11c"},
-    {file = "jax_cuda12_pjrt-0.4.35-py3-none-manylinux2014_x86_64.whl", hash = "sha256:0ffe7e1ba65659bd5738c2cc5addaf0a56205d2188eec5da194b63c068e1fdd2"},
+    {file = "jax_cuda12_pjrt-0.4.38-py3-none-manylinux2014_x86_64.whl", hash = "sha256:83be4c59fbcf30077a60085d98e7d59dc738b1c91e0d628e4ac1779fde15ac2b"},
 ]
 
 [[package]]
 name = "jax-cuda12-plugin"
-version = "0.4.35"
+version = "0.4.38"
 requires_python = ">=3.10"
 summary = "JAX Plugin for NVIDIA GPUs"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
-    "jax-cuda12-pjrt==0.4.35",
+    "jax-cuda12-pjrt==0.4.38",
 ]
 files = [
-    {file = "jax_cuda12_plugin-0.4.35-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:30290570a8a0547e59c1fd927aefb693d4a4fe15aae23c0a1e5c34eed82bef49"},
-    {file = "jax_cuda12_plugin-0.4.35-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:5fcc47ef49cb8ff5ceaa67d143a18b22c78456a0967d243963312901d978e96e"},
-    {file = "jax_cuda12_plugin-0.4.35-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:982c9b6fcc6f7a64cb4cb19aa2f9f98cfc29faac28ef04721b4617da76d81949"},
-    {file = "jax_cuda12_plugin-0.4.35-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:1752de1060f4671be6da47b88c1e0bcb1d2fe9e99958e95aa375a9b17dfa1656"},
-    {file = "jax_cuda12_plugin-0.4.35-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:767e53cd0ab0f543f7ac64c74e326b4e7145ca6424d0e7128373e5777012e6d9"},
-    {file = "jax_cuda12_plugin-0.4.35-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:80aa5e628e8e9dd4f89b767f73900152033c3bf6d5f49dc2081e93f9bac1c9dc"},
+    {file = "jax_cuda12_plugin-0.4.38-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:9d42e999cd64dd567c149ed68f79392ba88644364218bb636cdcefa0197c92fe"},
+    {file = "jax_cuda12_plugin-0.4.38-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:704654386f0e600a0281daaea95882aa67a47edb68393b61b1b173c7e8ca74a8"},
+    {file = "jax_cuda12_plugin-0.4.38-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:51f6acff7130eb72ebb02534dfd3581a0f5ea06971de52d7ebc21ad4d87fe71e"},
 ]
 
 [[package]]
 name = "jax-cuda12-plugin"
-version = "0.4.35"
+version = "0.4.38"
 extras = ["with_cuda"]
 requires_python = ">=3.10"
 summary = "JAX Plugin for NVIDIA GPUs"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
-    "jax-cuda12-plugin==0.4.35",
+    "jax-cuda12-plugin==0.4.38",
     "nvidia-cublas-cu12>=12.1.3.1",
     "nvidia-cuda-cupti-cu12>=12.1.105",
-    "nvidia-cuda-nvcc-cu12>=12.1.105",
+    "nvidia-cuda-nvcc-cu12>=12.6.85",
     "nvidia-cuda-runtime-cu12>=12.1.105",
     "nvidia-cudnn-cu12<10.0,>=9.1",
     "nvidia-cufft-cu12>=11.0.2.54",
@@ -753,12 +762,9 @@ dependencies = [
     "nvidia-nvjitlink-cu12>=12.1.105",
 ]
 files = [
-    {file = "jax_cuda12_plugin-0.4.35-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:30290570a8a0547e59c1fd927aefb693d4a4fe15aae23c0a1e5c34eed82bef49"},
-    {file = "jax_cuda12_plugin-0.4.35-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:5fcc47ef49cb8ff5ceaa67d143a18b22c78456a0967d243963312901d978e96e"},
-    {file = "jax_cuda12_plugin-0.4.35-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:982c9b6fcc6f7a64cb4cb19aa2f9f98cfc29faac28ef04721b4617da76d81949"},
-    {file = "jax_cuda12_plugin-0.4.35-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:1752de1060f4671be6da47b88c1e0bcb1d2fe9e99958e95aa375a9b17dfa1656"},
-    {file = "jax_cuda12_plugin-0.4.35-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:767e53cd0ab0f543f7ac64c74e326b4e7145ca6424d0e7128373e5777012e6d9"},
-    {file = "jax_cuda12_plugin-0.4.35-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:80aa5e628e8e9dd4f89b767f73900152033c3bf6d5f49dc2081e93f9bac1c9dc"},
+    {file = "jax_cuda12_plugin-0.4.38-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:9d42e999cd64dd567c149ed68f79392ba88644364218bb636cdcefa0197c92fe"},
+    {file = "jax_cuda12_plugin-0.4.38-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:704654386f0e600a0281daaea95882aa67a47edb68393b61b1b173c7e8ca74a8"},
+    {file = "jax_cuda12_plugin-0.4.38-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:51f6acff7130eb72ebb02534dfd3581a0f5ea06971de52d7ebc21ad4d87fe71e"},
 ]
 
 [[package]]
@@ -767,6 +773,7 @@ version = "1.6.1"
 requires_python = ">=3.8"
 summary = "Dataclasses + JAX"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "jax",
     "jaxlib",
@@ -779,27 +786,29 @@ files = [
 
 [[package]]
 name = "jax"
-version = "0.4.35"
+version = "0.4.38"
 extras = ["cuda12"]
 requires_python = ">=3.10"
 summary = "Differentiate, compile, and transform Numpy code."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
-    "jax-cuda12-plugin[with_cuda]<=0.4.35,>=0.4.34",
-    "jax==0.4.35",
-    "jaxlib==0.4.34",
+    "jax-cuda12-plugin[with_cuda]<=0.4.38,>=0.4.38",
+    "jax==0.4.38",
+    "jaxlib==0.4.38",
 ]
 files = [
-    {file = "jax-0.4.35-py3-none-any.whl", hash = "sha256:fa99e909a31424abfec750019a6dd36f6acc18a6e7d40e2c0086b932cc351325"},
-    {file = "jax-0.4.35.tar.gz", hash = "sha256:c0c986993026b10bf6f607fecb7417377460254640766ce40f1fef3fd139c12e"},
+    {file = "jax-0.4.38-py3-none-any.whl", hash = "sha256:78987306f7041ea8500d99df1a17c33ed92620c2268c4c3677fb24e06712be64"},
+    {file = "jax-0.4.38.tar.gz", hash = "sha256:43bae65881628319e0a2148e8f81a202fbc2b8d048e35c7cb1df2416672fa4a8"},
 ]
 
 [[package]]
 name = "jaxlib"
-version = "0.4.34"
+version = "0.4.38"
 requires_python = ">=3.10"
 summary = "XLA library for JAX"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "ml-dtypes>=0.2.0",
     "numpy>=1.24",
@@ -807,21 +816,21 @@ dependencies = [
     "scipy>=1.11.1; python_version >= \"3.12\"",
 ]
 files = [
-    {file = "jaxlib-0.4.34-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:b7a212a3cb5c6acc201c32ae4f4b5f5a9ac09457fbb77ba8db5ce7e7d4adc214"},
-    {file = "jaxlib-0.4.34-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:45d719a2ce0ebf21255a277b71d756f3609b7b5be70cddc5d88fd58c35219de0"},
-    {file = "jaxlib-0.4.34-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:3e60bc826933082e99b19b87c21818a8d26fcdb01f418d47cedff554746fd6cc"},
-    {file = "jaxlib-0.4.34-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:d840e64b85f8865404d6d225b9bb340e158df1457152a361b05680e24792b232"},
-    {file = "jaxlib-0.4.34-cp310-cp310-win_amd64.whl", hash = "sha256:b0001c8f0e2b1c7bc99e4f314b524a340d25653505c1a1484d4041a9d3617f6f"},
-    {file = "jaxlib-0.4.34-cp311-cp311-macosx_10_14_x86_64.whl", hash = "sha256:8ee3f93836e53c86556ccd9449a4ea43516ee05184d031a71dd692e81259f7d9"},
-    {file = "jaxlib-0.4.34-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:c9d3adcae43a33aad4332be9c2aedc5ef751d1e755f917a5afb30c7872eacaa8"},
-    {file = "jaxlib-0.4.34-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:571ef03259835458111596a71a2f4a6fabf4ec34595df4cea555035362ac5bf0"},
-    {file = "jaxlib-0.4.34-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:3bcfa639ca3cfaf86c8ceebd5fc0d47300fd98a078014a1d0cc03133e1523d5f"},
-    {file = "jaxlib-0.4.34-cp311-cp311-win_amd64.whl", hash = "sha256:133070d4fec5525ffea4dc72956398c1cf647a04dcb37f8a935ee82af78d9965"},
-    {file = "jaxlib-0.4.34-cp312-cp312-macosx_10_14_x86_64.whl", hash = "sha256:c7b3e724a30426a856070aba0192b5d199e95b4411070e7ad96ad8b196877b10"},
-    {file = "jaxlib-0.4.34-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:096f0ca309d41fa692a9d1f2f9baab1c5c8ca0749876ebb3f748e738a27c7ff4"},
-    {file = "jaxlib-0.4.34-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:1a30771d85fa77f9ab8f18e63240f455ab3a3f87660ed7b8d5eea6ceecbe5c1e"},
-    {file = "jaxlib-0.4.34-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:48272e9034ff868d4328cf0055a07882fd2be93f59dfb6283af7de491f9d1290"},
-    {file = "jaxlib-0.4.34-cp312-cp312-win_amd64.whl", hash = "sha256:901cb4040ed24eae40071d8114ea8d10dff436277fa74a1a5b9e7206f641151c"},
+    {file = "jaxlib-0.4.38-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:55c19b9d3f33a6fc59f644aa5a21fba02639ccdd776cb4a9b5526625f57839ff"},
+    {file = "jaxlib-0.4.38-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:30b2f52cb50d74734af2f477c2533a7a583e3bb7b2c8acdeb361ee77d940577a"},
+    {file = "jaxlib-0.4.38-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:ee19c163a8fdf0839d4c18b88a5fbfb4e731ba7c437416d3e5483e570bb764e4"},
+    {file = "jaxlib-0.4.38-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:61aeccb9a27c67fdb8450f6357240019cd4511cb9d62a44e4764756d384853ad"},
+    {file = "jaxlib-0.4.38-cp310-cp310-win_amd64.whl", hash = "sha256:d6ab745a89d0fb737a36fe1d8b86659e3fffe6ee8303b20651b26193d5edc0ef"},
+    {file = "jaxlib-0.4.38-cp311-cp311-macosx_10_14_x86_64.whl", hash = "sha256:b67fdeabd6dfed08b7768f3bdffb521160085f8305669bd197beef61d08de08b"},
+    {file = "jaxlib-0.4.38-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:3fb0eaae7369157afecbead50aaf29e73ffddfa77a2335d721bd9794f3c510e4"},
+    {file = "jaxlib-0.4.38-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:43db58c4c427627296366a56c10318e1f00f503690e17f94bb4344293e1995e0"},
+    {file = "jaxlib-0.4.38-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:2751ff7037d6a997d0be0e77cc4be381c5a9f9bb8b314edb755c13a6fd969f45"},
+    {file = "jaxlib-0.4.38-cp311-cp311-win_amd64.whl", hash = "sha256:35226968fc9de6873d1571670eac4117f5ed80e955f7a1775204d1044abe16c6"},
+    {file = "jaxlib-0.4.38-cp312-cp312-macosx_10_14_x86_64.whl", hash = "sha256:3fefea985f0415816f3bbafd3f03a437050275ef9bac9a72c1314e1644ac57c1"},
+    {file = "jaxlib-0.4.38-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:f33bcafe32c97a562ecf6894d7c41674c80c0acdedfa5423d49af51147149874"},
+    {file = "jaxlib-0.4.38-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:496f45b0e001a2341309cd0c74af0b670537dced79c168cb230cfcc773f0aa86"},
+    {file = "jaxlib-0.4.38-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:dad6c0a96567c06d083c0469fec40f201210b099365bd698be31a6d2ec88fd59"},
+    {file = "jaxlib-0.4.38-cp312-cp312-win_amd64.whl", hash = "sha256:966cdec36cfa978f5b4582bcb4147fe511725b94c1a752dac3a5f52ce46b6fa3"},
 ]
 
 [[package]]
@@ -829,6 +838,7 @@ name = "jaxopt"
 version = "0.8.3"
 summary = "Hardware accelerated, batchable and differentiable optimizers in JAX."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "jax>=0.2.18",
     "jaxlib>=0.1.69",
@@ -846,6 +856,7 @@ version = "0.2.34"
 requires_python = "~=3.9"
 summary = "Type annotations and runtime checking for shape and dtype of JAX arrays, and PyTrees."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "typeguard==2.13.3",
 ]
@@ -860,6 +871,7 @@ version = "0.19.1"
 requires_python = ">=3.6"
 summary = "An autocompletion tool for Python that can be used for text editors."
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "parso<0.9.0,>=0.8.3",
 ]
@@ -874,6 +886,7 @@ version = "1.4.2"
 requires_python = ">=3.8"
 summary = "Lightweight pipelining with Python functions"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "joblib-1.4.2-py3-none-any.whl", hash = "sha256:06d478d5674cbc267e7496a410ee875abd68e4340feff4490bcb7afb88060ae6"},
     {file = "joblib-1.4.2.tar.gz", hash = "sha256:2382c5816b2636fbd20a09e0f4e9dad4736765fdfb7dca582943b9c1366b3f0e"},
@@ -885,6 +898,7 @@ version = "4.23.0"
 requires_python = ">=3.8"
 summary = "An implementation of JSON Schema validation for Python"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "attrs>=22.2.0",
     "importlib-resources>=1.4.0; python_version < \"3.9\"",
@@ -904,6 +918,7 @@ version = "2024.10.1"
 requires_python = ">=3.9"
 summary = "The JSON Schema meta-schemas and vocabularies, exposed as a Registry"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "referencing>=0.31.0",
 ]
@@ -918,6 +933,7 @@ version = "1.4.7"
 requires_python = ">=3.8"
 summary = "A fast implementation of the Cassowary constraint solver"
 groups = ["default", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "kiwisolver-1.4.7-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:8a9c83f75223d5e48b0bc9cb1bf2776cf01563e00ade8775ffe13b0b6e1af3a6"},
     {file = "kiwisolver-1.4.7-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:58370b1ffbd35407444d57057b57da5d6549d2d854fa30249771775c63b5fe17"},
@@ -982,6 +998,7 @@ version = "0.0.7"
 requires_python = "~=3.9"
 summary = "Linear solvers in JAX and Equinox."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "equinox>=0.11.5",
     "jax>=0.4.26",
@@ -999,6 +1016,7 @@ version = "0.43.0"
 requires_python = ">=3.9"
 summary = "lightweight wrapper around basic LLVM functionality"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "llvmlite-0.43.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:a289af9a1687c6cf463478f0fa8e8aa3b6fb813317b0d70bf1ed0759eab6f761"},
     {file = "llvmlite-0.43.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:6d4fd101f571a31acb1559ae1af30f30b1dc4b3186669f92ad780e17c81e91bc"},
@@ -1020,18 +1038,19 @@ files = [
 
 [[package]]
 name = "loguru"
-version = "0.7.2"
-requires_python = ">=3.5"
+version = "0.7.3"
+requires_python = "<4.0,>=3.5"
 summary = "Python logging made (stupidly) simple"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "aiocontextvars>=0.2.0; python_version < \"3.7\"",
     "colorama>=0.3.4; sys_platform == \"win32\"",
     "win32-setctime>=1.0.0; sys_platform == \"win32\"",
 ]
 files = [
-    {file = "loguru-0.7.2-py3-none-any.whl", hash = "sha256:003d71e3d3ed35f0f8984898359d65b79e5b21943f78af86aa5491210429b8eb"},
-    {file = "loguru-0.7.2.tar.gz", hash = "sha256:e671a53522515f34fd406340ee968cb9ecafbc4b36c679da03c18fd8d0bd51ac"},
+    {file = "loguru-0.7.3-py3-none-any.whl", hash = "sha256:31a33c10c8e1e10422bfd431aeb5d351c7cf7fa671e3c4df004162264b28220c"},
+    {file = "loguru-0.7.3.tar.gz", hash = "sha256:19480589e77d47b8d85b2c827ad95d49bf31b0dcde16593892eb51dd18706eb6"},
 ]
 
 [[package]]
@@ -1040,6 +1059,7 @@ version = "3.9.2"
 requires_python = ">=3.9"
 summary = "Python plotting package"
 groups = ["default", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "contourpy>=1.0.1",
     "cycler>=0.10",
@@ -1080,6 +1100,7 @@ version = "0.1.7"
 requires_python = ">=3.8"
 summary = "Inline Matplotlib backend for Jupyter"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "traitlets",
 ]
@@ -1094,6 +1115,7 @@ version = "0.5.0"
 requires_python = ">=3.9"
 summary = ""
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "numpy>=1.21",
     "numpy>=1.21.2; python_version >= \"3.10\"",
@@ -1123,6 +1145,7 @@ version = "1.3.0"
 requires_python = "<3.13,>=3.8"
 summary = "Population genetic statistics for evolutionary inference"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "cython>=0.25",
     "demes>=0.2",
@@ -1147,6 +1170,7 @@ version = "2.1.20"
 requires_python = ">=3.5"
 summary = "MOran Model for Inference"
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "autograd>=1.2.0",
     "cached-property>=1.3",
@@ -1168,6 +1192,7 @@ name = "mpmath"
 version = "1.3.0"
 summary = "Python library for arbitrary-precision floating-point arithmetic"
 groups = ["default", "dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "mpmath-1.3.0-py3-none-any.whl", hash = "sha256:a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"},
     {file = "mpmath-1.3.0.tar.gz", hash = "sha256:7a28eb2a9774d00c7bc92411c19a89209d5da7c4c9a9e227be8330a23a25b91f"},
@@ -1179,6 +1204,7 @@ version = "1.3.3"
 requires_python = ">=3.9"
 summary = "Simulate genealogical trees and genomic sequence data using population genetic models"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "demes>=0.2",
     "newick>=1.3.0",
@@ -1204,6 +1230,7 @@ version = "3.4.2"
 requires_python = ">=3.10"
 summary = "Python package for creating and manipulating graphs and networks"
 groups = ["default", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "networkx-3.4.2-py3-none-any.whl", hash = "sha256:df5d4365b724cf81b8c6a7312509d0c22386097011ad1abe274afd5e9d3bbc5f"},
     {file = "networkx-3.4.2.tar.gz", hash = "sha256:307c3669428c5362aab27c8a1260aa8f47c4e91d3891f48be0141738d8d053e1"},
@@ -1215,6 +1242,7 @@ version = "1.9.0"
 requires_python = ">=3.7"
 summary = "A python module to read and write the Newick format"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "newick-1.9.0-py2.py3-none-any.whl", hash = "sha256:25c262ca88a7752b5d759ff5bce7c85d50289ac2b06b13bb340e0a599c05bd02"},
     {file = "newick-1.9.0.tar.gz", hash = "sha256:9f81be96ec86aefca74d920fc0d6962d89a3156547003ca6915c2e6e31ad3ddf"},
@@ -1226,8 +1254,9 @@ version = "2.7.1"
 requires_python = ">=3.6"
 summary = "Library for nonlinear optimization, wrapping many algorithms for global and local, constrained or unconstrained, optimization"
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
-    "numpy>=1.18.5",
+    "numpy>=1.14",
 ]
 files = [
     {file = "nlopt-2.7.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:42b7883704e1285ff40d930699eb7fc7e1341229da33666b4163459cfdf89fb1"},
@@ -1247,6 +1276,7 @@ version = "0.60.0"
 requires_python = ">=3.9"
 summary = "compiling Python code using LLVM"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "llvmlite<0.44,>=0.43.0dev0",
     "numpy<2.1,>=1.22",
@@ -1276,6 +1306,7 @@ version = "0.13.1"
 requires_python = ">=3.10"
 summary = "A Python package providing buffer compression and transformation codecs for use in data storage and communication applications."
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "numpy>=1.7",
 ]
@@ -1301,6 +1332,7 @@ version = "1.26.4"
 requires_python = ">=3.9"
 summary = "Fundamental package for array computing in Python"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "numpy-1.26.4-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:9ff0f4f29c51e2803569d7a51c2304de5554655a60c5d776e35b4a41413830d0"},
     {file = "numpy-1.26.4-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:2e4ee3380d6de9c9ec04745830fd9e2eccb3e6cf790d39d7b98ffd19b0dd754a"},
@@ -1335,6 +1367,7 @@ version = "12.6.3.3"
 requires_python = ">=3"
 summary = "CUBLAS native runtime libraries"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "nvidia_cublas_cu12-12.6.3.3-py3-none-manylinux2014_aarch64.whl", hash = "sha256:e531199ca4f1f764fb45bc1dde49a006f6765033f9c89c737e4553b9502ca1f5"},
     {file = "nvidia_cublas_cu12-12.6.3.3-py3-none-manylinux2014_x86_64.whl", hash = "sha256:f33fb68e101d99470c82d17f92a0dd9f74de2a21685c217f4716cdd63b1316eb"},
@@ -1347,6 +1380,7 @@ version = "12.6.80"
 requires_python = ">=3"
 summary = "CUDA profiling tools runtime libs."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "nvidia_cuda_cupti_cu12-12.6.80-py3-none-manylinux2014_aarch64.whl", hash = "sha256:358b4a1d35370353d52e12f0a7d1769fc01ff74a191689d3870b2123156184c4"},
     {file = "nvidia_cuda_cupti_cu12-12.6.80-py3-none-manylinux2014_x86_64.whl", hash = "sha256:a3eff6cdfcc6a4c35db968a06fcadb061cbc7d6dde548609a941ff8701b98b73"},
@@ -1355,14 +1389,15 @@ files = [
 
 [[package]]
 name = "nvidia-cuda-nvcc-cu12"
-version = "12.6.77"
+version = "12.6.85"
 requires_python = ">=3"
 summary = "CUDA nvcc"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
-    {file = "nvidia_cuda_nvcc_cu12-12.6.77-py3-none-manylinux2014_aarch64.whl", hash = "sha256:9a2aad43b8f4e4be9c237ece04f64450df77871eeebffad5a5a872714a97ca77"},
-    {file = "nvidia_cuda_nvcc_cu12-12.6.77-py3-none-manylinux2014_x86_64.whl", hash = "sha256:b66bb5dd6b8ae62262586691977d3b4a425e91db61b4b9bc2f6b42bcd4154b96"},
-    {file = "nvidia_cuda_nvcc_cu12-12.6.77-py3-none-win_amd64.whl", hash = "sha256:26e118b4dae4ebd316ab6f5ee3f3c4cb929f8265f717a8e016ba57e254c0b4f1"},
+    {file = "nvidia_cuda_nvcc_cu12-12.6.85-py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:d75d9d74599f4d7c0865df19ed21b739e6cb77a6497a3f73d6f61e8038a765e4"},
+    {file = "nvidia_cuda_nvcc_cu12-12.6.85-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:5d2edd5531b13e3daac8ffee9fc2b70a147e6088b2af2565924773d63d36d294"},
+    {file = "nvidia_cuda_nvcc_cu12-12.6.85-py3-none-win_amd64.whl", hash = "sha256:aa04742337973dcb5bcccabb590edc8834c60ebfaf971847888d24ffef6c46b5"},
 ]
 
 [[package]]
@@ -1371,6 +1406,7 @@ version = "12.6.77"
 requires_python = ">=3"
 summary = "CUDA Runtime native Libraries"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "nvidia_cuda_runtime_cu12-12.6.77-py3-none-manylinux2014_aarch64.whl", hash = "sha256:d461264ecb429c84c8879a7153499ddc7b19b5f8d84c204307491989a365588e"},
     {file = "nvidia_cuda_runtime_cu12-12.6.77-py3-none-manylinux2014_x86_64.whl", hash = "sha256:a84d15d5e1da416dd4774cb42edf5e954a3e60cc945698dc1d5be02321c44dc8"},
@@ -1383,6 +1419,7 @@ version = "9.5.1.17"
 requires_python = ">=3"
 summary = "cuDNN runtime libraries"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "nvidia-cublas-cu12",
 ]
@@ -1398,6 +1435,7 @@ version = "11.3.0.4"
 requires_python = ">=3"
 summary = "CUFFT native runtime libraries"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "nvidia-nvjitlink-cu12",
 ]
@@ -1413,6 +1451,7 @@ version = "11.7.1.2"
 requires_python = ">=3"
 summary = "CUDA solver native runtime libraries"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "nvidia-cublas-cu12",
     "nvidia-cusparse-cu12",
@@ -1430,6 +1469,7 @@ version = "12.5.4.2"
 requires_python = ">=3"
 summary = "CUSPARSE native runtime libraries"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "nvidia-nvjitlink-cu12",
 ]
@@ -1445,6 +1485,7 @@ version = "2.23.4"
 requires_python = ">=3"
 summary = "NVIDIA Collective Communication Library (NCCL) Runtime"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "nvidia_nccl_cu12-2.23.4-py3-none-manylinux2014_aarch64.whl", hash = "sha256:aa946c8327e22ced28e7cef508a334673abc42064ec85f02d005ba1785ea4cec"},
     {file = "nvidia_nccl_cu12-2.23.4-py3-none-manylinux2014_x86_64.whl", hash = "sha256:b097258d9aab2fa9f686e33c6fe40ae57b27df60cedbd15d139701bb5509e0c1"},
@@ -1456,6 +1497,7 @@ version = "12.6.77"
 requires_python = ">=3"
 summary = "Nvidia JIT LTO Library"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "nvidia_nvjitlink_cu12-12.6.77-py3-none-manylinux2014_aarch64.whl", hash = "sha256:3bf10d85bb1801e9c894c6e197e44dd137d2a0a9e43f8450e9ad13f2df0dd52d"},
     {file = "nvidia_nvjitlink_cu12-12.6.77-py3-none-manylinux2014_x86_64.whl", hash = "sha256:9ae346d16203ae4ea513be416495167a0101d33d2d14935aa9c1829a3fb45142"},
@@ -1468,6 +1510,7 @@ version = "3.4.0"
 requires_python = ">=3.8"
 summary = "Path optimization of einsum functions."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "opt_einsum-3.4.0-py3-none-any.whl", hash = "sha256:69bb92469f86a1565195ece4ac0323943e83477171b91d24c35afe028a90d7cd"},
     {file = "opt_einsum-3.4.0.tar.gz", hash = "sha256:96ca72f1b886d148241348783498194c577fa30a8faac108586b14f1ba4473ac"},
@@ -1475,21 +1518,22 @@ files = [
 
 [[package]]
 name = "optax"
-version = "0.2.3"
+version = "0.2.4"
 requires_python = ">=3.9"
-summary = "A gradient processing and optimisation library in JAX."
+summary = "A gradient processing and optimization library in JAX."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "absl-py>=0.7.1",
-    "chex>=0.1.86",
+    "chex>=0.1.87",
     "etils[epy]",
     "jax>=0.4.27",
     "jaxlib>=0.4.27",
     "numpy>=1.18.0",
 ]
 files = [
-    {file = "optax-0.2.3-py3-none-any.whl", hash = "sha256:083e603dcd731d7e74d99f71c12f77937dd53f79001b4c09c290e4f47dd2e94f"},
-    {file = "optax-0.2.3.tar.gz", hash = "sha256:ec7ab925440b0c5a512e1f24fba0fb3e7d760a7fd5d2496d7a691e9d37da01d9"},
+    {file = "optax-0.2.4-py3-none-any.whl", hash = "sha256:db35c04e50b52596662efb002334de08c2a0a74971e4da33f467e84fac08886a"},
+    {file = "optax-0.2.4.tar.gz", hash = "sha256:4e05d3d5307e6dde4c319187ae36e6cd3a0c035d4ed25e9e992449a304f47336"},
 ]
 
 [[package]]
@@ -1498,6 +1542,7 @@ version = "0.0.9"
 requires_python = "~=3.9"
 summary = "Nonlinear optimisation in JAX and Equinox."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "equinox>=0.11.7",
     "jax>=0.4.28",
@@ -1515,6 +1560,7 @@ name = "osqp"
 version = "0.6.7.post3"
 summary = "OSQP: The Operator Splitting QP Solver"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "numpy>=1.7",
     "qdldl",
@@ -1545,6 +1591,7 @@ version = "24.1"
 requires_python = ">=3.8"
 summary = "Core utilities for Python packages"
 groups = ["default", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "packaging-24.1-py3-none-any.whl", hash = "sha256:5b8f2217dbdbd2f7f384c41c628544e6d52f2d0f53c6d0c3ea61aa5d1d7ff124"},
     {file = "packaging-24.1.tar.gz", hash = "sha256:026ed72c8ed3fcce5bf8950572258698927fd1dbda10a5e981cdf0ac37f4f002"},
@@ -1556,6 +1603,7 @@ version = "2.2.3"
 requires_python = ">=3.9"
 summary = "Powerful data structures for data analysis, time series, and statistics"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "numpy>=1.22.4; python_version < \"3.11\"",
     "numpy>=1.23.2; python_version == \"3.11\"",
@@ -1595,6 +1643,7 @@ version = "0.8.4"
 requires_python = ">=3.6"
 summary = "A Python Parser"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "parso-0.8.4-py2.py3-none-any.whl", hash = "sha256:a418670a20291dacd2dddc80c377c5c3791378ee1e8d12bffc35420643d43f18"},
     {file = "parso-0.8.4.tar.gz", hash = "sha256:eb3a7b58240fb99099a345571deecc0f9540ea5f4dd2fe14c2a99d6b281ab92d"},
@@ -1605,7 +1654,7 @@ name = "pexpect"
 version = "4.9.0"
 summary = "Pexpect allows easy control of interactive console applications."
 groups = ["dev"]
-marker = "sys_platform != \"win32\" and sys_platform != \"emscripten\""
+marker = "python_version >= \"3.10\" and python_version < \"3.13\" and (sys_platform != \"win32\" and sys_platform != \"emscripten\")"
 dependencies = [
     "ptyprocess>=0.5",
 ]
@@ -1620,6 +1669,7 @@ version = "11.0.0"
 requires_python = ">=3.9"
 summary = "Python Imaging Library (Fork)"
 groups = ["default", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "pillow-11.0.0-cp310-cp310-macosx_10_10_x86_64.whl", hash = "sha256:6619654954dc4936fcff82db8eb6401d3159ec6be81e33c6000dfd76ae189947"},
     {file = "pillow-11.0.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:b3c5ac4bed7519088103d9450a1107f76308ecf91d6dabc8a33a2fcfb18d0fba"},
@@ -1670,6 +1720,7 @@ version = "4.3.6"
 requires_python = ">=3.8"
 summary = "A small Python package for determining appropriate platform-specific dirs, e.g. a `user data dir`."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "platformdirs-4.3.6-py3-none-any.whl", hash = "sha256:73e575e1408ab8103900836b97580d5307456908a03e92031bab39e4554cc3fb"},
     {file = "platformdirs-4.3.6.tar.gz", hash = "sha256:357fb2acbc885b0419afd3ce3ed34564c13c9b95c89360cd9563f73aa5e2b907"},
@@ -1681,6 +1732,7 @@ version = "1.5.0"
 requires_python = ">=3.8"
 summary = "plugin and hook calling mechanisms for python"
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "pluggy-1.5.0-py3-none-any.whl", hash = "sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669"},
     {file = "pluggy-1.5.0.tar.gz", hash = "sha256:2cffa88e94fdc978c4c574f15f9e59b7f4201d439195c3715ca9e2486f1d0cf1"},
@@ -1692,6 +1744,7 @@ version = "3.0.48"
 requires_python = ">=3.7.0"
 summary = "Library for building powerful interactive command lines in Python"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "wcwidth",
 ]
@@ -1705,7 +1758,7 @@ name = "ptyprocess"
 version = "0.7.0"
 summary = "Run a subprocess in a pseudo terminal"
 groups = ["dev"]
-marker = "sys_platform != \"win32\" and sys_platform != \"emscripten\""
+marker = "python_version >= \"3.10\" and python_version < \"3.13\" and (sys_platform != \"win32\" and sys_platform != \"emscripten\")"
 files = [
     {file = "ptyprocess-0.7.0-py2.py3-none-any.whl", hash = "sha256:4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35"},
     {file = "ptyprocess-0.7.0.tar.gz", hash = "sha256:5c5d0a3b48ceee0b48485e0c26037c0acd7d29765ca3fbb5cb3831d347423220"},
@@ -1716,6 +1769,7 @@ name = "pure-eval"
 version = "0.2.3"
 summary = "Safely evaluate AST nodes without side effects"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "pure_eval-0.2.3-py3-none-any.whl", hash = "sha256:1db8e35b67b3d218d818ae653e27f06c3aa420901fa7b081ca98cbedc874e0d0"},
     {file = "pure_eval-0.2.3.tar.gz", hash = "sha256:5f4e983f40564c576c7c8635ae88db5956bb2229d7e9237d03b3c0b0190eaf42"},
@@ -1727,6 +1781,7 @@ version = "2.18.0"
 requires_python = ">=3.8"
 summary = "Pygments is a syntax highlighting package written in Python."
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "pygments-2.18.0-py3-none-any.whl", hash = "sha256:b8e6aca0523f3ab76fee51799c488e38782ac06eafcf95e7ba832985c8e7b13a"},
     {file = "pygments-2.18.0.tar.gz", hash = "sha256:786ff802f32e91311bff3889f6e9a86e81505fe99f2735bb6d60ae0c5004f199"},
@@ -1738,6 +1793,7 @@ version = "3.2.0"
 requires_python = ">=3.9"
 summary = "pyparsing module - Classes and methods to define and execute parsing grammars"
 groups = ["default", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "pyparsing-3.2.0-py3-none-any.whl", hash = "sha256:93d9577b88da0bbea8cc8334ee8b918ed014968fd2ec383e868fb8afb1ccef84"},
     {file = "pyparsing-3.2.0.tar.gz", hash = "sha256:cbf74e27246d595d9a74b186b810f6fbb86726dbf3b9532efb343f6d7294fe9c"},
@@ -1749,6 +1805,7 @@ version = "0.22.1"
 requires_python = ">=3.6"
 summary = "Package for reading, manipulating, and writing genomic data"
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "pysam-0.22.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:f18e72013ef2db9a9bb7e8ac421934d054427f6c03e66ce8abc39b09c846ba72"},
     {file = "pysam-0.22.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:79cd94eeb96541385fa99e759a8f83d21428e092c8b577d50b4eee5823e757cd"},
@@ -1770,6 +1827,7 @@ name = "pyslim"
 version = "1.0.4"
 summary = "Manipulate tree sequences produced by SLiM."
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "msprime>=1.0.1",
     "numpy",
@@ -1782,10 +1840,11 @@ files = [
 
 [[package]]
 name = "pytest"
-version = "8.3.3"
+version = "8.3.4"
 requires_python = ">=3.8"
 summary = "pytest: simple powerful testing with Python"
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "colorama; sys_platform == \"win32\"",
     "exceptiongroup>=1.0.0rc8; python_version < \"3.11\"",
@@ -1795,8 +1854,8 @@ dependencies = [
     "tomli>=1; python_version < \"3.11\"",
 ]
 files = [
-    {file = "pytest-8.3.3-py3-none-any.whl", hash = "sha256:a6853c7375b2663155079443d2e45de913a911a11d669df02a50814944db57b2"},
-    {file = "pytest-8.3.3.tar.gz", hash = "sha256:70b98107bd648308a7952b06e6ca9a50bc660be218d53c257cc1fc94fda10181"},
+    {file = "pytest-8.3.4-py3-none-any.whl", hash = "sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6"},
+    {file = "pytest-8.3.4.tar.gz", hash = "sha256:965370d062bce11e73868e0335abac31b4d3de0e82f4007408d242b4f8610761"},
 ]
 
 [[package]]
@@ -1805,6 +1864,7 @@ version = "6.0.0"
 requires_python = ">=3.9"
 summary = "Pytest plugin for measuring coverage."
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "coverage[toml]>=7.5",
     "pytest>=4.6",
@@ -1820,6 +1880,7 @@ version = "2.9.0.post0"
 requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 summary = "Extensions to the standard Python datetime module"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "six>=1.5",
 ]
@@ -1833,6 +1894,7 @@ name = "pytz"
 version = "2024.2"
 summary = "World timezone definitions, modern and historical"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "pytz-2024.2-py2.py3-none-any.whl", hash = "sha256:31c7c1817eb7fae7ca4b8c7ee50c72f93aa2dd863de768e1ef4245d426aa0725"},
     {file = "pytz-2024.2.tar.gz", hash = "sha256:2aa355083c50a0f93fa581709deac0c9ad65cca8a9e9beac660adcbd493c798a"},
@@ -1843,6 +1905,7 @@ name = "qdldl"
 version = "0.1.7.post4"
 summary = "QDLDL, a free LDL factorization routine."
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "numpy>=1.7",
     "scipy>=0.13.2",
@@ -1868,18 +1931,19 @@ files = [
 
 [[package]]
 name = "quadax"
-version = "0.2.3"
+version = "0.2.4"
 requires_python = ">=3.8"
 summary = "Numerical quadrature with JAX"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "equinox<0.12,>=0.11",
     "jax<=0.5.0,>=0.3.2",
     "numpy<2.2,>=1.20.0",
 ]
 files = [
-    {file = "quadax-0.2.3-py3-none-any.whl", hash = "sha256:6372de788408eb578e59158cf1b40cfff1f1d37d3ccdb852f3a45fb3d79de501"},
-    {file = "quadax-0.2.3.tar.gz", hash = "sha256:e88cb984737edcb7755df7e04bfd9642df0d9d49b0b4d76024c8c03dcee76bc4"},
+    {file = "quadax-0.2.4-py3-none-any.whl", hash = "sha256:3337f36fe629f6ac1800d30eaf18def045b93d83d1311a7b4a6eb8028d85a246"},
+    {file = "quadax-0.2.4.tar.gz", hash = "sha256:c0cb80b3abb26b6b7cda5e30ceb6f1e8fd3c1a82ef21ecbcbd903cc58d6821e7"},
 ]
 
 [[package]]
@@ -1888,6 +1952,7 @@ version = "0.35.1"
 requires_python = ">=3.8"
 summary = "JSON Referencing + Python"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "attrs>=22.2.0",
     "rpds-py>=0.7.0",
@@ -1903,6 +1968,7 @@ version = "0.20.1"
 requires_python = ">=3.8"
 summary = "Python bindings to Rust's persistent data structures (rpds)"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "rpds_py-0.20.1-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:a649dfd735fff086e8a9d0503a9f0c7d01b7912a333c7ae77e1515c08c146dad"},
     {file = "rpds_py-0.20.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:f16bc1334853e91ddaaa1217045dd7be166170beec337576818461268a3de67f"},
@@ -1964,6 +2030,7 @@ version = "0.18.6"
 requires_python = ">=3.7"
 summary = "ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "ruamel-yaml-clib>=0.2.7; platform_python_implementation == \"CPython\" and python_version < \"3.13\"",
 ]
@@ -1978,7 +2045,7 @@ version = "0.2.12"
 requires_python = ">=3.9"
 summary = "C version of reader, parser and emitter for ruamel.yaml derived from libyaml"
 groups = ["default", "dev", "testing"]
-marker = "platform_python_implementation == \"CPython\" and python_version < \"3.13\""
+marker = "platform_python_implementation == \"CPython\" and python_version < \"3.13\" and python_version >= \"3.10\""
 files = [
     {file = "ruamel.yaml.clib-0.2.12-cp310-cp310-macosx_13_0_arm64.whl", hash = "sha256:11f891336688faf5156a36293a9c362bdc7c88f03a8a027c2c1d8e0bcde998e5"},
     {file = "ruamel.yaml.clib-0.2.12-cp310-cp310-manylinux2014_aarch64.whl", hash = "sha256:a606ef75a60ecf3d924613892cc603b154178ee25abb3055db5062da811fd969"},
@@ -2013,6 +2080,7 @@ version = "1.14.1"
 requires_python = ">=3.10"
 summary = "Fundamental algorithms for scientific computing in Python"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "numpy<2.3,>=1.23.5",
 ]
@@ -2050,6 +2118,7 @@ version = "3.2.7"
 requires_python = ">=3.7"
 summary = "Splitting conic solver"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "numpy",
     "scipy",
@@ -2076,6 +2145,7 @@ version = "0.13.2"
 requires_python = ">=3.8"
 summary = "Statistical data visualization"
 groups = ["testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "matplotlib!=3.6.1,>=3.4",
     "numpy!=1.24.0,>=1.20",
@@ -2092,7 +2162,7 @@ version = "75.3.0"
 requires_python = ">=3.8"
 summary = "Easily download, build, install, upgrade, and uninstall Python packages"
 groups = ["default"]
-marker = "python_version >= \"3.12\""
+marker = "python_version >= \"3.12\" and python_version < \"3.13\""
 files = [
     {file = "setuptools-75.3.0-py3-none-any.whl", hash = "sha256:f2504966861356aa38616760c0f66568e535562374995367b4e69c7143cf6bcd"},
     {file = "setuptools-75.3.0.tar.gz", hash = "sha256:fba5dd4d766e97be1b1681d98712680ae8f2f26d7881245f2ce9e40714f1a686"},
@@ -2104,6 +2174,7 @@ version = "1.16.0"
 requires_python = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
 summary = "Python 2 and 3 compatibility utilities"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "six-1.16.0-py2.py3-none-any.whl", hash = "sha256:8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254"},
     {file = "six-1.16.0.tar.gz", hash = "sha256:1e61c37477a1626458e36f7b1d82aa5c9b094fa4802892072e49de9c60c4c926"},
@@ -2115,6 +2186,7 @@ version = "0.15.4"
 requires_python = ">=3.8"
 summary = "Sparse n-dimensional arrays for the PyData ecosystem"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "numba>=0.49",
     "numpy>=1.17",
@@ -2130,6 +2202,7 @@ name = "stack-data"
 version = "0.6.3"
 summary = "Extract data from python stack frames and tracebacks for informative displays"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "asttokens>=2.1.0",
     "executing>=1.2.0",
@@ -2146,6 +2219,7 @@ version = "0.2.0"
 requires_python = ">=3.7"
 summary = "A library of population genetic simulation models"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "appdirs",
     "attrs>=19.1.0",
@@ -2167,6 +2241,7 @@ version = "1.4.3"
 requires_python = ">=3.6"
 summary = "A Python library to create SVG drawings."
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "svgwrite-1.4.3-py3-none-any.whl", hash = "sha256:bb6b2b5450f1edbfa597d924f9ac2dd099e625562e492021d7dd614f65f8a22d"},
     {file = "svgwrite-1.4.3.zip", hash = "sha256:a8fbdfd4443302a6619a7f76bc937fc683daf2628d9b737c891ec08b8ce524c3"},
@@ -2178,6 +2253,7 @@ version = "1.13.3"
 requires_python = ">=3.8"
 summary = "Computer algebra system (CAS) in Python"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "mpmath<1.4,>=1.1.0",
 ]
@@ -2192,7 +2268,7 @@ version = "2.0.2"
 requires_python = ">=3.8"
 summary = "A lil' TOML parser"
 groups = ["testing"]
-marker = "python_version < \"3.11\""
+marker = "python_version >= \"3.10\" and python_version < \"3.11\""
 files = [
     {file = "tomli-2.0.2-py3-none-any.whl", hash = "sha256:2ebe24485c53d303f690b0ec092806a085f07af5a5aa1464f3931eec36caaa38"},
     {file = "tomli-2.0.2.tar.gz", hash = "sha256:d46d457a85337051c36524bc5349dd91b1877838e2979ac5ced3e710ed8a60ed"},
@@ -2204,6 +2280,7 @@ version = "1.0.0"
 requires_python = ">=3.8"
 summary = "List processing tools and functional utilities"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "toolz-1.0.0-py3-none-any.whl", hash = "sha256:292c8f1c4e7516bf9086f8850935c799a874039c8bcf959d47b600e4c44a6236"},
     {file = "toolz-1.0.0.tar.gz", hash = "sha256:2c86e3d9a04798ac556793bced838816296a2f085017664e4995cb40a1047a02"},
@@ -2211,16 +2288,17 @@ files = [
 
 [[package]]
 name = "tqdm"
-version = "4.66.6"
+version = "4.67.1"
 requires_python = ">=3.7"
 summary = "Fast, Extensible Progress Meter"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "colorama; platform_system == \"Windows\"",
 ]
 files = [
-    {file = "tqdm-4.66.6-py3-none-any.whl", hash = "sha256:223e8b5359c2efc4b30555531f09e9f2f3589bcd7fdd389271191031b49b7a63"},
-    {file = "tqdm-4.66.6.tar.gz", hash = "sha256:4bdd694238bef1485ce839d67967ab50af8f9272aab687c0d7702a01da0be090"},
+    {file = "tqdm-4.67.1-py3-none-any.whl", hash = "sha256:26445eca388f82e72884e0d580d5464cd801a3ea01e63e5601bdff9ba6a48de2"},
+    {file = "tqdm-4.67.1.tar.gz", hash = "sha256:f8aef9c52c08c13a65f30ea34f4e5aac3fd1a34959879d7e59e63027286627f2"},
 ]
 
 [[package]]
@@ -2229,6 +2307,7 @@ version = "5.14.3"
 requires_python = ">=3.8"
 summary = "Traitlets Python configuration system"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "traitlets-5.14.3-py3-none-any.whl", hash = "sha256:b74e89e397b1ed28cc831db7aea759ba6640cb3de13090ca145426688ff1ac4f"},
     {file = "traitlets-5.14.3.tar.gz", hash = "sha256:9ed0579d3502c94b4b3732ac120375cda96f923114522847de4b3bb98b96b6b7"},
@@ -2240,6 +2319,7 @@ version = "0.6.0"
 requires_python = ">=3.9"
 summary = "The tree sequence toolkit."
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "jsonschema>=3.0.0",
     "numpy>=1.23.5",
@@ -2264,6 +2344,7 @@ version = "2.13.3"
 requires_python = ">=3.5.3"
 summary = "Run-time type checker for Python"
 groups = ["default"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "typeguard-2.13.3-py3-none-any.whl", hash = "sha256:5e3e3be01e887e7eafae5af63d1f36c849aaa94e3a0112097312aabfa16284f1"},
     {file = "typeguard-2.13.3.tar.gz", hash = "sha256:00edaa8da3a133674796cf5ea87d9f4b4c367d77476e185e80251cc13dfbb8c4"},
@@ -2275,6 +2356,7 @@ version = "4.12.2"
 requires_python = ">=3.8"
 summary = "Backported and Experimental Type Hints for Python 3.8+"
 groups = ["default", "dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "typing_extensions-4.12.2-py3-none-any.whl", hash = "sha256:04e5ca0351e0f3f85c6853954072df659d0d13fac324d0072316b67d7794700d"},
     {file = "typing_extensions-4.12.2.tar.gz", hash = "sha256:1a7ead55c7e559dd4dee8856e3a88b41225abfe1ce8df57b7c13915fe121ffb8"},
@@ -2286,6 +2368,7 @@ version = "2024.2"
 requires_python = ">=2"
 summary = "Provider of IANA time zone data"
 groups = ["default", "dev", "testing"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 files = [
     {file = "tzdata-2024.2-py2.py3-none-any.whl", hash = "sha256:a48093786cdcde33cad18c2555e8532f34422074448fbc874186f0abd79565cd"},
     {file = "tzdata-2024.2.tar.gz", hash = "sha256:7d85cc416e9382e69095b7bdf4afd9e3880418a2413feec7069d533d6b4e31cc"},
@@ -2296,6 +2379,7 @@ name = "wcwidth"
 version = "0.2.13"
 summary = "Measures the displayed width of unicode strings in a terminal"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "backports-functools-lru-cache>=1.2.1; python_version < \"3.2\"",
 ]
@@ -2310,7 +2394,7 @@ version = "1.1.0"
 requires_python = ">=3.5"
 summary = "A small Python utility to set file creation time on Windows"
 groups = ["default"]
-marker = "sys_platform == \"win32\""
+marker = "python_version >= \"3.10\" and python_version < \"3.13\" and sys_platform == \"win32\""
 files = [
     {file = "win32_setctime-1.1.0-py3-none-any.whl", hash = "sha256:231db239e959c2fe7eb1d7dc129f11172354f98361c4fa2d6d2d7e278baa8aad"},
     {file = "win32_setctime-1.1.0.tar.gz", hash = "sha256:15cf5750465118d6929ae4de4eb46e8edae9a5634350c01ba582df868e932cb2"},
@@ -2322,6 +2406,7 @@ version = "2.18.3"
 requires_python = ">=3.10"
 summary = "An implementation of chunked, compressed, N-dimensional arrays for Python"
 groups = ["dev"]
+marker = "python_version >= \"3.10\" and python_version < \"3.13\""
 dependencies = [
     "asciitree",
     "fasteners; sys_platform != \"emscripten\"",
