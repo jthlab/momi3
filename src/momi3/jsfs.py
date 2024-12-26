@@ -13,7 +13,7 @@ class JSFS(NamedTuple):
 
     Attributes:
         sample_sizes: The sample sizes of each populations.
-        coords: The coordinates of the nonzero entries.
+        sites: The coordinates of the nonzero entries.
         counts: The counts of the nonzero entries.
 
     Notes:
@@ -32,12 +32,28 @@ class JSFS(NamedTuple):
         )
 
     @classmethod
+    def from_dense(
+        cls, dense: Array, pops: list[str], drop_nonseg: bool = True
+    ) -> "JSFS":
+        ret = cls(
+            sample_sizes=dict(zip(pops, [s - 1 for s in dense.shape])),
+            sites=jnp.array(list(np.ndindex(*dense.shape))),
+            counts=dense.ravel(),
+        )
+        if drop_nonseg:
+            ret = ret.drop_nonseg_sites()
+        return ret
+
+    @classmethod
     def from_COO(cls, coo: sparse.COO, pops: list[str]) -> "JSFS":
         return cls(
             sample_sizes=dict(zip(pops, [s - 1 for s in coo.shape])),
             sites=coo.coords.T,
             counts=coo.data,
         )
+
+    def todense(self) -> Array:
+        return self.to_COO().todense()
 
     @property
     def pops(self):
@@ -58,6 +74,12 @@ class JSFS(NamedTuple):
     @property
     def num_seg_sites(self):
         return (self.counts * (~self.nonseg_sites)).sum()
+
+    def drop_nonseg_sites(self) -> "JSFS":
+        """Return a jsfs with non-segregating sites removed."""
+        return self._replace(
+            sites=self.sites[~self.nonseg_sites], counts=self.counts[~self.nonseg_sites]
+        )
 
     def slice(self, i: int) -> list["JSFS"]:
         "Slice jsfs into i sub-jsfs of approximately equal size."

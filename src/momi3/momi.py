@@ -1,7 +1,7 @@
 import itertools as it
 import numbers
 from copy import deepcopy
-from typing import Any
+from typing import Any, Callable
 
 import demes
 import jax
@@ -10,7 +10,7 @@ from jax import lax, vmap
 from jax.scipy.special import xlogy
 
 
-from momi3.common import Path
+from momi3.common import Path, set_path
 from momi3.iicr.event_tree import IicrEventTree
 from momi3.jsfs import JSFS
 
@@ -74,14 +74,60 @@ class Momi3:
         iicr = self.iicr(lineages)
         return vmap(iicr)(t)
 
+    def reparameterize(self, params: list[Path]) -> tuple[Callable, Callable]:
+        """
+        Bijectively reparameterize the demography to live in R^d.
 
-class _Momi3Iicr:
+        Args:
+            params: list of paths to reparameterize.
+
+        Notes:
+            The reparameterization obeys necessary constraints on the demography. For example,
+            consider the following isolation-with-pulse migration model:
+
+                                      anc
+                                       |
+                                      .-.   <--- t_div
+                                    /     \
+                                   /       \
+                                  /         \
+                                 / <---p---- \ <--- t_pulse
+                                /             \
+                               A               B
+
+            Here t_pulse must be less than t_div, p \in [0, 1], and t_div > 0. The reparameterization
+            will ensure these constraints are met for any x \in R^3.
+
+        Returns:
+            Tuple of functions: (forward, inverse)
+            The forward function maps from the original parameter space to R^d.
+            The inverse function maps from R^d back to the original parameter space.
+        """
+
+
+class _Momi3Base:
     def __init__(self, demo: demes.Graph, num_samples: dict[str, int]):
         self._demo = demo
         self._params_d = jax.tree.map(
             lambda v: float(v) if isinstance(v, numbers.Number) else v, demo.asdict()
         )
         self._num_samples = num_samples
+
+    @property
+    def aux(self):
+        return self._aux
+
+    @property
+    def params(self):
+        return self._demo.asdict()
+
+    def reparameterize(self, params: list[Path]) -> tuple[Callable, Callable]:
+        return self._T.reparameterize(params)
+
+
+class _Momi3Iicr(_Momi3Base):
+    def __init__(self, demo: demes.Graph, num_samples: dict[str, int]):
+        super().__init__(demo, num_samples)
         self._T = IicrEventTree(self._demo, num_samples)
         self._aux = self._T.setup()
 
@@ -109,13 +155,10 @@ class _Momi3Iicr:
         return jnp.trapezoid(vmap(f)(t), t)
 
 
-class _Momi3Sfs:
+class _Momi3Sfs(_Momi3Base):
     def __init__(self, demo: demes.Graph, num_samples: dict[str, int]):
-        self._demo = demo
-        self._params_d = demo.asdict()
-        self._num_samples = num_samples
+        super().__init__(demo, num_samples)
         self._T = SfsEventTree(self._demo, self._num_samples)
-        # self._aux = self._T._setup()
         if not (set(num_samples) <= set(self._T.leaves)):
             setdiff = set(num_samples) - set(self._T.leaves)
             raise ValueError(
@@ -135,7 +178,7 @@ class _Momi3Sfs:
 
     def E_tbl(
         self,
-        params: dict[Path, float],
+        path_d: dict[Path, float],
         num_derived: dict[str, int],
         aux,
     ) -> float:
@@ -159,16 +202,16 @@ class _Momi3Sfs:
             d = num_derived.get(pop, 0)
             # checkify.check(d <= n, f"More derived alleles than samples in {pop}")
             X[pop] = jax.nn.one_hot(jnp.array([d]), n + 1)[0]
-        pd = deepcopy(self._params_d)
-        for path in params:
-            _set_path(pd, path, params[path])
+        pd = deepcopy(self.params)
+        for path, val in path_d.items():
+            set_path(pd, path, val)
         return self._T.execute(pd, X, aux).phi
 
-    def E_tau(self, params: dict[Path, float], aux: Any) -> float:
+    def E_tau(self, path_d: dict[Path, float], aux: Any) -> float:
         """Compute the expected total branch length of the genealogy for a given set of parameters.
 
         Args:
-            params_d: A dictionary of parameter values.
+            path_d: A dictionary of parameter values.
 
         Returns:
             Expected total branch length subtending the given configuration.
@@ -183,34 +226,33 @@ class _Momi3Sfs:
                     jax.nn.one_hot(jnp.array([ns]), ns + 1)[0],
                 ]
             )
-        pd = deepcopy(self._params_d)
-        for path in params:
-            _set_path(pd, path, params[path])
-        ret = vmap(self._T.execute, in_axes=(None, 0, None))(pd, X_batch, aux)
-        phi = ret.phi
+        pd = deepcopy(self.params)
+        for path, val in path_d.items():
+            set_path(pd, path, val)
+        phi = vmap(self._T.execute, in_axes=(None, 0, None))(pd, X_batch, aux).phi
         return phi[0] - phi[1] - phi[2]
 
     def expected_sfs(
-        self, params_d: dict[str, float] = {}, aux: Any = None, _use_vmap: bool = True
+        self, path_d: dict[Path, float] = {}, aux: Any = None, _use_vmap: bool = True
     ):
         bs = [range(n + 1) for n in self._num_samples.values()]
         num_derived = jnp.array(list(it.product(*bs)))
 
         def f(ds):
             d = dict(zip(self._num_samples, ds))
-            return self.E_tbl(params_d, dict(d), self._aux)
+            return self.E_tbl(path_d, dict(d), self._aux)
 
         if _use_vmap:
             etbls = vmap(f)(num_derived)
         else:
             etbls = lax.map(f, num_derived)
-        tau = self.E_tau(params_d, aux=aux)
+        tau = self.E_tau(path_d, aux=aux)
         sh = tuple(n + 1 for n in self._num_samples.values())
-        return (etbls / tau).reshape(sh)
+        return etbls.reshape(sh), tau
 
     def loglik(
         self,
-        params_d: dict[str, float],
+        path_d: dict[Path, float],
         jsfs: JSFS,
         *,
         theta: float = None,
@@ -221,7 +263,7 @@ class _Momi3Sfs:
         """Log likelihood of joint site frequency spectrum.
 
         Args:
-            params_d: Mapping of parameter keys to values.
+            path_d: Mapping of parameter keys to values.
             jsfs: Joint Site Frequency Spectrum, represented as a sparse tensor.
                 The size of each axis should be 1 + sample size, with axis ordering
                 corresponding to the key ordering in self.num_samples.
@@ -232,8 +274,7 @@ class _Momi3Sfs:
             float: log-likelihood value
         """
         f = self._loglik_vmap if use_vmap else self._loglik_scan
-        ll, _ = f(params_d, jsfs, folded, aux=aux, theta=theta)
-        return ll
+        return f(path_d, jsfs, folded, aux=aux, theta=theta)[0]
 
     def _configs(self, ds: list[int], folded: bool):
         ns = jnp.array(list(self._num_samples.values()))
@@ -242,7 +283,7 @@ class _Momi3Sfs:
         return dict(zip(self._num_samples, ds))
 
     def _branch_lengths(
-        self, params_d: dict[str, float], jsfs: JSFS, folded: bool, aux
+        self, path_d: dict[Path, float], jsfs: JSFS, folded: bool, aux
     ) -> float:
         configs = [vmap(lambda ds: self._configs(ds, False))(jsfs.sites)]
 
@@ -271,10 +312,10 @@ class _Momi3Sfs:
 
         # merge together all configs
         X_batch = jax.tree.map(lambda a, b: jnp.concatenate([a, b]), X, X_tau)
-
-        pd = self.params.update(params_d).to_path_dict()
-        etbls = vmap(self._T.execute, in_axes=(None, 0, None))(pd, X_batch, aux)
-
+        pd = deepcopy(self.params)
+        for path, val in path_d.items():
+            set_path(pd, path, val)
+        etbls = vmap(self._T.execute, in_axes=(None, 0, None))(pd, X_batch, aux).phi
         tau = jax.tree.map(lambda e: e[-3] - e[-2] - e[-1], etbls).clip(2e-10)
         etbls = jax.tree.map(lambda e: e[:-3], etbls).clip(1e-10)
 
@@ -285,35 +326,45 @@ class _Momi3Sfs:
 
     def _loglik_vmap(
         self,
-        params_d: dict[str, float],
+        path_d: dict[Path, float],
         jsfs: JSFS,
         folded: bool,
         aux,
         theta: float = None,
     ) -> float:
-        etbls, tau = self._branch_lengths(params_d, jsfs, folded, aux)
+        etbls, tau = self._branch_lengths(path_d, jsfs, folded, aux)
         p = jsfs.counts  # / jsfs.counts.sum()
         # jax.debug.print('etbls: {}', etbls)
         # jax.debug.print('tau: {}', tau)
         if theta is not None:
             e = etbls * theta
-            ll = jnp.sum(-e + jsfs.counts * jnp.log(e))
+            ll = jnp.sum(-e + xlogy(jsfs.counts, e))
         else:
             ll = xlogy(p, etbls / tau).sum()
         return ll, tau
 
     def _loglik_scan(
-        self, params_d: dict[str, float], jsfs: JSFS, tau: float, folded: bool, aux
+        self,
+        path_d: dict[Path, float],
+        jsfs: JSFS,
+        folded: bool,
+        aux,
+        theta: float = None,
     ) -> float:
+        tau = self.E_tau(path_d, aux=aux)
+
         def f(accum, tup):
             ds, pi = tup
-            confs = self._configs(ds, folded)
-            etbl = jnp.array([self.E_tbl(params_d, c, aux=aux) for c in confs]).mean()
+            confs = [self._configs(ds, False)]
+            if folded:
+                confs.append(self._configs(ds, True))
+            etbl = jnp.array([self.E_tbl(path_d, c, aux=aux) for c in confs]).mean()
             accum += xlogy(pi, etbl / tau)
             return accum, None
 
         p = jsfs.counts  # / jsfs.counts.sum()
-        return lax.scan(f, 0.0, (jsfs.sites, p))[0]
+        ll = lax.scan(f, 0.0, (jsfs.sites, p))[0]
+        return ll, tau
 
     # def bound(
     #     self,

@@ -1,8 +1,9 @@
 from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
+from typing import Any
 
-from momi3.common import Axes, PopCounter, Population, T
+from momi3.common import Axes, PopCounter, Population
 
 from ..state import State
 from .admix import Admix, Pulse
@@ -34,21 +35,23 @@ class Rename(Event):
 
     def _setup_impl(
         self, in_axes: Axes, ns: Counter[Population, int]
-    ) -> tuple[Axes, PopCounter, T]:
+    ) -> tuple[Axes, PopCounter, Any]:
         out_axes = deepcopy(in_axes)
         out_axes[self.new] = out_axes.pop(self.old)
         ns = deepcopy(ns)
         ns[self.new] = ns.pop(self.old)
         return out_axes, ns, None
 
-    def _execute_impl(self, st: State, params: dict, aux: T) -> State:
+    def _execute_impl(self, st: State, params: dict, aux: Any) -> State:
         return st
 
 
 @dataclass(frozen=True, kw_only=True)
 class NoOp(Event):
-    def _setup_impl(self, in_axes: Axes, ns: PopCounter) -> tuple[Axes, PopCounter, T]:
+    def _setup_impl(
+        self, in_axes: Axes, ns: PopCounter
+    ) -> tuple[Axes, PopCounter, Any]:
         return in_axes, ns, None
 
-    def _execute_impl(self, st: State, params: dict, aux: T) -> State:
+    def _execute_impl(self, st: State, params: dict, aux: Any) -> State:
         return st

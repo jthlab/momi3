@@ -22,7 +22,6 @@ from momi3.common import (
     Path,
     unique_strs,
     get_path,
-    set_path,
     inv_softplus,
     inv_softmax,
 )
@@ -143,7 +142,7 @@ class EventTree:
         assert nx.is_directed_acyclic_graph(self._T)
         assert nx.number_connected_components(self._T.to_undirected()) == 1
 
-        params = self._demo.asdict()
+        params0 = self._demo.asdict()
         paths = set(paths)
         fd = {}
         finvd = {}
@@ -157,7 +156,7 @@ class EventTree:
         # validate the list of paths
         for p in paths:
             try:
-                get_path(params, p)
+                get_path(params0, p)
             except KeyError as e:
                 raise ValueError(f"path {p} not found in demes graph") from e
         # check that the start time of the first deme is not in the list of paths
@@ -171,13 +170,13 @@ class EventTree:
         def f_pos(x, _):
             return jax.nn.softplus(x)
 
-        def finv_pos(y, params):
+        def finv_pos(y, _):
             return inv_softplus(y)
 
         def f_simplex(x, _):
             return jax.nn.softmax(x)
 
-        def finv_simplex(y, params):
+        def finv_simplex(y, _):
             return inv_softmax(y)
 
         # check no duplication in the path list
@@ -208,7 +207,17 @@ class EventTree:
                 case "proportions":
                     fd[fp] = f_simplex
                     finvd[fp] = finv_simplex
-                case "rate" | "start_size" | "end_size":
+                case "rate":
+                    fd[fp] = f_pos
+                    finvd[fp] = finv_pos
+                case "start_size" | "end_size":
+                    func_type = get_path(params0, path[:-1] + ("size_function",))
+                    if func_type == "constant":
+                        # if the size function is constant, the start size and end size are
+                        # constrained to be equal
+                        fp = frozenset(
+                            [path[:-1] + (f"{x}_size",) for x in ("start", "end")]
+                        )
                     fd[fp] = f_pos
                     finvd[fp] = finv_pos
                 case _:
@@ -247,28 +256,28 @@ class EventTree:
                 if p.t.t > n.t.t:
                     break
 
-            def f(x, params, parent_path=p.t.path):
+            def f(x, params=params0, parent_path=p.t.path):
                 alpha = jax.nn.sigmoid(x)
                 return alpha * get_path(params, parent_path)
 
             fd[path_block] = f
 
-            def finv(y, params, parent_path=p.t.path):
+            def finv(y, params=params0, parent_path=p.t.path):
                 return logit(y / get_path(params, parent_path))
 
             finvd[path_block] = finv
 
         # create return functions that apply the reparameterization and inverse
         # based on the lists created above.
-        def f_combined(x, params, fd=fd):
-            x = jax.tree.map(jnp.array, x)
-            ret = deepcopy(params)
+        def f_combined(x, params=params0, fd=fd):
+            x = jax.tree.map(lambda x: jnp.array(x, dtype=jnp.float64), x)
+            ret = {}
             for paths, fp in fd.items():
                 # any times which are identically equal in the base model
                 # are constrained to be equal during reparameterization
                 val = fp(x[paths], params)
                 for path in paths:
-                    set_path(ret, path, val)
+                    ret[path] = val
             return ret
 
         def finv_combined(params, finvd=finvd):
@@ -276,7 +285,7 @@ class EventTree:
             for paths, fi in finvd.items():
                 path = next(iter(paths))
                 # all paths in the block should be equal
-                y = jnp.array(get_path(params, path))
+                y = jnp.array(get_path(params, path), dtype=jnp.float64)
                 ret[paths] = fi(y, params)
             return ret
 
