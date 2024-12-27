@@ -2,6 +2,7 @@ import itertools as it
 import numbers
 from copy import deepcopy
 from typing import Any, Callable
+from collections.abc import Collection
 
 import demes
 import jax
@@ -74,7 +75,24 @@ class Momi3:
         iicr = self.iicr(lineages)
         return vmap(iicr)(t)
 
-    def reparameterize(self, params: list[Path]) -> tuple[Callable, Callable]:
+
+class _Momi3Base:
+    def __init__(self, demo: demes.Graph, num_samples: dict[str, int]):
+        self._demo = demo
+        self._params_d = jax.tree.map(
+            lambda v: float(v) if isinstance(v, numbers.Number) else v, demo.asdict()
+        )
+        self._num_samples = num_samples
+
+    @property
+    def aux(self):
+        return self._aux
+
+    @property
+    def params(self):
+        return self._demo.asdict()
+
+    def reparameterize(self, paths: Collection[Path]) -> tuple[Callable, Callable]:
         """
         Bijectively reparameterize the demography to live in R^d.
 
@@ -103,26 +121,7 @@ class Momi3:
             The forward function maps from the original parameter space to R^d.
             The inverse function maps from R^d back to the original parameter space.
         """
-
-
-class _Momi3Base:
-    def __init__(self, demo: demes.Graph, num_samples: dict[str, int]):
-        self._demo = demo
-        self._params_d = jax.tree.map(
-            lambda v: float(v) if isinstance(v, numbers.Number) else v, demo.asdict()
-        )
-        self._num_samples = num_samples
-
-    @property
-    def aux(self):
-        return self._aux
-
-    @property
-    def params(self):
-        return self._demo.asdict()
-
-    def reparameterize(self, params: list[Path]) -> tuple[Callable, Callable]:
-        return self._T.reparameterize(params)
+        return self._T.reparameterize(paths)
 
 
 class _Momi3Iicr(_Momi3Base):
