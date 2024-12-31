@@ -36,8 +36,13 @@ class Rename(Event):
     def _setup_impl(
         self, in_axes: Axes, ns: Counter[Population, int]
     ) -> tuple[Axes, PopCounter, Any]:
-        out_axes = deepcopy(in_axes)
-        out_axes[self.new] = out_axes.pop(self.old)
+        out_axes = Axes()
+        # iterate to maintain order of axes!
+        for k in in_axes:
+            if k == self.old:
+                out_axes[self.new] = in_axes[k]
+            else:
+                out_axes[k] = in_axes[k]
         ns = deepcopy(ns)
         ns[self.new] = ns.pop(self.old)
         return out_axes, ns, None
