@@ -55,12 +55,15 @@ class PExp(NamedTuple):
         const = jnp.isclose(self.N0, self.N1)
         b_safe = jnp.where(const, 1.0, b)
 
-        t1_safe = jnp.where(const, 1., t[1:])
-        ui_safe = jnp.where(const, 1., ui)
-        dt_safe = jnp.where(const, 1., dt)
+        t1_safe = jnp.where(const, 1.0, t[1:])
+        ui_safe = jnp.where(const, 1.0, ui)
+        dt_safe = jnp.where(const, 1.0, dt)
         integrals = (
             # a / b_safe * jnp.exp(-b_safe * (t[1:] - ui)) * -jnp.expm1(-b_safe * dt)
-            a / b_safe * jnp.exp(-b_safe * (t1_safe - ui_safe)) * -jnp.expm1(-b_safe * dt_safe)
+            a
+            / b_safe
+            * jnp.exp(-b_safe * (t1_safe - ui_safe))
+            * -jnp.expm1(-b_safe * dt_safe)
         )
         integrals = jnp.where(const, a * dt, integrals)
         return integrals.sum()
@@ -82,10 +85,12 @@ class PExp(NamedTuple):
             # = exp(-c R(ti)) \int_ti^ti1 exp(-c (t - ti) (1/2N0) ds) dt
             # = exp(-c R(ti)) (N0/c) -expm1(-c / N0) dt)
             ti1_safe = jnp.where(jnp.isinf(ti1), 2 * ti, ti1)
-            i1 = jnp.exp(-c * (self.R(ti) - Rt0)) * (2 * N0i / c) * jnp.where(
-                jnp.isinf(ti1),
-                1.,
-                -jnp.expm1(-c / (2 * N0i) * (ti1_safe - ti))
+            i1 = (
+                jnp.exp(-c * (self.R(ti) - Rt0))
+                * (2 * N0i / c)
+                * jnp.where(
+                    jnp.isinf(ti1), 1.0, -jnp.expm1(-c / (2 * N0i) * (ti1_safe - ti))
+                )
             )
             x1 = jnp.linspace(ti, ti1_safe, 1000)
             x2 = jnp.linspace(x1[1], x1[-1], 1000)

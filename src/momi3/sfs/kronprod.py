@@ -4,7 +4,6 @@ from typing import Union
 
 import jax_dataclasses as jdc
 import numpy as np
-from jax import jit
 from jax import numpy as jnp
 from jax.experimental.sparse import BCOO, empty, eye, sparsify
 
@@ -151,8 +150,7 @@ class KronProd:
 class GroupedKronProd(KronProd):
     """Group operations between pairs of indices."""
 
-    @jit
-    def __matmul__(self, other: jnp.ndarray) -> jnp.ndarray:
+    def __old_matmul__(self, other: jnp.ndarray) -> jnp.ndarray:
         ret = jnp.zeros_like(other)
         d = len(self.dims)
         f = 1.0 / (d - 1)
@@ -183,6 +181,38 @@ class GroupedKronProd(KronProd):
                         0,
                         i,
                     )
+                )
+        return ret
+
+    def __matmul__(self, other):
+        assert self.dims == other.shape
+        ret = jnp.zeros_like(other)
+        d = len(self.dims)
+        other_inds = tuple(range(d))
+        f = 1.0 / (d - 1)
+        for Ai in self.A:
+            k = list(Ai.keys())
+            if len(k) == 2:
+                i, j = k
+                out_inds = list(other_inds)
+                out_inds[i] = d + 1
+                out_inds[j] = d + 2
+                ret += jnp.einsum(
+                    Ai[i],
+                    (d + 1, i),
+                    Ai[j],
+                    (d + 2, j),
+                    other,
+                    other_inds,
+                    tuple(out_inds),
+                )
+            else:
+                assert len(k) == 1
+                i = k[0]
+                out_inds = list(other_inds)
+                out_inds[i] = d + 1
+                ret += jnp.einsum(
+                    f * Ai[i], (d + 1, i), other, other_inds, tuple(out_inds)
                 )
         return ret
 

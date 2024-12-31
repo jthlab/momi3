@@ -48,7 +48,7 @@ class Split2(Event):
         assert not (
             donor_axes.keys() & recip_axes.keys()
         )  # the axes should be disjoint if we are using this event
-        out_axes = recip_axes | donor_axes
+        out_axes = donor_axes | recip_axes
         out_axes[self.recipient] += out_axes[self.donor] - 1
         del out_axes[self.donor]
         aux = {

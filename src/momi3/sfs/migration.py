@@ -33,6 +33,7 @@ def lift_cm_aux(
 
     # convert sparse matrices from scipy to JAX format
     def f(A):
+        return A.todense()
         if isinstance(A, sps.spmatrix):
             ret = BCOO.from_scipy_sparse(A).sort_indices()
             ret.unique_indices = True
@@ -95,11 +96,6 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     f_Q_mig, Q_mut = _Q_mig_mut(t[0], t[1], dims, axes, params["mig"], aux, tr=False)
     f_Q_mig_T, _ = _Q_mig_mut(t[0], t[1], dims, axes, params["mig"], aux, tr=True)
 
-    if True:
-        # Convert all Q_* to dense
-        Q_drift = Q_drift.todense()
-        Q_mut = Q_mut.todense()
-
     solver = dfx.Kvaerno3()
     term = dfx.ODETerm(_A)
 
@@ -109,14 +105,14 @@ def _lift_cm_exp(params, t, pl, axes, aux):
         jump_ts = jnp.array([eta.t for eta in etas.values()])
         jump_ts = jnp.append(jump_ts, f_Q_mig.t)
         jump_ts = jnp.sort(jump_ts)
-        ssc = dfx.PIDController(jump_ts=jump_ts, rtol=1e-6, atol=1e-6)
+        ssc = dfx.PIDController(jump_ts=jump_ts, rtol=1e-5, atol=1e-5)
         res = dfx.diffeqsolve(
             term,
             solver,
             t0=t[0],
             t1=t[1],
-            # dt0=(t[1] - t[0]) / 100,
-            dt0=None,
+            dt0=(t[1] - t[0]) / 100,
+            # dt0=None,
             y0=y0,
             args=args,
             stepsize_controller=ssc,
