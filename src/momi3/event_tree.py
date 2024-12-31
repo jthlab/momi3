@@ -111,18 +111,15 @@ class EventTree:
 
     Args:
         demo: a demes graph
-        num_samples: a dictionary mapping deme names to the number of samples in that
-            deme.
+        events: a module containing event classes
     """
 
     def __init__(
         self,
         demo: demes.Graph,
-        num_samples: dict[str, int],
         events: ModuleType,
     ):
         self._demo = demo
-        self._num_samples = num_samples
         self._events = events
         self._shared_paths = set()
         self._T = nx.DiGraph()

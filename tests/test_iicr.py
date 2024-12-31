@@ -33,15 +33,21 @@ def _idfun(x):
     ],
     ids=_idfun,
 )
-def test_stdpopsim(demo, pops):
+def test_stdpopsim(request, pytestconfig, demo, pops, nd):
     t0 = 0.0
     t1 = 10.0 * demo.model.debug().epoch_start_time[-1]
-    t = np.linspace(t0, t1, 12345)
+    t = np.linspace(t0, t1, 123456)
     model_times = np.array([e.time for e in demo.model.events])
     t = np.sort(np.unique(np.concatenate([t, model_times])))
     m3 = momi3.momi.Momi3(demo.model.to_demes())
-    c2, p2 = m3.coalescence_rate_trajectory(t, pops)
-    c1, p1 = demo.model.debug().coalescence_rate_trajectory(steps=t, lineages=pops)
+    c2, p2 = m3.coalescence_rate_trajectory(t, pops, _nd=nd)
+    key = request.node.name
+    val = pytestconfig.cache.get(key, None)
+    if not val:
+        c1, p1 = demo.model.debug().coalescence_rate_trajectory(steps=t, lineages=pops)
+        val = (c1.tolist(), p1.tolist())
+        pytestconfig.cache.set(key, val)
+    c1, p1 = map(np.array, val)
     # thle iicr can jump discontinuously at the model times, so the value depends on
     # whether the function is defined to be left- or right-continuous. afaict theres's
     # not really a convention for this so we just ignore the values at the model times
@@ -87,33 +93,39 @@ def test_iicr_star():
     np.testing.assert_allclose(c[t >= 1e3], 10 / 2 / 1e5)
 
 
-def test_iicr_simple():
-    demo, _ = SingleDeme.Constant().base()
+@pytest.fixture(params=[True, False])
+def nd(request):
+    return request.param
+
+
+def test_iicr_simple(nd):
+    N = 1e4
+    demo, _ = SingleDeme.Constant(size=N).base()
     # FIXME: rate at changepoints is not handled correctly because of autodiff
     t = np.linspace(0.0, 1.1e4, 10)
-    N = 1e4
     for n in [2, 5, 20]:
-        c, p = Momi3(demo).coalescence_rate_trajectory(t, {"A": n})
+        c, p = Momi3(demo).coalescence_rate_trajectory(t, {"A": n}, _nd=nd)
         np.testing.assert_allclose(p, np.exp(-t * n * (n - 1) / 4 / N))
         np.testing.assert_allclose(c, n * (n - 1) / 4 / N)
 
 
-def test_iicr_growth():
-    demo, _ = SingleDeme.Exponential().base()
+def test_iicr_growth(nd):
+    N = 1e4
+    demo, _ = SingleDeme.Exponential(size=N, t=1e3, g=0.01).base()
     t = jnp.linspace(0, 2.1e4, 20)
     N_t = np.array([demo.demes[0].size_at(tt) for tt in t])
     for n in [2, 5, 20]:
-        c, p = Momi3(demo).coal_rate_trajectory(t, {"A": n})
+        c, p = Momi3(demo).coalescence_rate_trajectory(t, {"A": n}, _nd=nd)
         np.testing.assert_allclose(c, n * (n - 1) / 4 / N_t)
 
 
-def test_iicr_twopop():
-    demo, _ = TwoDemes.Constant().base()
-    t = jnp.linspace(0, 2e4, 20)
+def test_iicr_twopop(nd):
+    demo, _ = TwoDemes.Constant(size=1e4, t=1e3).base()
+    t = jnp.linspace(0, 1e3 - 1.0, 20)
 
     for lin in "A", "B":
         d = {lin: 2}
-        c, p = Momi3(demo).coalescence_rate_trajectory(t, d)
+        c, p = Momi3(demo).coalescence_rate_trajectory(t, d, _nd=nd)
         deme = next(d for d in demo.demes if d.name == lin)
         N_t = np.array([deme.size_at(tt) for tt in t])
         np.testing.assert_allclose(c, 1 / 2 / N_t)
@@ -142,11 +154,11 @@ def test_iicr_mig0_vs_msp():
             np.testing.assert_allclose(p1, p3, atol=1e-4)
 
 
-def test_iicr_iwm():
+def test_iicr_iwm(nd):
     cons = TwoDemes.Constant()
     demo, _ = cons.migration()
     t = np.linspace(0.0, 1.1 * cons.t, 123456)
-    c2, p2 = Momi3(demo).coalescence_rate_trajectory(t, {"A": 1, "B": 1})
+    c2, p2 = Momi3(demo).coalescence_rate_trajectory(t, {"A": 1, "B": 1}, _nd=nd)
     c1, p1 = (
         msprime.Demography.from_demes(demo)
         .debug()
@@ -166,14 +178,18 @@ def test_iicr_iwm():
         (ThreeDemes.Constant(t1=1000.0, t2=1001.0).three_migrants, 3),
     ],
 )
-def test_strobeck(demo_gen, n, rng):
+def test_strobeck(demo_gen, n, rng, nd):
     r = jnp.clip(rng.exponential(0.1), 1 / n)
     demo = demo_gen(rate=r)[0]
     np.linspace(0.0, 100.0, 12345)
     m3 = momi3.momi.Momi3(demo)
     for tup in it.combinations_with_replacement("ABC"[:n], 2):
         d = Counter(tup)
-        iicr = m3.iicr(d)
+        if nd:
+            i = m3.iicr_nd
+        else:
+            i = m3.iicr
+        iicr = i(d)
         m = n  # within
         if len(d) == 2:
             # between
@@ -187,34 +203,49 @@ def test_strobeck(demo_gen, n, rng):
 @pytest.mark.parametrize(
     "demo_tup",
     [
-        TwoDemes.Constant().two_pulses(),
-        TwoDemes.Constant().pulse(),
-        TwoDemes.Constant().base(),
-        TwoDemes.Exponential().base(),
-        TwoDemes.Constant().migration(),
-        TwoDemes.Constant().migration_twophase(),
-        TwoDemes.Exponential().migration(),
-        TwoDemes.Exponential().migration_sym(),
-        ThreeDemes.Constant().base(),
-        ThreeDemes.Constant().migration(),
+        TwoDemes.Constant(size=1e4).pulse(),
+        TwoDemes.Constant(size=1e4).two_pulses(),
+        TwoDemes.Constant(size=1e4).base(),
+        TwoDemes.Exponential(size=1e4, g=0.001, t=2e2).base(),
+        TwoDemes.Constant(size=1e4).migration(),
+        TwoDemes.Constant(size=1e4).migration_twophase(),
+        TwoDemes.Exponential(size=1e4, g=0.001, t=2e3).migration(),
+        TwoDemes.Exponential(size=1e4, g=0.001, t=2e2).migration_sym(),
+        ThreeDemes.Constant(size=5e4).base(),
+        ThreeDemes.Constant(size=5e4).migration(),
     ],
 )
-def test_vs_msp(demo_tup, config):
+def test_vs_msp(request, pytestconfig, demo_tup, config, nd):
     demo, _ = demo_tup
     if not all(any(d.name == x for d in demo.demes) for x in config):
         pytest.skip("not a valid configuration for this demo")
     t = np.linspace(0.0, 3.1e4, 123456)
     dd = msprime.Demography.from_demes(demo).debug()
     m3 = momi3.momi.Momi3(demo)
-    c2, p2 = m3.coalescence_rate_trajectory(t, config)
-    c1, p1 = dd.coalescence_rate_trajectory(steps=t, lineages=config)
-    mask = p1 > 1e-8
-    np.testing.assert_allclose(p1[mask], p2[mask], atol=1e-3, rtol=1e-3)
-    np.testing.assert_allclose(c1[mask], c2[mask], atol=1e-3, rtol=1e-3)
+    c2, p2 = m3.coalescence_rate_trajectory(t, config, _nd=nd, _jit=False)
+    # cache the msprime result, it is slow
+    key = request.node.name
+    val = pytestconfig.cache.get(key, None)
+    if not val:
+        c1, p1 = dd.coalescence_rate_trajectory(steps=t, lineages=config)
+        val = (c1.tolist(), p1.tolist())
+        pytestconfig.cache.set(key, val)
+    c1, p1 = map(np.array, val)
+    # survival probs
+    np.testing.assert_allclose(p1, p2, atol=1e-3, rtol=1e-3)
+    # coal rates
+    np.testing.assert_allclose(c1, c2, atol=1e-3, rtol=1e-3)
 
 
-def test_pulse():
+def test_one_pulse(nd):
+    demo, _ = TwoDemes.Constant(size=5e3).pulse(t=6e3)
+    t = np.linspace(0.0, 1.1e4, 123456)
+    m3 = momi3.momi.Momi3(demo)
+    c1, p1 = m3.coalescence_rate_trajectory(t, {"A": 1, "B": 1}, _nd=nd)
+
+
+def test_two_pulses(nd):
     demo, _ = TwoDemes.Constant().two_pulses()
     t = np.linspace(0.0, 1.1e4, 123456)
     m3 = momi3.momi.Momi3(demo)
-    c1, p1 = m3.coalescence_rate_trajectory(t, {"A": 1, "B": 1})
+    c1, p1 = m3.coalescence_rate_trajectory(t, {"A": 1, "B": 1}, _nd=nd)

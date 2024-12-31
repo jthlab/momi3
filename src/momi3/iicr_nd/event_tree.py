@@ -11,28 +11,29 @@ from . import events
 from .state import State
 
 
-class IicrEventTree(EventTree):
-    def __init__(self, demo: demes.Graph, num_samples: dict[str, int]):
-        self._num_samples = num_samples
+class IicrNdEventTree(EventTree):
+    def __init__(self, demo: demes.Graph, n: int):
+        self._n = n
         super().__init__(demo, events)
 
     def _init_leaves(self):
         super()._init_leaves()
+        n = self._n
         for deme in self._demo.demes:
             pop = deme.name
-            n = self._num_samples.get(pop, 0)
             self.nodes[self.leaves[pop]].update(
                 {"axes": Axes({pop: n + 1}), "ns": {pop: {pop: n}}}
             )
 
-    def execute(self, params: dict, t: float, aux: Any) -> jax.Array:
+    def execute(
+        self, params: dict, num_samples: dict[str, int], t: float, aux: Any
+    ) -> jax.Array:
+        # assert sum(num_samples.values()) == self._n
+        I = jnp.eye(self._n + 1)  # noqa: E741
         for pop in self.leaves:
-            n = self._num_samples.get(pop, 0)
-            sh = (1,) * n
-            p = jnp.ones(sh)
+            p = I[num_samples.get(pop, 0)]
             self.nodes[self.leaves[pop]]["state"] = State(
                 p=p, s=1.0, c=0.0, t=t, terminal=False
             )
-
         ret = super().execute(params, aux)
         return (ret.c, ret.s)

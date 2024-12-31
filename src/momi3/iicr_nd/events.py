@@ -6,8 +6,9 @@ from typing import Any
 
 import diffrax as dfx
 import jax
-from jax.scipy.special import logsumexp
 import jax.numpy as jnp
+from jax import vmap
+from jax.scipy.special import logsumexp
 import networkx as nx
 import numpy as np
 
@@ -19,57 +20,30 @@ from momi3.sfs.events import NoOp, Rename  # noqa: F401
 from .state import State
 
 
-def _merge(p, j, k):
-    "merge population j into population k"
-
-    def f(q, i):
-        def g(v):
-            return jnp.delete(v, j).at[k].add(v[j])
-
-        return jnp.apply_along_axis(g, i, q)
-
-    return reduce(f, range(p.ndim), p)
+def _outer_product(T: jax.Array) -> jax.Array:
+    """Compute the outer product of a tensor along its last axis."""
+    return reduce(
+        lambda a, b: a[..., None] * b[None, :],
+        T[1:],
+        T[0],
+    )
 
 
-def _split(p, j, k1, k2, prob):
-    "split population j into populations k1 and k2"
-
-    def f(q, i):
-        def g(v):
-            return jnp.insert(
-                jnp.delete(v, j),
-                jnp.array([k1, k2]),
-                jnp.array([v[j] * prob, v[j] * (1 - prob)]),
-            )
-
-        return jnp.apply_along_axis(g, i, q)
-
-    return reduce(f, range(p.ndim), p)
-
-
-def _pulse(p, j, k, prob):
-    "pulse population j into population k"
-
-    def f(q, i):
-        def g(v):
-            return v.at[j].multiply(1 - prob).at[k].add(v[j] * prob)
-
-        return jnp.apply_along_axis(g, i, q)
-
-    return reduce(f, range(p.ndim), p)
-
-
-def _product(p1, d1, p2, d2):
-    # align two ndarrays for concatenation
-    n1 = p1.ndim
-    n2 = p2.ndim
-    if n1 > 0:
-        p1 = jnp.pad(p1, [(0, d2)] * n1)
-    if n2 > 0:
-        p2 = jnp.pad(p2, [(d1, 0)] * n2)
-    p1_sl = (slice(None),) * p1.ndim + (None,) * p2.ndim
-    p2_sl = (None,) * p1.ndim + (slice(None),) * p2.ndim
-    return p1[p1_sl] * p2[p2_sl]
+def _mats(d, n):
+    B = np.array(list(np.ndindex((n,) * d))).reshape((n,) * d + (d,))
+    C = B * (B - 1) / 2
+    # construct a tensor D[i1,...,id,j1,...,jd] = 1 if |i-j| = 1, 0 otherwise
+    c1 = B[(...,) + (None,) * d + (slice(None),)]
+    c2 = B
+    # Neighborhood tensor
+    N1 = np.abs(c1 - c2).sum(-1) == 2
+    N2 = c1.sum(-1) == c2.sum(-1)
+    N = N1 & N2
+    # X[i,j,u,v] = 1 if iu == jv - 1, 0 otherwise
+    X = c1 == c2 - 1
+    # Y[i,j,u,v] = 1 if iu == jv + 1, 0 otherwise
+    Y = c1 == c2 + 1
+    return dict(B=B, C=C, N=N, X=X, Y=Y)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -77,20 +51,8 @@ class Lift(momi3.sfs.events.Lift):
     def _setup_impl(
         self, child_axes: Axes, ns: PopCounter
     ) -> tuple[Axes, PopCounter, Any]:
-        d = len(child_axes)
-        n = sum(a - 1 for p, a in child_axes.items())
-        if n == 0:
-            # NoOp lifting event
-            return child_axes, ns, {}
-
-        # state.p is a tensor of shape (d, d, ..., d) with n dimensions
-        # create a new tensor A of shape state.p.shape + (d,) such that
-        # A[i1,...,in,j] = #[i == j for i in {i1,...,in}]
-        inds = np.transpose(np.unravel_index(np.arange(d**n), (d,) * n))
-        counts = jax.vmap(lambda b: jnp.bincount(b, length=d))(inds).reshape(
-            (d,) * n + (d,)
-        )
-
+        n = list(child_axes.values())[0]
+        assert all(v == n for v in child_axes.values())
         # find cliques of migration populations
         G = nx.DiGraph()
         G.add_nodes_from(
@@ -114,7 +76,6 @@ class Lift(momi3.sfs.events.Lift):
         aux = {}
         aux["migration_sets"] = migration_sets1
         aux["axes"] = child_axes
-        aux["C"] = counts * (counts - 1) / 2
         nsp = deepcopy(ns)
         return child_axes, nsp, aux
 
@@ -129,44 +90,56 @@ class Lift(momi3.sfs.events.Lift):
         Returns:
             State after the lifting event.
         """
-        n = st.p.ndim
-        if n == 0:
-            return st._replace(terminal=self.terminal)
         t0, t1 = [get_path(params, t.path) for t in (self.t0, self.t1)]
         u = jnp.clip(st.t, t0, t1)
         t_isin_t0_t1 = (t0 <= st.t) & (st.t < t1)
         etas = self._etas(params)
         axes = aux["axes"]
-        d = st.p.shape[0]
-        assert st.p.shape == (d,) * n
-        C = aux["C"]
+        n = st.p.shape[0]
+        d = st.p.ndim
+        assert st.p.shape == (n,) * d
 
-        if self.migrations == {} or self.terminal or jnp.isinf(t1):
+        if self.migrations == {} or self.terminal:
             # no migrations, so just lift each population to r and t1
+            j = jnp.arange(n)
+            C = j * (j - 1) // 2
             R = []
             for p in axes:
                 R.append(etas[p].R(u) - etas[p].R(t0))
             R = jnp.array(R)
-            x = C.dot(R)
+            cum_rates = C[:, None] * R[None, :]
+            assert cum_rates.shape == (n, d)
+            # convert to (n,) * d outer product tensor
+            x = _outer_product(cum_rates.T)
+            assert x.shape == (n,) * d
             # probability of no coalescence
             log_p_nc = -x
             log_p_prime = jnp.log(st.p) + log_p_nc
-            s_prime = jnp.where(st.t < t0, 1.0, jnp.exp(logsumexp(log_p_prime)).sum())
+            s_prime = jnp.where(st.t < t0, 1.0, jnp.exp(logsumexp(log_p_prime)))
             p_prime = jnp.exp(log_p_prime - logsumexp(log_p_prime))
+            # p_prime = probability distribution at u conditional on no coalescence
             coal = jnp.array([1 / 2 / etas[p](u) for p in axes])
-            # probability distribution conditional on no coalescence
-            c_prime = jnp.where(t_isin_t0_t1, jnp.sum(p_prime * C.dot(coal)), 0.0)
-            # no change to p since the lineages do not migrate
+            # iicr at time t, ignore if t is not in (t0, t1)
+            y = _outer_product(coal[:, None] * C[None, :])
+            c_prime = jnp.where(t_isin_t0_t1, jnp.sum(p_prime * y), 0.0)
             return st._replace(
                 p=p_prime, s=st.s * s_prime, c=st.c + c_prime, terminal=self.terminal
             )
 
         M, jump_ts = self.migration_matrix(params, aux["axes"])
+        # C[i1,...,id] = [i1(i1-1)/2, ..., id(id-1)/2]
+
+        mats = jax.tree.map(jnp.array, _mats(d, n))
 
         def rate(t, y, args):
-            etas, C = args
+            # y.shape = (n,) * d
+            # y[i1,i2,...,id] = probability of deme 1 have i1 lineages, deme 2 have i2
+            # lineages, etc.
+            # the rate of coalescence in state (i1, i2, ..., id) is
+            # \sum_k \binom{i_k}{2} / 2 / \eta_k(t)
+            (etas,) = args
             eta = jnp.array([1 / 2 / etas[pop](t) for pop in axes])
-            return C.dot(eta)
+            return mats["C"].dot(eta)
 
         def stats(t, y, args):
             p, s = y
@@ -176,20 +149,43 @@ class Lift(momi3.sfs.events.Lift):
 
         def f(t, y, args):
             # migration matrix at time t
-            etas, C = args
-            M_t = M(t)
+            (etas,) = args
+            M_t = jnp.fill_diagonal(M(t), 0.0, inplace=False)
             # transition p forward in time
             p, _ = y
             ds = p * rate(t, y, args)
-            # multiply along each axis, equivalnt of direct sum
-            dp = sum(
-                map(
-                    lambda i: jnp.apply_along_axis(M_t.T.__matmul__, i, p),
-                    range(n),
-                )
+            # net rate of transition into state i=(i1,...,id) is
+            # \sum_{j\in N(i)} p[j] \sum_{u,v} ju M[u,v] 1{ju == iu + 1, jv == iv - 1}
+            # \sum_{j\in N(i)} p[j] \sum_{u,v} B[j,u] M[u,v] X[i,j,u] Y[i,j,v]
+            # - N(i) are the neighbors of i (states reachable by one migration event)
+            # - The tensors M, X, Y are defined to satisfy the above properties, e.g.
+            #   B[j1,...,jd,u] = ju for u=1,...,d
+            i = tuple(range(d))
+            j = tuple(range(d, 2 * d))
+            u = 2 * d + 1
+            v = u + 1
+            dp_in = jnp.einsum(
+                mats["N"],
+                i + j,
+                p,
+                j,
+                mats["B"],
+                j + (u,),
+                M_t,
+                (u, v),
+                mats["X"],
+                i + j + (u,),
+                mats["Y"],
+                i + j + (v,),
+                i,
             )
+            # net rate of transition out of state (i1,...,id) due to migration is
+            # p[i1,...,id] * \sum_k ik \sum_j M_{k,j}
+            dp_out = jnp.einsum(p, i, mats["B"], i + (d + 1,), M_t, (d + 1, d + 2), i)
+            dp = dp_in - dp_out
+            # should have dp.sum() == 0 at this point, migration is conservative
             # movement into coalescent state
-            dp -= ds  # movement among migrant states, independent
+            dp -= ds
             # jax.debug.print("p:{} c:{} dp:{} dc:{}", p, c, dp, dc)
             return dp, ds.sum()
 
@@ -202,8 +198,9 @@ class Lift(momi3.sfs.events.Lift):
         # evolving_subsaveat = dfx.SubSaveAt(ts=[u], fn=stats)
         saveat = dfx.SaveAt(ts=[u, t1], fn=stats)
         ssc = dfx.PIDController(jump_ts=jump_ts, rtol=1e-6, atol=1e-6)
-        args = (etas, C)
+        args = (etas,)
         y0 = (st.p, 0.0)
+
         res = dfx.diffeqsolve(
             term,
             solver,
@@ -231,7 +228,15 @@ class Split1(momi3.sfs.events.Split1):
     def _setup_impl(
         self, in_axes: Axes, ns: PopCounter
     ) -> tuple[Axes, PopCounter, Any]:
-        out_axes, nsp, _ = super()._setup_impl(in_axes, ns)
+        nsp = deepcopy(ns)
+        nsp[self.recipient].update(nsp[self.donor])
+        del nsp[self.donor]
+        out_axes = in_axes.copy()
+        del out_axes[self.donor]
+        n = out_axes[self.recipient]
+        del out_axes[self.recipient]
+        # deleting and then re-adding ensures that recipient is the last axis.
+        out_axes[self.recipient] = n
         aux = {"in_axes": in_axes, "out_axes": out_axes}
         return out_axes, nsp, aux
 
@@ -240,15 +245,34 @@ class Split1(momi3.sfs.events.Split1):
         assert self.donor not in aux["out_axes"]
         assert self.recipient in aux["in_axes"]
         assert self.recipient in aux["out_axes"]
+        i = list(aux["in_axes"]).index(self.recipient)
         j = list(aux["in_axes"]).index(self.donor)
         k = list(aux["out_axes"]).index(self.recipient)
-        # remove the i'th entry from state.p, then add it to the j'th entry of what remains
-        p_prime = _merge(st.p, j, k)
+
+        def f(A):
+            # sum of antidiagonals == convolution of two pops
+            return jnp.array(
+                [jnp.trace(A[:, ::-1], offset=i) for i in range(A.shape[0])]
+            )[::-1]
+
+        # rotate axes i and j to end, apply f to stack of mats, then rotate back
+        for _ in range(st.p.ndim - 2):
+            f = vmap(f)
+        p_prime = f(jnp.moveaxis(st.p, (i, j), (-2, -1)))
+        p_prime = jnp.moveaxis(p_prime, -1, k)
         return st._replace(p=p_prime)
 
 
 @dataclass(frozen=True, kw_only=True)
 class Split2(momi3.sfs.events.Split2):
+    def _setup_impl(
+        self, in_axes: dict[str, Axes], ns: PopCounter
+    ) -> tuple[Axes, PopCounter, Any]:
+        out_axes, nsp, aux = super()._setup_impl(in_axes, ns)
+        # number of lineages stays same
+        out_axes[self.recipient] = in_axes["donor_axes"][self.donor]
+        return out_axes, nsp, aux
+
     def _execute_impl(self, state: dict[str, State], params: dict, aux: Any) -> State:
         """Merge two populations in different event blocks.
 
@@ -259,21 +283,30 @@ class Split2(momi3.sfs.events.Split2):
         """
         donor_st = state["donor_state"]
         recip_st = state["recipient_state"]
-        list(aux["out_axes"])
         donor_axes = aux["donor_axes"]
         recip_axes = aux["recip_axes"]
-        d1 = len(recip_axes)
-        d2 = len(donor_axes)
-        p_prime = _product(recip_st.p, d1, donor_st.p, d2)
-        # now want to merge the populations in donor and recip into one, to get
-        # a square tensor of shape (d1 + d2 - 1,) * (n1 + n2)
-        # new_p[i1,...,in,j] = sum_{k} recip_p[i1,...,in,k] * donor_p[k,j]
-        combined_axes = aux["recip_axes"] | aux["donor_axes"]
-        j = list(combined_axes).index(self.donor)
-        k = list(aux["out_axes"]).index(self.recipient)
-        # if we are merging into a zero-length population, then the new population just becomes
-        # the old population. otherwise, need to merge the two populations.
-        p_prime = _merge(p_prime, j, k)
+        n = donor_st.p.shape[0]
+        assert donor_st.p.shape == (n,) * len(donor_axes)
+        assert recip_st.p.shape == (n,) * len(recip_axes)
+        da = list(donor_axes)
+        ra = list(recip_axes)
+        i = da.index(self.donor)
+        j = ra.index(self.recipient)
+
+        def f(donor_col):
+            def g(recip_col):
+                a, b, c = jnp.ogrid[:n, :n, :n]
+                # TODO this is a convolution
+                r = jnp.sum((donor_col[a] * recip_col[b]) * (a + b == c), axis=(0, 1))
+                return r
+
+            return jnp.apply_along_axis(g, j, recip_st.p)
+
+        p_prime = jnp.apply_along_axis(f, -1, jnp.moveaxis(donor_st.p, i, -1))
+        # the effect of applying along ith axis of donor,
+        # and jth axis of recip
+        p_prime_axes = da[:i] + da[i + 1 :] + ra
+        assert tuple(p_prime_axes) == tuple(aux["out_axes"])
         return State(
             p=p_prime,
             s=donor_st.s * recip_st.s,
@@ -289,6 +322,7 @@ class MigrationStart(momi3.sfs.events.MigrationStart):
         self, in_axes: Axes, ns: PopCounter
     ) -> tuple[Axes, PopCounter, Any]:
         out_axes, nsp, aux = super()._setup_impl(in_axes, ns)
+        # out_axes = src_ax | dst_ax
         aux.update({"in_axes": in_axes, "out_axes": out_axes})
         return out_axes, nsp, aux
 
@@ -297,9 +331,8 @@ class MigrationStart(momi3.sfs.events.MigrationStart):
         src_st = state["source_state"]
         dst_st = state["dest_state"]
         # an empty/scalar tensor represents one deme with no lineages
-        d1 = len(aux["in_axes"]["source_axes"])
         d2 = len(aux["in_axes"]["dest_axes"])
-        p_prime = _product(src_st.p, d1, dst_st.p, d2)
+        p_prime = src_st.p[(...,) + (None,) * d2] * dst_st.p
         return State(
             p=p_prime,
             s=src_st.s * dst_st.s,
@@ -315,10 +348,6 @@ class Admix(momi3.sfs.events.Admix):
         self, in_axes: Axes, ns: PopCounter
     ) -> tuple[Axes, PopCounter, Any]:
         out_axes, nsp, aux = super()._setup_impl(in_axes, ns)
-        # unlike sfs implementation, we don't have to "enlarge" the number of ancestral
-        # lineages, because we track distribution over their location.
-        out_axes[self.parent2] = 1  # no extra lineages for parent1
-        assert out_axes.n == in_axes.n
         aux.update({"in_axes": in_axes, "out_axes": out_axes})
         return out_axes, nsp, aux
 
@@ -327,7 +356,23 @@ class Admix(momi3.sfs.events.Admix):
         # child splits into self.parent1 and self.parent2
         i = list(aux["in_axes"]).index(self.child)
         j, k = [list(aux["out_axes"]).index(x) for x in (self.parent1, self.parent2)]
-        p_prime = _split(st.p, i, j, k, p_admix)
+        # rotate axis i to back and vmap over it
+        n = st.p.shape[0]
+        assert st.p.shape == (n,) * st.p.ndim
+
+        def f(v):
+            # v is the distribution of lineages in the child
+            # i is the number of lineages in the child
+            # j is the number of lineages in the first parent
+            # k is the number of lineages in the second parent
+            i, j, k = jnp.ogrid[:n, :n, :n]
+            M = v[i] * jax.scipy.stats.binom.pmf(j, i, p_admix) * (k == i - j)
+            return M.sum(0)
+
+        for _ in range(st.p.ndim - 1):
+            f = vmap(f)
+        p_prime = f(jnp.moveaxis(st.p, i, -1))
+        p_prime = jnp.moveaxis(p_prime, (-2, -1), (j, k))
         return st._replace(p=p_prime)
 
 
@@ -344,7 +389,30 @@ class Pulse(momi3.sfs.events.Pulse):
 
     def _execute_impl(self, st: State, params: dict, aux: Any) -> State:
         p_pulse = self.f_p(params)
-        i = list(aux["in_axes"]).index(self.dest)
-        j = list(aux["in_axes"]).index(self.source)
-        p_prime = _pulse(st.p, i, j, p_pulse)
+        n = st.p.shape[0]
+        assert st.p.shape == (n,) * st.p.ndim
+
+        def f(M):
+            # M is the joint distribution of source and dest.
+            # now compute the joint distribution after the pulse:
+            # i: number of lineages in source
+            # j: number of lineages in dest
+            # k: number of lineages donated
+            # ret[i,j] = \sum_k M[i+k,j-k] * binom(i, k, p_pulse)
+            (
+                i,
+                j,
+                k,
+            ) = jnp.ogrid[:n, :n, :n]
+            mask = ((i + k) < n) & ((j - k) >= 0)
+            S = M[i + k, j - k] * jax.scipy.stats.binom.pmf(k, i + k, p_pulse) * mask
+            return S.sum(2)
+
+        for _ in range(st.p.ndim - 2):
+            f = vmap(f)
+
+        i = list(aux["in_axes"]).index(self.source)
+        j = list(aux["in_axes"]).index(self.dest)
+        p_prime = f(jnp.moveaxis(st.p, (i, j), (-2, -1)))
+        p_prime = jnp.moveaxis(p_prime, (-2, -1), (i, j))
         return st._replace(p=p_prime)
