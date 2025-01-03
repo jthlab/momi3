@@ -2,7 +2,6 @@
 
 import itertools as it
 import math
-from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
@@ -12,7 +11,7 @@ from jax import numpy as jnp, lax, vmap
 from jax.scipy.linalg import expm
 
 from momi3.common import Axes, PopCounter, Population, Time, oe_einsum, get_path
-from ..migration import lift_cm, lift_cm_aux
+from ..migration import lift_cm, lift_cm_aux, MigrationMatrix
 from momi3.pexp import PExp
 from momi3.utils import W_matrix, moran_eigensystem, rate_matrix
 
@@ -49,37 +48,6 @@ class Lift(Event):
     @property
     def terminal(self):
         return math.isinf(self.t1.t)
-
-    def migration_matrix(self, params, axes: Axes):
-        M_ij = defaultdict(lambda: lambda _: 0.0)
-        jump_ts = jnp.array([])
-        for p1, p2 in self.migrations:
-            ms = [
-                m for m in params["migrations"] if m["source"] == p1 and m["dest"] == p2
-            ]
-            A = jnp.array([[m["rate"], m["end_time"], m["start_time"]] for m in ms])
-            i = A[:, 1].argsort()
-            r, t_start, t_end = A[i].T
-
-            def f(t, r=r, t_start=t_start, t_end=t_end):
-                j = jnp.searchsorted(t_start, t, side="right") - 1
-                return jnp.where((t_start[j] <= t) & (t < t_end[j]), r[j], 0.0)
-
-            M_ij[p1, p2] = f
-            jump_ts = jnp.concatenate([jump_ts, t_start, t_end])
-
-        def ret(t):
-            a = len(axes)
-            M = [[0.0] * a for _ in range(a)]
-            for (i1, p1), (i2, p2) in it.product(enumerate(axes), repeat=2):
-                M[i2][i1] = M_ij[p1, p2](t)
-            # rate of entering coalescent state
-            # rate of coalescing equals assign
-            M = jnp.array(M)
-            M -= jnp.diag(M.sum(1))
-            return M
-
-        return ret, jump_ts
 
     def _setup_impl(
         self, child_axes: Axes, ns: PopCounter
@@ -133,11 +101,9 @@ class Lift(Event):
         # set up functions for computing migration rates and pop sizes at runtime
         return child_axes, nsp, aux
 
-    def _etas(self, params: dict) -> dict[Population, tuple[float, float]]:
+    def _etas(self, params: dict) -> dict[Population, PExp]:
         ret = {}
         for pop in params["demes"]:
-            if pop["name"] not in self.epochs:
-                continue
             t = []
             N0 = []
             N1 = []
@@ -149,6 +115,9 @@ class Lift(Event):
 
             ret[pop["name"]] = PExp(N0=jnp.array(N0), N1=jnp.array(N1), t=jnp.array(t))
         return ret
+
+    def _migration_matrix(self, params: dict, axes: Axes):
+        return MigrationMatrix(params, axes)
 
     def _migfun(
         self, params: dict, s: list[tuple[Population, Population]]

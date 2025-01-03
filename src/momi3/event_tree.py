@@ -11,6 +11,7 @@ from collections.abc import Collection
 import demes
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.scipy.special import logit
 import networkx as nx
 from frozendict import frozendict
@@ -124,8 +125,9 @@ class EventTree:
         self._shared_paths = set()
         self._T = nx.DiGraph()
         # initialize leaves and then build the event tree
-        self._init_leaves()
-        self._build_tree()
+        with jax.disable_jit(True):
+            self._init_leaves()
+            self._build_tree()
 
     @property
     def events(self):
@@ -546,18 +548,15 @@ class EventTree:
             # register times of all events, including epochs
             t = Time(d["t"], d["path"])
             self._shared_paths.add(frozenset([t.path]))
+
             u = self._lift(d["pop"], t)
             assert u.t.t == t.t
             # if epoch, nothing to do. epochs are handled by the lifting events.
+
             if d["ev"] in (EventType.EPOCH, EventType.MIGRATION_END):
                 continue
-                # nn = self.node_like(u)
-                # self.nodes[nn]["epochs"] = self.nodes[nn]["epochs"].set(
-                #     d["pop"], d["i"]
-                # )
-                # self.add_edge(u, nn)
 
-            elif d["ev"] == EventType.MIGRATION_START:
+            if d["ev"] == EventType.MIGRATION_START:
                 key = (d["source"], d["pop"])
                 v = self._lift(d["source"], t)
                 if u is v:
@@ -642,6 +641,51 @@ class EventTree:
 
             else:
                 raise RuntimeError(f"unknown event type {d['ev']}")
+
+        assert nx.is_tree(self._T)  # sanity check.
+        self._collapse_successive_lifts()
+
+    def _collapse_successive_lifts(self):
+        """collapse successive lift events into a single event"""
+
+        def f():
+            for u, v in self._T.edges():
+                if self._T.in_degree(v) != 1:
+                    continue
+                succ = list(self._T.successors(v))
+                if len(succ) == 0:
+                    # root node
+                    assert np.isinf(v.t.t)
+                    continue
+                else:
+                    assert len(succ) == 1
+                    w = succ[0]
+
+                def edge_is_lift(e):
+                    return isinstance(e.get("event"), self.events.Lift)
+
+                if edge_is_lift(self._T.edges[u, v]) and edge_is_lift(
+                    self._T.edges[v, w]
+                ):
+                    # collapse the two lifts into a single lift
+                    t0 = self.edges[u, v]["event"].t0
+                    t1 = self.edges[v, w]["event"].t1
+                    ev = self.events.Lift(
+                        t0=t0,
+                        t1=t1,
+                        epochs=self.nodes[u]["epochs"],
+                        migrations=self.nodes[u]["migrations"]
+                        | self.nodes[v]["migrations"],
+                    )
+                    self._T.add_edge(u, w, event=ev)
+                    self._T.remove_node(v)
+                    # repeat the process until there are no more successive lifts
+                    return False
+            return True
+
+        # repeat the process until there are no more successive lifts
+        while not f():
+            pass
 
         assert nx.is_tree(self._T)  # sanity check.
 

@@ -210,7 +210,8 @@ class _Momi3Sfs(_Momi3Base):
                 f"Some sampled populations do not exist in the demography: {setdiff}"
             )
         # self._params = Params(demo=self._demo, T=self._T)
-        self._aux = self._T.setup()
+        with jax.disable_jit(True):
+            self._aux = self._T.setup()
 
     # @property
     # def params(self) -> dict[str, float]:

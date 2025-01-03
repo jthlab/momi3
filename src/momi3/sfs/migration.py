@@ -1,7 +1,9 @@
 import diffrax as dfx
 import jax
 import jax.numpy as jnp
+import itertools as it
 import scipy.sparse as sps
+from typing import NamedTuple, Any
 from jax import jacfwd
 from jax.experimental.sparse import BCOO
 from scipy.sparse.linalg._expm_multiply import _expm_multiply_simple
@@ -11,6 +13,55 @@ from .kronprod import GroupedKronProd
 from .momints import _drift, _migration, _mutation
 
 jax.config.update("jax_bcoo_cusparse_lowering", True)
+
+
+class MigrationMatrix(NamedTuple):
+    params: dict[str, Any]
+    axes: Axes
+
+    @property
+    def jump_ts(self):
+        return jnp.concatenate(
+            [
+                jnp.array([m["start_time"], m["end_time"]])
+                for m in self.params["migrations"]
+            ]
+        )
+
+    def __call__(self, t: float):
+        M_ij = {}
+        for p1, p2 in it.product(self.axes, repeat=2):
+            ms = [
+                m
+                for m in self.params["migrations"]
+                if m["source"] == p1 and m["dest"] == p2
+            ]
+
+            if not ms:
+                continue
+
+            A = jnp.array([[m["rate"], m["end_time"], m["start_time"]] for m in ms])
+            i = A[:, 1].argsort()
+            r, t_start, t_end = A[i].T
+
+            def f(t, t_start=t_start, t_end=t_end, r=r):
+                j = jnp.searchsorted(t_start, t, side="right") - 1
+                return jnp.where((t_start[j] <= t) & (t < t_end[j]), r[j], 0.0)
+
+            M_ij[p1, p2] = f
+
+        a = len(self.axes)
+        M = [[0.0] * a for _ in range(a)]
+        for (i1, p1), (i2, p2) in it.product(enumerate(self.axes), repeat=2):
+            if (p1, p2) in M_ij:
+                M[i2][i1] = M_ij[p1, p2](t)
+            else:
+                M[i2][i1] = 0.0
+        # rate of entering coalescent state
+        # rate of coalescing equals assign
+        M = jnp.array(M)
+        M -= jnp.diag(M.sum(1))
+        return M
 
 
 def _dense_expmv(A, v, t):

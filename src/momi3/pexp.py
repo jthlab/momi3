@@ -22,11 +22,6 @@ class PExp(NamedTuple):
     N1: jnp.ndarray
     t: jnp.ndarray
 
-    def reverse(self):
-        r"Return a new PExp object with time reversed."
-        # won't work if self.t[-1] = inf, but we should not ever hit this case
-        return PExp(self.N1[::-1], self.N0[::-1], self.t[-1] - self.t[::-1])
-
     @property
     def a(self):
         "eta(t) = a[i] exp(-(t[i + 1] - t)) b[i]) = 1 / (2 Ne(t))"
@@ -42,8 +37,13 @@ class PExp(NamedTuple):
         r"Evaluate eta(u)."
         t = self.t
         i = jnp.maximum(jnp.searchsorted(t, u) - 1, 0)  # t[j] <= u < t[j + 1]
-        x = (t[i + 1] - u) / (t[i + 1] - t[i])
-        return self.N1[i] * (self.N0[i] / self.N1[i]) ** x
+        # i = jnp.searchsorted(t, u) - 1
+        # i = jnp.where(i >= 0, i, 0)  # t[j] <= u < t[j + 1]
+        ti1_safe = jnp.where(jnp.isinf(t[i + 1]), t[i] + 1, t[i + 1])
+        x = (ti1_safe - u) / (ti1_safe - t[i])
+        return jnp.where(
+            jnp.isinf(t[i + 1]), self.N0[i], self.N1[i] * (self.N0[i] / self.N1[i]) ** x
+        )
 
     def R(self, u: jnp.ndarray):
         r"Evaluate R(u) = \int_t[0]^u eta(s) ds"
