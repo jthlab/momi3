@@ -29,6 +29,8 @@ class IicrNdEventTree(EventTree):
         self, params: dict, num_samples: dict[str, int], t: float, aux: Any
     ) -> jax.Array:
         # assert sum(num_samples.values()) == self._n
+        if not set(num_samples) <= set(self.leaves):
+            raise ValueError("num_samples keys must be a subset of the demes")
         I = jnp.eye(self._n + 1)  # noqa: E741
         for pop in self.leaves:
             p = I[num_samples.get(pop, 0)]
