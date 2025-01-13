@@ -141,7 +141,7 @@ class Lift(momi3.sfs.events.Lift):
         assert st.p.shape == (d,) * n
         C = aux["C"]
 
-        if self.migrations == {} or self.terminal or jnp.isinf(t1):
+        if self.migrations == {} or self.terminal:
             # no migrations, so just lift each population to r and t1
             R = []
             for p in axes:
@@ -161,7 +161,7 @@ class Lift(momi3.sfs.events.Lift):
                 p=p_prime, s=st.s * s_prime, c=st.c + c_prime, terminal=self.terminal
             )
 
-        M, jump_ts = self.migration_matrix(params, aux["axes"])
+        M = self._migration_matrix(params, aux["axes"])
 
         def rate(t, y, args):
             etas, C = args
@@ -196,7 +196,7 @@ class Lift(momi3.sfs.events.Lift):
         solver = dfx.Kvaerno3()
         term = dfx.ODETerm(f)
         eta_ts = jnp.concatenate([eta.t for eta in etas.values()])
-        jump_ts = jnp.concatenate([jump_ts, eta_ts])
+        jump_ts = jnp.concatenate([M.jump_ts, eta_ts])
         jump_ts = jnp.sort(jump_ts)
         # final_subsaveat = dfx.SubSaveAt(t1=True)
         # evolving_subsaveat = dfx.SubSaveAt(ts=[u], fn=stats)
@@ -259,7 +259,7 @@ class Split2(momi3.sfs.events.Split2):
         """
         donor_st = state["donor_state"]
         recip_st = state["recipient_state"]
-        list(aux["out_axes"])
+        out_axes = aux["out_axes"]
         donor_axes = aux["donor_axes"]
         recip_axes = aux["recip_axes"]
         d1 = len(recip_axes)
@@ -269,11 +269,12 @@ class Split2(momi3.sfs.events.Split2):
         # a square tensor of shape (d1 + d2 - 1,) * (n1 + n2)
         # new_p[i1,...,in,j] = sum_{k} recip_p[i1,...,in,k] * donor_p[k,j]
         combined_axes = aux["recip_axes"] | aux["donor_axes"]
-        j = list(combined_axes).index(self.donor)
-        k = list(aux["out_axes"]).index(self.recipient)
-        # if we are merging into a zero-length population, then the new population just becomes
-        # the old population. otherwise, need to merge the two populations.
-        p_prime = _merge(p_prime, j, k)
+        j, k = [list(combined_axes).index(x) for x in (self.donor, self.recipient)]
+        p_prime = jnp.moveaxis(
+            _merge(p_prime, j, k),
+            k,
+            list(out_axes).index(self.recipient),
+        )
         return State(
             p=p_prime,
             s=donor_st.s * recip_st.s,

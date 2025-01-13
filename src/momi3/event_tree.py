@@ -138,157 +138,7 @@ class EventTree:
         return self._leaves
 
     def reparameterize(self, paths: Collection[Path]):
-        assert nx.is_directed_acyclic_graph(self._T)
-        assert nx.number_connected_components(self._T.to_undirected()) == 1
-
-        params0 = self._demo.asdict()
-        paths = set(paths)
-        fd = {}
-        finvd = {}
-
-        def is_time_path(path):
-            return path[-1] in ("start_time", "end_time", "time")
-
-        def get_path_block(path):
-            return next(s for s in self._shared_paths if path in s)
-
-        # validate the list of paths
-        for p in paths:
-            try:
-                get_path(params0, p)
-            except KeyError as e:
-                raise ValueError(f"path {p} not found in demes graph") from e
-        # check that the start time of the first deme is not in the list of paths
-        if ("demes", 0, "start_time") in paths:
-            assert math.isinf(demes[0]["start_time"])
-            raise ValueError(
-                "cannot reparameterize the start time of the first deme, "
-                "as it extends infinitely far back in the past"
-            )
-
-        def f_pos(x, _):
-            return jax.nn.softplus(x)
-
-        def finv_pos(y, _):
-            return inv_softplus(y)
-
-        def f_simplex(x, _):
-            return jax.nn.softmax(x)
-
-        def finv_simplex(y, _):
-            return inv_softmax(y)
-
-        # check no duplication in the path list
-        for path in paths:
-            # only time paths can be multiply referenced
-            if is_time_path(path):
-                try:
-                    other_paths = get_path_block(path) - {path}
-                except StopIteration:
-                    raise ValueError(
-                        f"path {path} not found in shared paths, this is a bug!"
-                    )
-                if other_paths & paths:
-                    raise ValueError(
-                        f"cannot reparameterize {path} and {other_paths} "
-                        "simultaneously, since they are constrained to be equal"
-                    )
-
-        # first match all non-time paths
-        for path in filter(lambda x: not is_time_path(x), paths):
-            if path[-2] == "proportions":
-                raise NotImplementedError(
-                    "I can't reparameterize individual proportions. Instead of passing "
-                    "{path}, pass {path[:-1]} to reparameterize the entire vector."
-                )
-            fp = frozenset([path])
-            match path[-1]:
-                case "proportions":
-                    fd[fp] = f_simplex
-                    finvd[fp] = finv_simplex
-                case "rate":
-                    fd[fp] = f_pos
-                    finvd[fp] = finv_pos
-                case "start_size" | "end_size":
-                    func_type = get_path(params0, path[:-1] + ("size_function",))
-                    if func_type == "constant":
-                        # if the size function is constant, the start size and end size are
-                        # constrained to be equal
-                        fp = frozenset(
-                            [path[:-1] + (f"{x}_size",) for x in ("start", "end")]
-                        )
-                    fd[fp] = f_pos
-                    finvd[fp] = finv_pos
-                case _:
-                    raise ValueError(f"unrecognized path {path}")
-
-        # now handle the time paths which are weirder
-
-        # start at root
-        Tr = self._T.reverse()  # edges pointing away from root
-        nodes = nx.topological_sort(Tr)
-        root = next(nodes)
-        assert root.t.t == math.inf
-        n = next(nodes)  # this is the "crown" of the tree
-        # the crown is special because the time is unbounded above, so it needs to
-        # transform to a positive value
-        path_block = get_path_block(n.t.path)
-        if path_block & paths:
-            fd[path_block] = f_pos
-            finvd[path_block] = finv_pos
-
-        # recurse down the tree. each parameterized time node is expressed in
-        # terms of a fraction of the time of its nearest ancestor.
-        for n in nodes:
-            if n.t.path not in paths:
-                # this time is not in the list of paths to reparameterize
-                continue
-            path_block = get_path_block(n.t.path)
-            if path_block in fd:
-                # this time has already been reparameterized
-                continue
-            p = n
-            while True:
-                ps = list(Tr.predecessors(p))
-                assert len(ps) == 1
-                (p,) = ps
-                if p.t.t > n.t.t:
-                    break
-
-            def f(x, params=params0, parent_path=p.t.path):
-                alpha = jax.nn.sigmoid(x)
-                return alpha * get_path(params, parent_path)
-
-            fd[path_block] = f
-
-            def finv(y, params=params0, parent_path=p.t.path):
-                return logit(y / get_path(params, parent_path))
-
-            finvd[path_block] = finv
-
-        # create return functions that apply the reparameterization and inverse
-        # based on the lists created above.
-        def f_combined(x, params=params0, fd=fd):
-            x = jax.tree.map(lambda x: jnp.array(x, dtype=jnp.float64), x)
-            ret = {}
-            for paths, fp in fd.items():
-                # any times which are identically equal in the base model
-                # are constrained to be equal during reparameterization
-                val = fp(x[paths], params)
-                for path in paths:
-                    ret[path] = val
-            return ret
-
-        def finv_combined(params, finvd=finvd):
-            ret = {}
-            for paths, fi in finvd.items():
-                path = next(iter(paths))
-                # all paths in the block should be equal
-                y = jnp.array(get_path(params, path), dtype=jnp.float64)
-                ret[paths] = fi(y, params)
-            return ret
-
-        return f_combined, finv_combined
+        return _reparameterize_event_tree(self, paths)
 
     def _init_leaves(self):
         # initialize the event tree
@@ -556,7 +406,7 @@ class EventTree:
             if d["ev"] in (EventType.EPOCH, EventType.MIGRATION_END):
                 continue
 
-            if d["ev"] == EventType.MIGRATION_START:
+            elif d["ev"] == EventType.MIGRATION_START:
                 key = (d["source"], d["pop"])
                 v = self._lift(d["source"], t)
                 if u is v:
@@ -625,13 +475,18 @@ class EventTree:
                 # the remaining ancestor merges with last ancestor
                 s = d["ancestors"][-1]
                 v = self._lift(s, t)
-                nn = self._merge_nodes(u, v, rm=d["pop"])
-                evc = events.Split1 if u is v else events.Split2
-                self.nodes[nn]["event"] = evc(donor=d["pop"], recipient=s)
-                self.nodes[nn]["migrations"]
-                # identify which edge is which for later traversal
-                self.edges[u, nn]["id"] = "donor"
-                self.edges[v, nn]["id"] = "recipient"
+                if d["pop"] in v.block:
+                    # the populations are already in the same block
+                    w = self.node_like(v)
+                    self.add_edge(
+                        v, w, event=events.Split1(donor=d["pop"], recipient=s)
+                    )
+                else:
+                    w = self._merge_nodes(u, v, rm=d["pop"])
+                    self.nodes[w]["event"] = events.Split2(donor=d["pop"], recipient=s)
+                    # identify which edge is which for later traversal
+                    self.edges[u, w]["id"] = "donor"
+                    self.edges[v, w]["id"] = "recipient"
 
             elif d["ev"] == EventType.POPULATION_START:
                 # the population extends infinitely far back into the past. basically
@@ -647,6 +502,8 @@ class EventTree:
 
     def _collapse_successive_lifts(self):
         """collapse successive lift events into a single event"""
+        self._full_T = self._T
+        self._T = self._full_T.copy()
 
         def f():
             for u, v in self._T.edges():
@@ -723,3 +580,182 @@ class EventTree:
             assert x.block == (u.block | v.block | {tr2}) - {dest}
             y = self.node_like(x, block=u.block | v.block)
             self.add_edge(x, y, event=events.Rename(old=tr2, new=dest))
+
+
+def _reparameterize_event_tree(tree: EventTree, paths: Collection[Path]):
+    T = tree._full_T
+    assert nx.is_directed_acyclic_graph(T)
+    assert nx.number_connected_components(T.to_undirected()) == 1
+
+    params0 = tree._demo.asdict()
+    paths = set(paths)
+    fd = {}
+    finvd = {}
+
+    def is_time_path(path):
+        return path[-1] in ("start_time", "end_time", "time")
+
+    def get_path_block(path):
+        return next(s for s in tree._shared_paths if path in s)
+
+    # validate the list of paths
+    for p in paths:
+        try:
+            get_path(params0, p)
+        except KeyError as e:
+            raise ValueError(f"path {p} not found in demes graph") from e
+    # check that the start time of the first deme is not in the list of paths
+    if ("demes", 0, "start_time") in paths:
+        assert math.isinf(demes[0]["start_time"])
+        raise ValueError(
+            "cannot reparameterize the start time of the first deme, "
+            "as it extends infinitely far back in the past"
+        )
+
+    def f_pos(x, _):
+        return jax.nn.softplus(x)
+
+    def finv_pos(y, _):
+        return inv_softplus(y)
+
+    def f_simplex(x, _):
+        return jax.nn.softmax(x)
+
+    def finv_simplex(y, _):
+        return inv_softmax(y)
+
+    def f_01(x, _):
+        return jax.nn.sigmoid(x)
+
+    def finv_01(y, _):
+        return jax.scipy.special.logit(y)
+
+    # list of constraints
+    constraints = []
+
+    # check no duplication in the path list
+    for path in paths:
+        # only time paths can be multiply referenced
+        if is_time_path(path):
+            try:
+                other_paths = get_path_block(path) - {path}
+            except StopIteration:
+                raise ValueError(
+                    f"path {path} not found in shared paths, this is a bug!"
+                )
+            if other_paths & paths:
+                raise ValueError(
+                    f"cannot reparameterize {path} and {other_paths} "
+                    "simultaneously, since they are constrained to be equal"
+                )
+
+    # first match all non-time paths
+    for path in filter(lambda x: not is_time_path(x), paths):
+        if path[-2] == "proportions":
+            raise NotImplementedError(
+                "I can't reparameterize individual proportions. Instead of passing "
+                f"{path}, pass {path[:-1]} to reparameterize the entire vector of "
+                "proportions."
+            )
+        fp = frozenset([path])
+        match path[-1]:
+            case "proportions":
+                fd[fp] = f_simplex
+                finvd[fp] = finv_simplex
+                constraints.append((path, "simplex"))
+            case "rate":
+                fd[fp] = f_01
+                finvd[fp] = finv_01
+                constraints.append((path, "[0,1]"))
+            case "start_size" | "end_size":
+                func_type = get_path(params0, path[:-1] + ("size_function",))
+                if func_type == "constant":
+                    # if the size function is constant, the start size and end size are
+                    # constrained to be equal
+                    fp = frozenset(
+                        [path[:-1] + (f"{x}_size",) for x in ("start", "end")]
+                    )
+                fd[fp] = f_pos
+                finvd[fp] = finv_pos
+                constraints.append((path, "positive"))
+            case _:
+                raise ValueError(f"unrecognized path {path}")
+
+    # now handle the time paths which are weirder
+
+    # start at root
+    Tr = T.reverse()  # edges pointing away from root
+    nodes = nx.topological_sort(Tr)
+    root = next(nodes)
+    assert root.t.t == math.inf
+    n = next(nodes)  # this is the "crown" of the tree
+    # the crown is special because the time is unbounded above, so it needs to
+    # transform to a positive value
+    path_block = get_path_block(n.t.path)
+    if path_block & paths:
+        fd[path_block] = f_pos
+        finvd[path_block] = finv_pos
+        constraints.append((n.t.path, "positive"))
+
+    # recurse down the tree. each parameterized time node is expressed in
+    # terms of a fraction of the time of its nearest ancestor.
+    for n in nodes:
+        if n.t.path not in paths:
+            # this time is not in the list of paths to reparameterize
+            continue
+        path_block = get_path_block(n.t.path)
+        if path_block in fd:
+            # this time has already been reparameterized
+            continue
+        p = n
+        while True:
+            ps = list(Tr.predecessors(p))
+            assert len(ps) == 1
+            (p,) = ps
+            if p.t.t > n.t.t:
+                break
+
+        def f(x, params=params0, parent_path=p.t.path):
+            alpha = jax.nn.sigmoid(x)
+            return alpha * get_path(params, parent_path)
+
+        fd[path_block] = f
+
+        def finv(y, params=params0, parent_path=p.t.path):
+            return logit(y / get_path(params, parent_path))
+
+        finvd[path_block] = finv
+
+        constraints.append((n.t.path, "<=", p.t.path))
+
+    for path_block in fd:
+        assert path_block in finvd
+        if len(path_block) > 1:
+            # all paths in the block should be equal
+            # set prints nicer
+            constraints.append((set(path_block), "equal"))
+
+    # create return functions that apply the reparameterization and inverse
+    # based on the lists created above.
+    def f_combined(x, params=params0, fd=fd):
+        x = jax.tree.map(lambda x: jnp.array(x, dtype=jnp.float64), x)
+        ret = {}
+        for paths, fp in fd.items():
+            # any times which are identically equal in the base model
+            # are constrained to be equal during reparameterization
+            val = fp(x[paths], params)
+            for path in paths:
+                ret[path] = val
+        return ret
+
+    def finv_combined(params, finvd=finvd):
+        ret = {}
+        for paths, fi in finvd.items():
+            path = next(iter(paths))
+            # all paths in the block should be equal
+            y = jnp.array(get_path(params, path), dtype=jnp.float64)
+            ret[paths] = fi(y, params)
+        return ret
+
+    f_combined.constraints = constraints
+    return f_combined, finv_combined

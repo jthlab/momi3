@@ -147,7 +147,7 @@ class Lift(momi3.sfs.events.Lift):
         # evolving_subsaveat = dfx.SubSaveAt(ts=[u], fn=stats)
         saveat = dfx.SaveAt(t1=True, ts=[u], fn=_stats)
         ssc = dfx.PIDController(rtol=1e-6, atol=1e-6)
-        mats = jax.tree.map(jnp.array, _mats(d, n))
+        mats = _mats(d, n)
         args = (etas, M, mats, aux["axes"])
         y0 = (st.p, 0.0)
         # Option I
@@ -229,7 +229,7 @@ def _rate(t, args):
     eta = jnp.array([1 / 2 / etas[pop](t) for pop in axes])
     # t, eta = print_grad((t, eta), "grad(t)/grad(eta)")
     # t, eta = eqx.internal.debug_backward_nan((t, eta), name="eta", terminate=False)
-    return mats["C"].dot(eta)
+    return jnp.dot(mats["C"], eta)
 
 
 def _stats(t, y, args):

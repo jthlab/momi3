@@ -116,7 +116,7 @@ def _A(s, y, args):
     f_Q_mig, Q_mut, Q_drift, dims, axes, aux, etas = args
     Q_mig = f_Q_mig(s)
     coal = {}
-    for pop in etas:
+    for pop in axes:
         i = list(axes).index(pop)
         coal[i] = 1 / (4 * etas[pop](s))
         # if isinstance(Ne[pop], tuple):
@@ -147,7 +147,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     f_Q_mig, Q_mut = _Q_mig_mut(t[0], t[1], dims, axes, params["mig"], aux, tr=False)
     f_Q_mig_T, _ = _Q_mig_mut(t[0], t[1], dims, axes, params["mig"], aux, tr=True)
 
-    solver = dfx.Kvaerno3()
+    solver = dfx.Tsit5()
     term = dfx.ODETerm(_A)
 
     def solve(y0, args):
@@ -290,10 +290,9 @@ def _Q_drift(
     dims, axes, coal_rates, aux
 ) -> tuple[GroupedKronProd, GroupedKronProd, GroupedKronProd]:
     """construct Q matrix for continuously migrating populations"""
-    s = list(coal_rates)  # these are the populations participating in the migration
     i = list(axes).index
     return GroupedKronProd(
-        [{i(ss): aux["drift"][ss] * coal_rates[ss]} for ss in s], dims
+        [{i(pop): aux["drift"][pop] * coal_rates[pop]} for pop in axes], dims
     )
 
 
@@ -301,9 +300,8 @@ def _Q_mig_mut(
     t0, t1, dims, axes, mig_mat, aux, tr=False
 ) -> tuple[GroupedKronProd, GroupedKronProd]:
     """construct Q matrix for continuously migrating populations"""
-    s = list(aux["mut"])
     i = list(axes).index
-    Q_mut = GroupedKronProd([{i(ss): aux["mut"][ss]} for ss in s], dims)
+    Q_mut = GroupedKronProd([{i(pop): aux["mut"][pop]} for pop in axes], dims)
 
     # migration matrix is a bit trickier
     def f_Q_mig(t):

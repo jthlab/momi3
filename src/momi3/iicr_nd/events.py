@@ -203,8 +203,8 @@ class Pulse(momi3.sfs.events.Pulse):
         for _ in range(st.p.ndim - 2):
             f = vmap(f)
 
-        i = list(aux["in_axes"]).index(self.source)
-        j = list(aux["in_axes"]).index(self.dest)
+        i = list(aux["in_axes"]).index(self.dest)
+        j = list(aux["in_axes"]).index(self.source)
         p_prime = f(jnp.moveaxis(st.p, (i, j), (-2, -1)))
         p_prime = jnp.moveaxis(p_prime, (-2, -1), (i, j))
         return st._replace(p=p_prime)

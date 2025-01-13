@@ -55,6 +55,13 @@ class JSFS(NamedTuple):
     def todense(self) -> Array:
         return self.to_COO().todense()
 
+    def sum(self):
+        return self.counts.sum()
+
+    @property
+    def ndim(self):
+        return len(self.sample_sizes)
+
     @property
     def pops(self):
         return list(self.sample_sizes.keys())

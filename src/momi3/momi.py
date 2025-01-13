@@ -42,6 +42,11 @@ class Momi3:
             demo: demes.Graph object representing the demography.
             n_samples: Dictionary mapping deme names to sample sizes.
         """
+        if demo.time_units != "generations":
+            raise ValueError(
+                "Time units must be in generations. "
+                "Please use demes.Graph.in_generations() to convert."
+            )
         self._demo = demo
 
     @property
@@ -110,7 +115,7 @@ class _Momi3Base:
 
     def reparameterize(self, paths: Collection[Path]) -> tuple[Callable, Callable]:
         """
-        Bijectively reparameterize the demography to live in R^d.
+        Bijectively map demographic parameters to R^d.
 
         Args:
             params: list of paths to reparameterize.
@@ -136,6 +141,17 @@ class _Momi3Base:
             Tuple of functions: (forward, inverse)
             The forward function maps from the original parameter space to R^d.
             The inverse function maps from R^d back to the original parameter space.
+
+        Notes:
+            The forward function contains an attribute `constraints` which explains the constraints
+            on the reparameterized space.
+
+        Example:
+            >>> momi = Momi3(demo)  # demo corresponds to the demography above
+            >>> forward, inverse = momi.reparameterize([('pulses', 0, 'time'), ('pulses', 0, 'proportion')])
+            >>> forward.constraints
+            {'pulses': {'time': 't_div', 'proportion': 'p'}}
+
         """
         return self._T.reparameterize(paths)
 
@@ -281,6 +297,8 @@ class _Momi3Sfs(_Momi3Base):
     def expected_sfs(
         self, path_d: dict[Path, float] = {}, aux: Any = None, _use_vmap: bool = True
     ):
+        if aux is None:
+            aux = self._aux
         bs = [range(n + 1) for n in self._num_samples.values()]
         num_derived = jnp.array(list(it.product(*bs)))
 
@@ -319,6 +337,8 @@ class _Momi3Sfs(_Momi3Base):
         Returns:
             float: log-likelihood value
         """
+        if aux is None:
+            aux = self._aux
         f = self._loglik_vmap if use_vmap else self._loglik_scan
         return f(path_d, jsfs, folded, aux=aux, theta=theta)[0]
 

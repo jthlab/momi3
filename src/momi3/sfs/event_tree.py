@@ -10,7 +10,8 @@ from .state import State
 
 class SfsEventTree(EventTree):
     def __init__(self, demo, num_samples):
-        super().__init__(demo, num_samples, events)
+        self._num_samples = num_samples
+        super().__init__(demo, events)
 
     def _init_leaves(self):
         # initialize leaf sample sizes
