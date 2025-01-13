@@ -12,6 +12,7 @@ from momi3.event_tree import Population  # noqa: F401
 from momi3.sfs.events import NoOp, Rename  # noqa: F401
 import momi3.iicr.events
 
+from .lift import Lift  # noqa: F401
 from .state import State
 
 
