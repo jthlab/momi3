@@ -147,7 +147,7 @@ def _lift_cm_exp(params, t, pl, axes, aux):
     f_Q_mig, Q_mut = _Q_mig_mut(t[0], t[1], dims, axes, params["mig"], aux, tr=False)
     f_Q_mig_T, _ = _Q_mig_mut(t[0], t[1], dims, axes, params["mig"], aux, tr=True)
 
-    solver = dfx.Tsit5()
+    solver = dfx.Kvaerno3()
     term = dfx.ODETerm(_A)
 
     def solve(y0, args):

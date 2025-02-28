@@ -138,7 +138,7 @@ class Lift(momi3.sfs.events.Lift):
 
         M = self._migration_matrix(params, aux["axes"])
         jump_ts = M.jump_ts
-        solver = dfx.Tsit5()
+        solver = dfx.Kvaerno3()
         term = dfx.ODETerm(_term)
         eta_ts = jnp.concatenate([eta.t for eta in etas.values()])
         jump_ts = jnp.concatenate([jump_ts, eta_ts])

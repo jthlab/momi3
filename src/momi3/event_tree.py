@@ -664,8 +664,8 @@ def _reparameterize_event_tree(tree: EventTree, paths: Collection[Path]):
                 finvd[fp] = finv_simplex
                 constraints.append((path, "simplex"))
             case "rate":
-                fd[fp] = f_01
-                finvd[fp] = finv_01
+                fd[fp] = f_pos
+                finvd[fp] = finv_pos
                 constraints.append((path, "[0,1]"))
             case "start_size" | "end_size":
                 func_type = get_path(params0, path[:-1] + ("size_function",))
