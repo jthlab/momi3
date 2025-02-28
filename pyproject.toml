@@ -18,7 +18,7 @@ dependencies = [
     "diffrax>=0.6.0",
     "frozendict>=2.0.2",
     "gmpy2>=2.1.5",
-    "jax[cuda12]>=0.5.0",
+    "jax>=0.5.0",
     "jaxopt>=0.8.3",
     "joblib>=1.4.0",
     "msprime>=1.2.0",
@@ -75,6 +75,13 @@ addopts = "--pdbcls=IPython.terminal.debugger:TerminalPdb"
 name = "nvidia"
 url = "https://pypi.ngc.nvidia.com"
 verify_ssl = true
+
+[project.optional-dependencies]
+gpu = [
+    "jax[cuda12]>=0.5.0",
+    "cuda-python<13,>=12.3",
+    "nvidia-cuda-nvrtc-cu12>=12.3",
+]
 
 [dependency-groups]
 dev = [
