@@ -1,3 +1,4 @@
+from itertools import count
 from typing import Any
 
 import demes
@@ -12,27 +13,33 @@ from .state import State
 
 
 class IicrEventTree(EventTree):
-    def __init__(self, demo: demes.Graph, num_samples: dict[str, int]):
-        self._num_samples = num_samples
+    def __init__(self, demo: demes.Graph, n: int):
+        self._n = n
         super().__init__(demo, events)
 
     def _init_leaves(self):
         super()._init_leaves()
         for deme in self._demo.demes:
             pop = deme.name
-            n = self._num_samples.get(pop, 0)
             self.nodes[self.leaves[pop]].update(
-                {"axes": Axes({pop: n + 1}), "ns": {pop: {pop: n}}}
+                {"axes": Axes({pop: self._n}), "ns": {pop: {pop: self._n}}}
             )
 
-    def execute(self, params: dict, t: float, aux: Any) -> jax.Array:
+    def execute(self, num_samples: dict, params: dict, t: float, aux: Any) -> jax.Array:
+        i = count(-1)
         for pop in self.leaves:
-            n = self._num_samples.get(pop, 0)
-            sh = (1,) * n
-            p = jnp.ones(sh)
+            # idea here is that the state is a (d+1, d+1, ..., d+1)-tensor where
+            # T[i, j, ..., k] is the probability that lineage 1 is in deme i, lineage 2 is in deme j, etc.
+            # deme d+1 is a special deme that represents the "outside" deme
+            k = [1] * self._n
+            for p in num_samples:
+                for j in range(num_samples.get(p, 0)):
+                    if p == pop:
+                        k[next(i)] = 0
+            p = jnp.zeros((2,) * self._n).at[tuple(k)].set(1.0)
             self.nodes[self.leaves[pop]]["state"] = State(
                 p=p, s=1.0, c=0.0, t=t, terminal=False
             )
 
-        ret = super().execute(params, aux)
+        ret = super().execute(params=params, auxd=aux)
         return (ret.c, ret.s)

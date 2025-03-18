@@ -1,4 +1,5 @@
 import itertools as it
+from functools import partial
 import numbers
 from copy import deepcopy
 from typing import Any, Callable
@@ -13,7 +14,6 @@ from jax.scipy.special import xlogy
 
 from momi3.common import Path, set_path
 from momi3.iicr.event_tree import IicrEventTree
-from momi3.iicr_nd.event_tree import IicrNdEventTree
 from momi3.jsfs import JSFS
 
 # from momi3.lineage_sampler import bound_sampler
@@ -60,11 +60,8 @@ class Momi3:
     def sfs(self, num_samples: dict[str, int]):
         return _Momi3Sfs(self._demo, num_samples)
 
-    def iicr(self, num_samples: dict[str, int]):
-        return _Momi3Iicr(self._demo, num_samples)
-
-    def iicr_nd(self, n: int):
-        return _Momi3IicrNd(self._demo, n)
+    def iicr(self, n: dict[str, int]):
+        return _Momi3Iicr(self._demo, n)
 
     def coalescence_rate_trajectory(
         self,
@@ -85,14 +82,9 @@ class Momi3:
         Note:
             This function mirrors the `coalescence_rate_trajectory` method of the `msprime.DemographyDebugger` class.
         """
-        if _nd:
-            n = sum(lineages.values())
-
-            def fun(t):
-                return self.iicr_nd(n)(lineages, t)
-        else:
-            fun = self.iicr(lineages)
-        f = vmap(fun)
+        n = sum(lineages.values())
+        f = partial(self.iicr(n), lineages)
+        f = vmap(f)
         if _jit:
             f = jit(f)
         return f(t)
@@ -157,40 +149,9 @@ class _Momi3Base:
 
 
 class _Momi3Iicr(_Momi3Base):
-    def __init__(self, demo: demes.Graph, num_samples: dict[str, int]):
-        super().__init__(demo)
-        self._num_samples = num_samples
-        self._T = IicrEventTree(self._demo, num_samples)
-        self._aux = self._T.setup()
-
-    @property
-    def constraints(self):
-        return self._T.constraints
-
-    def __call__(self, t: float, params: dict[Path, int] = {}) -> float:
-        pd = _update_from_paths(self._params_d, params)
-        for path in params:
-            _set_path(pd, path, params[path])
-        return self._T.execute(pd, t, self._aux)
-
-    def ET(self, params: dict[Path, int] = {}) -> float:
-        "Expected time to first coalescence"
-
-        def f(t):
-            return self.sf(t, params)
-
-        t_max = 1.0
-        while f(t_max) > 1e-7:
-            t_max *= 2
-
-        t = jnp.linspace(0, t_max, 1000)
-        return jnp.trapezoid(vmap(f)(t), t)
-
-
-class _Momi3IicrNd(_Momi3Base):
     def __init__(self, demo: demes.Graph, n: int):
         super().__init__(demo)
-        self._T = IicrNdEventTree(self._demo, n)
+        self._T = IicrEventTree(self._demo, n)
         self._aux = self._T.setup()
 
     def __call__(

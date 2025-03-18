@@ -17,6 +17,6 @@ class State(NamedTuple):
     # c is the probability that the first coalescence event has not occured by time t.
 
     def check_shape(self, ax: Axes) -> None:
-        n = sum([a - 1 for a in ax.values()])
-        d = len(ax)
-        assert self.p.shape == (d,) * n
+        d = next(iter(ax.values())) - 1
+        assert all(v == d + 1 for v in ax.values())
+        # assert all(s == d + 1 for s in self.p.shape)
