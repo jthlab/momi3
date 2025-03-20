@@ -1,4 +1,3 @@
-from itertools import count
 from typing import Any
 
 import demes
@@ -26,16 +25,18 @@ class IicrEventTree(EventTree):
             )
 
     def execute(self, num_samples: dict, params: dict, t: float, aux: Any) -> jax.Array:
-        i = count(-1)
+        i = -1
         for pop in self.leaves:
             # idea here is that the state is a (d+1, d+1, ..., d+1)-tensor where
             # T[i, j, ..., k] is the probability that lineage 1 is in deme i, lineage 2 is in deme j, etc.
             # deme d+1 is a special deme that represents the "outside" deme
-            k = [1] * self._n
+            k = jnp.ones(self._n, dtype=jnp.int32)
             for p in num_samples:
-                for j in range(num_samples.get(p, 0)):
-                    if p == pop:
-                        k[next(i)] = 0
+                for j in range(self._n):
+                    accept = (p == pop) & (j < num_samples[p])
+                    i = jnp.where(accept, i + 1, i)
+                    k1 = k.at[i].set(0)
+                    k = jnp.where(accept, k1, k)
             p = jnp.zeros((2,) * self._n).at[tuple(k)].set(1.0)
             self.nodes[self.leaves[pop]]["state"] = State(
                 p=p, s=1.0, c=0.0, t=t, terminal=False

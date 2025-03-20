@@ -5,6 +5,7 @@ from copy import deepcopy
 from typing import Any, Callable
 from collections.abc import Collection
 
+import equinox as eqx
 import demes
 import jax
 import jax.numpy as jnp
@@ -106,7 +107,7 @@ class _Momi3Base:
         return self._demo.asdict()
 
     def reparameterize(self, paths: Collection[Path]) -> tuple[Callable, Callable]:
-        """
+        r"""
         Bijectively map demographic parameters to R^d.
 
         Args:
@@ -151,12 +152,23 @@ class _Momi3Base:
 class _Momi3Iicr(_Momi3Base):
     def __init__(self, demo: demes.Graph, n: int):
         super().__init__(demo)
+        self._n = n
         self._T = IicrEventTree(self._demo, n)
         self._aux = self._T.setup()
 
     def __call__(
         self, num_samples: dict[str, int], t: float, params: dict[Path, int] = {}
     ) -> float:
+        if not num_samples.keys() <= set(self._T.leaves):
+            setdiff = set(num_samples) - set(self._T.leaves)
+            raise ValueError(
+                f"Some sampled populations do not exist in the demography: {setdiff}. "
+                f"Demography populations are: {list(self._T.leaves)}"
+            )
+        pred = sum(num_samples.values()) != self._n
+        num_samples = eqx.error_if(
+            num_samples, pred, f"Number of lineages must equal n={self._n}."
+        )
         pd = _update_from_paths(self._params_d, params)
         for path in params:
             _set_path(pd, path, params[path])
