@@ -54,10 +54,6 @@ class Momi3:
     def demo(self):
         return self._demo
 
-    @property
-    def constraints(self):
-        return self._T.constraints
-
     def sfs(self, num_samples: dict[str, int]):
         return _Momi3Sfs(self._demo, num_samples)
 
@@ -201,15 +197,6 @@ class _Momi3Sfs(_Momi3Base):
         # self._params = Params(demo=self._demo, T=self._T)
         with jax.disable_jit(True):
             self._aux = self._T.setup()
-
-    # @property
-    # def params(self) -> dict[str, float]:
-    #     """Default parameters specified by demography"""
-    #     return self._params
-
-    # @property
-    # def constraints(self):
-    #     return self.params.constraints
 
     def E_tbl(
         self,

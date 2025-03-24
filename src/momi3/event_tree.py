@@ -122,7 +122,7 @@ class EventTree:
     ):
         self._demo = demo
         self._events = events
-        self._shared_paths = set()
+        self._paths = set()
         self._T = nx.DiGraph()
         # initialize leaves and then build the event tree
         with jax.disable_jit(True):
@@ -207,6 +207,11 @@ class EventTree:
             auxd["nodes"][u] = aux
             self.nodes[u].update({"axes": new_ax, "ns": new_ns})
         return auxd
+
+    def constraints(self, paths: Collection[Path] = None):
+        if paths is None:
+            paths = self._paths
+        return self.reparameterize(paths).constraints
 
     def execute(self, params: dict, auxd: dict) -> jnp.ndarray:
         """Execute the event tree.
@@ -311,12 +316,12 @@ class EventTree:
 
     def _merge_paths(self, p0: Path, p1: Path):
         "merge the blocks containing p0 and p1"
-        bl0, bl1 = [next(s for s in self._shared_paths if p in s) for p in (p0, p1)]
+        bl0, bl1 = [next(s for s in self._paths if p in s) for p in (p0, p1)]
         if bl0 is bl1:
             return
-        self._shared_paths.remove(bl0)
-        self._shared_paths.remove(bl1)
-        self._shared_paths.add(bl0 | bl1)
+        self._paths.remove(bl0)
+        self._paths.remove(bl1)
+        self._paths.add(bl0 | bl1)
 
     def _lift(self, pop: Population, t: Time) -> Node:
         """lift node u to time t.
@@ -397,7 +402,7 @@ class EventTree:
         for d in sorted(_all_events(self._demo), key=keyfun):
             # register times of all events, including epochs
             t = Time(d["t"], d["path"])
-            self._shared_paths.add(frozenset([t.path]))
+            self._paths.add(frozenset([t.path]))
 
             u = self._lift(d["pop"], t)
             assert u.t.t == t.t
@@ -596,7 +601,7 @@ def _reparameterize_event_tree(tree: EventTree, paths: Collection[Path]):
         return path[-1] in ("start_time", "end_time", "time")
 
     def get_path_block(path):
-        return next(s for s in tree._shared_paths if path in s)
+        return next(s for s in tree._paths if path in s)
 
     # validate the list of paths
     for p in paths:

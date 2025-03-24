@@ -16,33 +16,15 @@ from ..state import State
 class Event:
     "Base class for events."
 
-    bounds: Axes = None
-
     def setup(
         self, axes: Axes, ns: Counter[Population, int]
     ) -> tuple[Axes, PopCounter, Any]:
         ax, ns, aux = self._setup_impl(axes, ns)
-        if self.bounds:
-            aux["bounds"] = {}
-            assert set(ax) <= set(self.bounds)
-            for pop, dim in ax.items():
-                n = dim - 1
-                assert self.bounds[pop] <= n
-                if self.bounds[pop] < n:
-                    ax, ns, aux["bounds"][pop] = Upsample(
-                        pop=pop, m=self.bounds[pop]
-                    ).setup(ax, ns)
-        return ax, ns, aux
 
     def execute(self, st: State, params: dict, aux: Any) -> State:
         st = self._execute_impl(st, params, aux)
         if os.environ.get("MOMI_PRINT_EVENTS"):
             print(self)
-        if self.bounds:
-            for pop in aux["bounds"]:
-                st = Upsample(pop=pop, m=self.bounds[pop]).execute(
-                    st, params, aux["bounds"][pop]
-                )
         return st
 
 
