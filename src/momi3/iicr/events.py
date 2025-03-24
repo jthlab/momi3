@@ -156,15 +156,18 @@ class Lift(momi3.sfs.events.Lift):
             # probability of no coalescence
             log_p_nc = -x
             log_p_prime = jnp.log(st.p) + log_p_nc
-            s_prime = jnp.where(st.t < t0, 1.0, jnp.exp(logsumexp(log_p_prime)).sum())
-            p_prime = jnp.exp(log_p_prime - logsumexp(log_p_prime))
+            log_s_prime = jnp.where(st.t < t0, 0.0, logsumexp(log_p_prime))
+            p_prime = jnp.exp(log_p_prime - log_s_prime)
             coal = jnp.array([1 / 2 / etas[p](u) for p in axes])
             coal = jnp.append(coal, 0.0)
             # probability distribution conditional on no coalescence
             c_prime = jnp.where(t_isin_t0_t1, jnp.sum(p_prime * C.dot(coal)), 0.0)
             # no change to p since the lineages do not migrate
             return st._replace(
-                p=p_prime, s=st.s * s_prime, c=st.c + c_prime, terminal=self.terminal
+                p=p_prime,
+                log_s=st.log_s + log_s_prime,
+                c=st.c + c_prime,
+                terminal=self.terminal,
             )
 
         M = self._migration_matrix(params, aux["axes"])
@@ -191,7 +194,7 @@ class Lift(momi3.sfs.events.Lift):
             # transition p forward in time
             p, _ = y
             ds = p * rate(t, y, args)
-            # multiply along each axis, equivalnt of direct sum
+            # multiply along each axis, equivalent of direct sum
             dp = sum(
                 map(
                     lambda i: jnp.apply_along_axis(M_t.T.__matmul__, i, p),
@@ -229,10 +232,10 @@ class Lift(momi3.sfs.events.Lift):
         )
         (_, p1), (cu, _), (su, s1) = res.ys
         p1 /= p1.sum()  # normalize to probability conditional on non-coalescence
-        s_prime = jnp.where(st.t < t0, 1.0, 1.0 - su)
+        log_s_prime = jnp.where(st.t < t0, 0.0, jnp.log1p(-su))
         c_prime = jnp.where(t_isin_t0_t1, cu, 0.0)
         return st._replace(
-            p=p1, s=st.s * s_prime, c=st.c + c_prime, terminal=self.terminal
+            p=p1, log_s=st.log_s * log_s_prime, c=st.c + c_prime, terminal=self.terminal
         )
 
 
@@ -303,7 +306,7 @@ class Split2(momi3.sfs.events.Split2):
         assert ca == list(aux["out_axes"])
         return State(
             p=p_prime,
-            s=donor_st.s * recip_st.s,
+            log_s=donor_st.log_s + recip_st.log_s,
             c=donor_st.c + recip_st.c,
             t=donor_st.t,  # t is the same for both populations
             terminal=False,
@@ -327,7 +330,7 @@ class MigrationStart(momi3.sfs.events.MigrationStart):
         p_prime = _product(src_st.p, dst_st.p)
         return State(
             p=p_prime,
-            s=src_st.s * dst_st.s,
+            log_s=src_st.log_s * dst_st.log_s,
             c=src_st.c + dst_st.c,
             t=src_st.t,  # t is the same for both populations
             terminal=False,

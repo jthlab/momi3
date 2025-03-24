@@ -7,7 +7,7 @@ from momi3.common import Axes
 
 class State(NamedTuple):
     p: jax.Array
-    s: float
+    log_s: float
     c: float
     t: float
     terminal: bool

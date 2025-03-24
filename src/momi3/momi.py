@@ -84,7 +84,8 @@ class Momi3:
         f = vmap(f)
         if _jit:
             f = jit(f)
-        return f(t)
+        c, log_s = f(t)
+        return c, jnp.exp(log_s)
 
 
 class _Momi3Base:

@@ -39,8 +39,8 @@ class IicrEventTree(EventTree):
                     k = jnp.where(accept, k1, k)
             p = jnp.zeros((2,) * self._n).at[tuple(k)].set(1.0)
             self.nodes[self.leaves[pop]]["state"] = State(
-                p=p, s=1.0, c=0.0, t=t, terminal=False
+                p=p, log_s=0.0, c=0.0, t=t, terminal=False
             )
 
         ret = super().execute(params=params, auxd=aux)
-        return (ret.c, ret.s)
+        return (ret.c, ret.log_s)

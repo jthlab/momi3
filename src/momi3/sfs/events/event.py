@@ -19,7 +19,7 @@ class Event:
     def setup(
         self, axes: Axes, ns: Counter[Population, int]
     ) -> tuple[Axes, PopCounter, Any]:
-        ax, ns, aux = self._setup_impl(axes, ns)
+        return self._setup_impl(axes, ns)
 
     def execute(self, st: State, params: dict, aux: Any) -> State:
         st = self._execute_impl(st, params, aux)
