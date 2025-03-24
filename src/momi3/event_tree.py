@@ -150,7 +150,7 @@ class EventTree:
             n = len(deme.epochs)
             path = ("demes", j, "epochs", n - 1, "end_time")
             t = Time(deme.epochs[n - 1].end_time, path=path)
-            self._shared_paths.add(frozenset([path]))
+            self._paths.add(frozenset([path]))
             node = Node(i=next(self._i), block=frozenset([deme.name]), t=t)
             # attached to each node are attributes that track the population size and
             # migration rates. (these are the two model attributes that persist
