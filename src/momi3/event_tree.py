@@ -763,4 +763,4 @@ def _reparameterize_event_tree(tree: EventTree, paths: Collection[Path]):
         return ret
 
     f_combined.constraints = constraints
-    return f_combined, finv_combined
+    return f_combined, finv_combined(params0)
