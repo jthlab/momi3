@@ -155,7 +155,9 @@ class Lift(momi3.sfs.events.Lift):
             x = C.dot(R)
             # probability of no coalescence
             log_p_nc = -x
-            log_p_prime = jnp.log(st.p) + log_p_nc
+            p0 = jnp.isclose(st.p, 0.0)
+            safe_p = jnp.where(p0, 1.0, st.p)
+            log_p_prime = jnp.where(p0, -jnp.inf, jnp.log(safe_p) + log_p_nc)
             log_s_prime = jnp.where(st.t < t0, 0.0, logsumexp(log_p_prime))
             p_prime = jnp.exp(log_p_prime - log_s_prime)
             coal = jnp.array([1 / 2 / etas[p](u) for p in axes])
@@ -192,7 +194,7 @@ class Lift(momi3.sfs.events.Lift):
                 M_t, ((0, 1), (0, 1)), constant_values=0.0
             )  # add untracked deme
             # transition p forward in time
-            p, _ = y
+            p, s = y
             ds = p * rate(t, y, args)
             # multiply along each axis, equivalent of direct sum
             dp = sum(
@@ -203,39 +205,40 @@ class Lift(momi3.sfs.events.Lift):
             )
             # movement into coalescent state
             dp -= ds  # movement among migrant states, independent
-            # jax.debug.print("p:{} c:{} dp:{} dc:{}", p, c, dp, dc)
+            # jax.debug.print("p:{} s:{} dp:{} ds:{}", p, s, dp, ds, ordered=True)
             return dp, ds.sum()
 
         solver = dfx.Kvaerno3()
         term = dfx.ODETerm(f)
         eta_ts = jnp.concatenate([eta.t for eta in etas.values()])
         jump_ts = jnp.concatenate([M.jump_ts, eta_ts])
-        jump_ts = jnp.sort(jump_ts)
+        jump_ts = jnp.sort(jump_ts).clip(t0, t1)
         # final_subsaveat = dfx.SubSaveAt(t1=True)
         # evolving_subsaveat = dfx.SubSaveAt(ts=[u], fn=stats)
         saveat = dfx.SaveAt(ts=[u, t1], fn=stats)
         ssc = dfx.PIDController(jump_ts=jump_ts, rtol=1e-6, atol=1e-6)
         args = (etas, C)
         y0 = (st.p, 0.0)
+
         res = dfx.diffeqsolve(
             term,
             solver,
             t0=t0,
             t1=t1,
             dt0=(t1 - t0) / 1000,
-            # dt0=None,
             args=args,
             y0=y0,
             stepsize_controller=ssc,
             max_steps=16384,
             saveat=saveat,
         )
+
         (_, p1), (cu, _), (su, s1) = res.ys
         p1 /= p1.sum()  # normalize to probability conditional on non-coalescence
         log_s_prime = jnp.where(st.t < t0, 0.0, jnp.log1p(-su))
         c_prime = jnp.where(t_isin_t0_t1, cu, 0.0)
         return st._replace(
-            p=p1, log_s=st.log_s * log_s_prime, c=st.c + c_prime, terminal=self.terminal
+            p=p1, log_s=st.log_s + log_s_prime, c=st.c + c_prime, terminal=self.terminal
         )
 
 
@@ -330,7 +333,7 @@ class MigrationStart(momi3.sfs.events.MigrationStart):
         p_prime = _product(src_st.p, dst_st.p)
         return State(
             p=p_prime,
-            log_s=src_st.log_s * dst_st.log_s,
+            log_s=src_st.log_s + dst_st.log_s,
             c=src_st.c + dst_st.c,
             t=src_st.t,  # t is the same for both populations
             terminal=False,
