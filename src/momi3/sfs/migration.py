@@ -75,11 +75,12 @@ def lift_cm_aux(
     # compute the transition matrices for the dimensions involved in the lift. this function doesn't know about the
     # other dimensions that are not being lifted.
     tm = {}
-    pops = {x for ab in migration_pairs for x in ab}
+    pops = list(axes.keys())
     tm["drift"] = {pop: _drift(axes[pop] - 1) for pop in pops}
     tm["mut"] = {pop: _mutation(axes[pop] - 1) for pop in pops}
     tm["mig"] = {
-        (p1, p2): _migration((axes[p1] - 1, axes[p2] - 1)) for p1, p2 in migration_pairs
+        (p1, p2): _migration((axes[p1] - 1, axes[p2] - 1))
+        for p1, p2 in it.product(pops, repeat=2)
     }
 
     # convert sparse matrices from scipy to JAX format
