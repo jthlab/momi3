@@ -66,7 +66,11 @@ class Lift(Event):
         G.add_nodes_from(
             child_axes
         )  # add a node for each population in the child partial likelihood
-        G.add_edges_from(self.migrations)
+        # only consider migrations between axes that actually exist
+        for c1, c2 in self.migrations:
+            if c1 not in child_axes or c2 not in child_axes:
+                continue
+            G.add_edge(c1, c2)
         migration_sets = [tuple(c) for c in nx.connected_components(G.to_undirected())]
         # refine migration sets to only consider who is migrating into who
         migration_sets1 = []
