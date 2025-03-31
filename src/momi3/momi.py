@@ -1,4 +1,3 @@
-import itertools as it
 from functools import partial
 import numbers
 from copy import deepcopy
@@ -186,18 +185,28 @@ class _Momi3Iicr(_Momi3Base):
 
 
 class _Momi3Sfs(_Momi3Base):
-    def __init__(self, demo: demes.Graph, num_samples: dict[str, int]):
+    def __init__(
+        self, demo: demes.Graph, num_samples: dict[str, int], _event_tree=None
+    ):
         super().__init__(demo)
+        self._bounded = False
         self._num_samples = num_samples
-        self._T = SfsEventTree(self._demo, self._num_samples)
-        if not (set(num_samples) <= set(self._T.leaves)):
-            setdiff = set(num_samples) - set(self._T.leaves)
+        if _event_tree is not None:
+            self._event_tree = _event_tree
+        else:
+            self._event_tree = SfsEventTree(self._demo, self._num_samples)
+        if not (set(num_samples) <= set(self._event_tree.leaves)):
+            setdiff = set(num_samples) - set(self._event_tree.leaves)
             raise ValueError(
                 f"Some sampled populations do not exist in the demography: {setdiff}"
             )
         # self._params = Params(demo=self._demo, T=self._T)
         with jax.disable_jit(True):
-            self._aux = self._T.setup()
+            self._aux = self._event_tree.setup()
+
+    @property
+    def sampled_demes(self):
+        return list(self._num_samples.keys())
 
     def E_tbl(
         self,
@@ -219,7 +228,7 @@ class _Momi3Sfs(_Momi3Base):
         assert set(num_samples) == set(num_derived)
         # create X mapping each population to a one-hot encoded array of derived allele counts
         X = {}
-        for pop in self._T.leaves:
+        for pop in self._event_tree.leaves:
             # some ghost populations may not be sampled. then they have trivial partial leaf likelihood.
             n = num_samples.get(pop, 0)
             d = num_derived.get(pop, 0)
@@ -228,7 +237,7 @@ class _Momi3Sfs(_Momi3Base):
         pd = deepcopy(self.params)
         for path, val in path_d.items():
             set_path(pd, path, val)
-        return self._T.execute(pd, X, aux).phi
+        return self._event_tree.execute(pd, X, aux).phi
 
     def E_tau(self, path_d: dict[Path, float], aux: Any) -> float:
         """Compute the expected total branch length of the genealogy for a given set of parameters.
@@ -240,7 +249,7 @@ class _Momi3Sfs(_Momi3Base):
             Expected total branch length subtending the given configuration.
         """
         X_batch = {}
-        for pop in self._T.leaves:
+        for pop in self._event_tree.leaves:
             ns = self._num_samples.get(pop, 0)
             X_batch[pop] = jnp.array(
                 [
@@ -252,7 +261,9 @@ class _Momi3Sfs(_Momi3Base):
         pd = deepcopy(self.params)
         for path, val in path_d.items():
             set_path(pd, path, val)
-        phi = vmap(self._T.execute, in_axes=(None, 0, None))(pd, X_batch, aux).phi
+        phi = vmap(self._event_tree.execute, in_axes=(None, 0, None))(
+            pd, X_batch, aux
+        ).phi
         return phi[0] - phi[1] - phi[2]
 
     def expected_sfs(
@@ -260,8 +271,11 @@ class _Momi3Sfs(_Momi3Base):
     ):
         if aux is None:
             aux = self._aux
-        bs = [range(n + 1) for n in self._num_samples.values()]
-        num_derived = jnp.array(list(it.product(*bs)))
+        bs = [n + 1 for n in self._num_samples.values()]
+        num_derived = jnp.indices(bs)
+        num_derived = jnp.rollaxis(num_derived, 0, num_derived.ndim).reshape(
+            -1, len(bs)
+        )
 
         def f(ds):
             d = dict(zip(self._num_samples, ds))
@@ -342,7 +356,9 @@ class _Momi3Sfs(_Momi3Base):
         pd = deepcopy(self.params)
         for path, val in path_d.items():
             set_path(pd, path, val)
-        etbls = vmap(self._T.execute, in_axes=(None, 0, None))(pd, X_batch, aux).phi
+        etbls = vmap(self._event_tree.execute, in_axes=(None, 0, None))(
+            pd, X_batch, aux
+        ).phi
         tau = jax.tree.map(lambda e: e[-3] - e[-2] - e[-1], etbls).clip(2e-10)
         etbls = jax.tree.map(lambda e: e[:-3], etbls).clip(1e-10)
 
