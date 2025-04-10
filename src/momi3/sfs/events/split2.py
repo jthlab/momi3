@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Any
 
 import numpy as np
 
@@ -11,8 +11,6 @@ from momi3.math_functions import log_hypergeom
 
 from ..state import State
 from .event import Event
-
-T = TypeVar("T")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -32,11 +30,11 @@ class Split2(Event):
 
     def _setup_impl(
         self, in_axes: dict[str, Axes], ns: PopCounter
-    ) -> tuple[Axes, PopCounter, T]:
+    ) -> tuple[Axes, PopCounter, Any]:
         donor_axes = in_axes["donor_axes"]
         recip_axes = in_axes["recipient_axes"]
-        assert self.recipient in recip_axes
         assert self.donor in donor_axes
+        assert self.recipient in recip_axes
         nw1 = donor_axes[self.donor] - 1
         nw2 = recip_axes[self.recipient] - 1
         n = nw1 + nw2
@@ -63,7 +61,7 @@ class Split2(Event):
         del nsp[self.donor]
         return out_axes, nsp, aux
 
-    def _execute_impl(self, state: dict[str, State], params: dict, aux: T) -> State:
+    def _execute_impl(self, state: dict[str, State], params: dict, aux: Any) -> State:
         """Merge two populations in different event blocks.
 
         Args:

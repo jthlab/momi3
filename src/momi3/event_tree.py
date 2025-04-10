@@ -149,7 +149,7 @@ class EventTree:
             # add initial leaf nodes for each population
             n = len(deme.epochs)
             path = ("demes", j, "epochs", n - 1, "end_time")
-            t = Time(deme.epochs[n - 1].end_time, path=path)
+            t = self._add_time(deme.epochs[n - 1].end_time, path=path)
             self._paths.add(frozenset([path]))
             node = Node(i=next(self._i), block=frozenset([deme.name]), t=t)
             # attached to each node are attributes that track the population size and
@@ -290,6 +290,8 @@ class EventTree:
     def add_edge(self, u: Node, v: Node, **kw):
         assert isinstance(u, Node)
         assert isinstance(v, Node)
+        succ = list(self._T.successors(u))
+        assert not succ, (u, v, succ)
         self._T.add_edge(u, v, **kw)
 
     def node_like(self, u, i=None, block=None, t=None, **kw) -> Node:
@@ -299,17 +301,17 @@ class EventTree:
             i = next(self._i)
         ret = Node(i=i, block=block or u.block, t=t or u.t)
         attr = deepcopy(self.nodes[u])
-        attr.update(kw)
         try:
             del attr["event"]  # do not copy the event, for it should be different
         except KeyError:
             pass
+        attr.update(kw)
         self._T.add_node(ret, **attr)
         return ret
 
     def _get_active(self, pop):
         """get the active (most recent) node for a population"""
-        assert nx.is_forest(self._T)
+        assert nx.is_forest(self._T), [(u.i, v.i) for u, v in self._T.edges()]
         for u in reversed(list(nx.topological_sort(self._T))):
             if pop in u.block:
                 return u
@@ -343,13 +345,16 @@ class EventTree:
         assert u.t.t < t.t
         # create a new node that is the same as u, but with a different time
         v = self.node_like(u, t=t)
-        ev = self.events.Lift(
-            t0=u.t,
-            t1=v.t,
-            epochs=self.nodes[u]["epochs"],
-            migrations=self.nodes[u]["migrations"],
-        )
-        self._T.add_edge(u, v, event=ev)
+        kw = {}
+        if u.t != v.t:
+            ev = self.events.Lift(
+                t0=u.t,
+                t1=v.t,
+                epochs=self.nodes[u]["epochs"],
+                migrations=self.nodes[u]["migrations"],
+            )
+            kw["event"] = ev
+        self.add_edge(u, v, **kw)
         return v
 
     # def bound(self, bounds):
@@ -380,7 +385,7 @@ class EventTree:
         nn = Node(i=next(self._i), block=b, t=x.t)
         self.add_node(nn, **st)
         for z in x, y:
-            self._T.add_edge(z, nn)
+            self.add_edge(z, nn)
         return nn
 
     def _build_tree(self):
@@ -401,15 +406,20 @@ class EventTree:
         # iterate over all events in the sort order specified above
         for d in sorted(_all_events(self._demo), key=keyfun):
             # register times of all events, including epochs
-            t = Time(d["t"], d["path"])
+            t = self._add_time(d["t"], d["path"])
             self._paths.add(frozenset([t.path]))
 
             u = self._lift(d["pop"], t)
             assert u.t.t == t.t
             # if epoch, nothing to do. epochs are handled by the lifting events.
 
-            if d["ev"] in (EventType.EPOCH, EventType.MIGRATION_END):
-                continue
+            if d["ev"] == EventType.EPOCH:
+                pass
+                # nn = self.node_like(u)
+                # self.nodes[nn]["epochs"] = self.nodes[nn]["epochs"].set(
+                #     d["pop"], d["i"]
+                # )
+                # self.add_edge(u, nn)
 
             elif d["ev"] == EventType.MIGRATION_START:
                 key = (d["source"], d["pop"])
@@ -441,11 +451,12 @@ class EventTree:
 
             # a state update. the nodes are already in the same block, and remain so
             # even after migration ends.
-            # elif d["ev"] == EventType.MIGRATION_END:
-            #     key = (d["source"], d["pop"])
-            #     nn = self.node_like(u)
-            #     self.nodes[nn]["migrations"] = self.nodes[nn]["migrations"].delete(key)
-            #     self.add_edge(u, nn)
+            elif d["ev"] == EventType.MIGRATION_END:
+                pass
+                # key = (d["source"], d["pop"])
+                # nn = self.node_like(u)
+                # self.nodes[nn]["migrations"] = self.nodes[nn]["migrations"].delete(key)
+                # self.add_edge(u, nn)
 
             # pulses function in a similarly to continuous migrations, but they are not
             # recorded in the state since they happen instantly.
@@ -476,16 +487,19 @@ class EventTree:
                         # to be admixed
                         return deme["proportions"][j] / (1 - p)
 
-                    self._pulse(source=s, dest=d["pop"], t=t, f_p=f_p)
+                    # u is updated by the pulse
+                    u = self._pulse(source=s, dest=d["pop"], t=t, f_p=f_p)
                 # the remaining ancestor merges with last ancestor
                 s = d["ancestors"][-1]
                 v = self._lift(s, t)
                 if d["pop"] in v.block:
                     # the populations are already in the same block
-                    w = self.node_like(v)
-                    self.add_edge(
-                        v, w, event=events.Split1(donor=d["pop"], recipient=s)
+                    w = self.node_like(
+                        v,
+                        event=events.Split1(donor=d["pop"], recipient=s),
+                        block=v.block - {d["pop"]},
                     )
+                    self.add_edge(v, w)
                 else:
                     w = self._merge_nodes(u, v, rm=d["pop"])
                     self.nodes[w]["event"] = events.Split2(donor=d["pop"], recipient=s)
@@ -510,10 +524,8 @@ class EventTree:
         self._full_T = self._T
         self._T = self._full_T.copy()
 
-        def f():
+        def simplify():
             for u, v in self._T.edges():
-                if self._T.in_degree(v) != 1:
-                    continue
                 succ = list(self._T.successors(v))
                 if len(succ) == 0:
                     # root node
@@ -523,30 +535,42 @@ class EventTree:
                     assert len(succ) == 1
                     w = succ[0]
 
-                def edge_is_lift(e):
-                    return isinstance(e.get("event"), self.events.Lift)
-
-                if edge_is_lift(self._T.edges[u, v]) and edge_is_lift(
-                    self._T.edges[v, w]
-                ):
-                    # collapse the two lifts into a single lift
-                    t0 = self.edges[u, v]["event"].t0
-                    t1 = self.edges[v, w]["event"].t1
-                    ev = self.events.Lift(
-                        t0=t0,
-                        t1=t1,
-                        epochs=self.nodes[u]["epochs"],
-                        migrations=self.nodes[u]["migrations"]
-                        | self.nodes[v]["migrations"],
-                    )
-                    self._T.add_edge(u, w, event=ev)
-                    self._T.remove_node(v)
-                    # repeat the process until there are no more successive lifts
+                # eliminate pointless lifts
+                ev = self._T.edges[u, v].get("event")
+                if isinstance(ev, self.events.Lift) and ev.t0.t == ev.t1.t:
+                    del self._T.edges[u, v]["event"]
                     return False
+
+                if self._T.nodes[v].get("event"):
+                    continue
+
+                # collapse the two lifts into a single lift
+                t0 = u.t
+                t1 = w.t
+                ev = self.events.Lift(
+                    t0=t0,
+                    t1=t1,
+                    epochs=self.nodes[u]["epochs"],
+                    migrations=self.nodes[u]["migrations"]
+                    | self.nodes[v]["migrations"],
+                )
+                kw = {}
+                if "id" in self._T.edges[v, w]:
+                    kw["id"] = self._T.edges[v, w]["id"]
+                assert not (
+                    (self._T.edges[u, v].keys() & self._T.edges[v, w].keys())
+                    - {"event"}
+                )
+                self._T.add_edge(u, w, event=ev, **kw)
+                self._T.remove_node(v)
+                # repeat the process until there are no more successive lifts
+                return False
+
+            # we did not find any successive lifts, so we are done
             return True
 
         # repeat the process until there are no more successive lifts
-        while not f():
+        while not simplify():
             pass
 
         assert nx.is_tree(self._T)  # sanity check.
@@ -560,8 +584,9 @@ class EventTree:
         # block or not
         if u is v:
             # same block, so we perform the pulse in one tensor contraction
-            w = self.node_like(u)
-            self.add_edge(u, w, event=events.Pulse(source=source, dest=dest, f_p=f_p))
+            w = self.node_like(u, event=events.Pulse(source=source, dest=dest, f_p=f_p))
+            self.add_edge(u, w)
+            return w
         else:
             # different blocks, so we model the pulse as an admixture followed by a
             # split2
@@ -570,10 +595,13 @@ class EventTree:
                 tr1,
                 tr2,
             }  # augment the blocks of u with the new transient pop
-            w = self.node_like(u, block=b, t=t)
-            self.add_edge(
-                u, w, event=events.Admix(child=dest, parent1=tr1, parent2=tr2, f_p=f_p)
+            w = self.node_like(
+                u,
+                block=b,
+                t=t,
+                event=events.Admix(child=dest, parent1=tr1, parent2=tr2, f_p=f_p),
             )
+            self.add_edge(u, w)
             # now we need to merge the transient admixed population into the source
             # population
             x = self._merge_nodes(w, v, rm=tr1)
@@ -583,8 +611,11 @@ class EventTree:
             self.edges[v, x]["id"] = "recipient"
             # finally, rename the transient population to the destination population
             assert x.block == (u.block | v.block | {tr2}) - {dest}
-            y = self.node_like(x, block=u.block | v.block)
-            self.add_edge(x, y, event=events.Rename(old=tr2, new=dest))
+            y = self.node_like(
+                x, block=u.block | v.block, event=events.Rename(old=tr2, new=dest)
+            )
+            self.add_edge(x, y)
+            return y
 
 
 def _reparameterize_event_tree(tree: EventTree, paths: Collection[Path]):

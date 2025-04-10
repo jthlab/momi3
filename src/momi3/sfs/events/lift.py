@@ -62,6 +62,9 @@ class Lift(Event):
             dims: dimensions of the resulting partial likelihood.
             aux: dict mapping each migration set to the necessary parameters for lifting
         """
+        if self.terminal:
+            assert len(child_axes) == 1
+
         G = nx.DiGraph()
         G.add_nodes_from(
             child_axes
@@ -86,6 +89,7 @@ class Lift(Event):
             migration_sets1.append(tuple(a))
         aux = {"mats": {"single": {}, "multi": {}}, "axes": child_axes}
         nsp = deepcopy(ns)
+
         for s in migration_sets1:
             if isinstance(s, Population):
                 # 1d lifting
@@ -201,7 +205,17 @@ class Lift(Event):
                     M = self._migfun(params, s)
                     mats = aux["mats"]["multi"][s]
                     involved_pops = {x for ab in s for x in ab}
-                    plp, etbl = _liftmulti(plp, axes, etas, (t0, t1), M, mats["cmm"])
+
+                    def is_const(pop):
+                        d = next(d for d in params["demes"] if d["name"] == pop)
+                        e = d["epochs"][self.epochs[pop]]
+                        return e["size_function"] == "constant"
+
+                    const = all(map(is_const, involved_pops))
+                    plp, etbl = _liftmulti(
+                        plp, axes, etas, (t0, t1), M, mats["cmm"], involved_pops, const
+                    )
+
                 inds = [0] * st.pl.ndim
                 for pop in involved_pops:
                     inds[list(axes).index(pop)] = slice(None)
@@ -256,10 +270,10 @@ def _lift1(pl, in_axis, eta, t0, t1, d, Q, M, QQ, RR, W, terminal):
     return plp, etbl
 
 
-def _liftmulti(pl, axes, etas, t, mig_mat, cmm):
+def _liftmulti(pl, axes, etas, t, mig_mat, cmm, involved_pops, const):
     """Lift multiple populations who are migrating continuously."""
     params = {"etas": etas, "mig": mig_mat}
-    return lift_cm(params, t, pl, axes, cmm)
+    return lift_cm(params, t, pl, axes, cmm, involved_pops, const)
 
 
 def _etbl_R(nv, eta, t0, t1, W):

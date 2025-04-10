@@ -32,10 +32,10 @@ class SfsEventTree(EventTree):
             node = self.leaves[deme.name]
             ns = self._num_samples.get(deme.name, 0)
             if ns < 4:
-                v = self.node_like(node)
-                self.add_edge(
-                    node, v, event=events.Downsample(pop=deme.name, m=4, n=ns)
+                v = self.node_like(
+                    node, event=events.Downsample(pop=deme.name, m=4, n=ns)
                 )
+                self.add_edge(node, v)
 
     def execute(
         self, params: dict, leaf_state: dict[Population, jnp.ndarray], aux: dict

@@ -22,9 +22,9 @@ class Event:
         return self._setup_impl(axes, ns)
 
     def execute(self, st: State, params: dict, aux: Any) -> State:
-        st = self._execute_impl(st, params, aux)
         if os.environ.get("MOMI_PRINT_EVENTS"):
             print(self)
+        st = self._execute_impl(st, params, aux)
         return st
 
 

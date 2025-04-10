@@ -4,6 +4,8 @@ from copy import deepcopy
 from typing import Any, Callable
 from collections.abc import Collection
 
+from loguru import logger
+
 import equinox as eqx
 import demes
 import jax
@@ -267,8 +269,14 @@ class _Momi3Sfs(_Momi3Base):
         return phi[0] - phi[1] - phi[2]
 
     def expected_sfs(
-        self, path_d: dict[Path, float] = {}, aux: Any = None, _use_vmap: bool = True
+        self,
+        path_d: dict[Path, float] = {},
+        aux: Any = None,
+        _use_vmap: bool = True,
+        _batch_size: int = None,
     ):
+        if _batch_size is not None and _use_vmap:
+            logger.warning("Batch size is ignored when using vmap")
         if aux is None:
             aux = self._aux
         bs = [n + 1 for n in self._num_samples.values()]
@@ -277,14 +285,15 @@ class _Momi3Sfs(_Momi3Base):
             -1, len(bs)
         )
 
+        @jit
         def f(ds):
             d = dict(zip(self._num_samples, ds))
-            return self.E_tbl(path_d, dict(d), self._aux)
+            return self.E_tbl(path_d, d, self._aux)
 
         if _use_vmap:
             etbls = vmap(f)(num_derived)
         else:
-            etbls = lax.map(f, num_derived)
+            etbls = lax.map(f, num_derived, batch_size=_batch_size)
         tau = self.E_tau(path_d, aux=aux)
         sh = tuple(n + 1 for n in self._num_samples.values())
         return etbls.reshape(sh), tau
