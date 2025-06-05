@@ -124,6 +124,7 @@ class EventTree:
         self._events = events
         self._paths = set()
         self._T = nx.DiGraph()
+        self._times = []
         # initialize leaves and then build the event tree
         with jax.disable_jit(True):
             self._init_leaves()
@@ -137,8 +138,17 @@ class EventTree:
     def leaves(self):
         return self._leaves
 
+    @property
+    def times(self):
+        return self._times
+
     def reparameterize(self, paths: Collection[Path]):
         return _reparameterize_event_tree(self, paths)
+
+    def _add_time(self, t, path):
+        ret = Time(t, path)
+        self._times.append(ret)
+        return ret
 
     def _init_leaves(self):
         # initialize the event tree
@@ -365,6 +375,13 @@ class EventTree:
     #                 d[u]["event"] = dataclasses.replace(ev, bounds=bounds[ev])
     #     self._setup()
     #     return self
+
+    def _get_node_by_id(self, i: int) -> Node:
+        """get the node with id i"""
+        for u in self._T:
+            if u.i == i:
+                return u
+        raise ValueError(f"node with id {i} not found")
 
     def _merge_nodes(self, x: Node, y: Node, rm=None) -> Node:
         """merge nodes x and y, optionally removing rm from the merged block set."""
