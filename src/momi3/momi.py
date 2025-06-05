@@ -22,19 +22,6 @@ from momi3.jsfs import JSFS
 from momi3.sfs.event_tree import SfsEventTree
 
 
-def _set_path(d, path, value):
-    for i in path[:-1]:
-        d = d[i]
-    d[path[-1]] = value
-
-
-def _update_from_paths(d, paths):
-    d = deepcopy(d)
-    for path in paths:
-        _set_path(d, path, paths[path])
-    return d
-
-
 class Momi3:
     def __init__(self, demo: demes.Graph):
         """
@@ -95,6 +82,15 @@ class _Momi3Base:
         self._params_d = jax.tree.map(
             lambda v: float(v) if isinstance(v, numbers.Number) else v, demo.asdict()
         )
+
+    def _update_from_paths(self, pd):
+        d = deepcopy(self._params_d)
+        for k, v in pd.items():
+            if not isinstance(k, frozenset):
+                k = frozenset([k])
+            for path in k:
+                set_path(d, path, v)
+        return d
 
     @property
     def aux(self):
@@ -167,12 +163,7 @@ class _Momi3Iicr(_Momi3Base):
         num_samples = eqx.error_if(
             num_samples, pred, f"Number of lineages must equal n={self._n}."
         )
-        pd = _update_from_paths(self._params_d, params)
-        for k, v in pd.items():
-            if not isinstance(k, frozenset):
-                k = frozenset([k])
-            for path in k:
-                set_path(pd, path, v)
+        pd = self._update_from_paths(self._params_d, params)
         return self._T.execute(params=pd, num_samples=num_samples, t=t, aux=self._aux)
 
     def ET(self, params: dict[Path, int] = {}) -> float:
@@ -215,7 +206,7 @@ class _Momi3Sfs(_Momi3Base):
 
     def E_tbl(
         self,
-        path_d: dict[Path, float],
+        path_d: dict[Path | frozenset[Path], float],
         num_derived: dict[str, int],
         aux,
     ) -> float:
@@ -239,9 +230,7 @@ class _Momi3Sfs(_Momi3Base):
             d = num_derived.get(pop, 0)
             # checkify.check(d <= n, f"More derived alleles than samples in {pop}")
             X[pop] = jax.nn.one_hot(jnp.array([d]), n + 1)[0]
-        pd = deepcopy(self.params)
-        for path, val in path_d.items():
-            set_path(pd, path, val)
+        pd = self._update_from_paths(path_d)
         return self._event_tree.execute(pd, X, aux).phi
 
     def E_tau(self, path_d: dict[frozenset[Path] | Path, float], aux: Any) -> float:
@@ -263,9 +252,7 @@ class _Momi3Sfs(_Momi3Base):
                     jax.nn.one_hot(jnp.array([ns]), ns + 1)[0],
                 ]
             )
-        pd = deepcopy(self.params)
-        for path, val in path_d.items():
-            set_path(pd, path, val)
+        pd = self._update_from_paths(path_d)
         phi = vmap(self._event_tree.execute, in_axes=(None, 0, None))(
             pd, X_batch, aux
         ).phi
@@ -273,7 +260,7 @@ class _Momi3Sfs(_Momi3Base):
 
     def expected_sfs(
         self,
-        path_d: dict[Path, float] = {},
+        path_d: dict[Path | frozenset[Path], float] = {},
         aux: Any = None,
         _use_vmap: bool = True,
         _batch_size: int = None,
@@ -365,12 +352,7 @@ class _Momi3Sfs(_Momi3Base):
 
         # merge together all configs
         X_batch = jax.tree.map(lambda a, b: jnp.concatenate([a, b]), X, X_tau)
-        pd = deepcopy(self.params)
-        for k, v in path_d.items():
-            if not isinstance(k, frozenset):
-                k = frozenset([k])
-            for path in k:
-                set_path(pd, path, v)
+        pd = self._update_from_paths(path_d)
         etbls = vmap(self._event_tree.execute, in_axes=(None, 0, None))(
             pd, X_batch, aux
         ).phi
@@ -384,7 +366,7 @@ class _Momi3Sfs(_Momi3Base):
 
     def _loglik_vmap(
         self,
-        path_d: dict[frozenset[Path], float],
+        path_d: dict[frozenset[Path] | Path, float],
         jsfs: JSFS,
         folded: bool,
         aux,
@@ -403,7 +385,7 @@ class _Momi3Sfs(_Momi3Base):
 
     def _loglik_scan(
         self,
-        path_d: dict[Path, float],
+        path_d: dict[frozenset[Path] | Path, float],
         jsfs: JSFS,
         folded: bool,
         aux,
