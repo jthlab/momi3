@@ -1,3 +1,4 @@
+import equinox as eqx
 from typing import NamedTuple
 
 import jax.numpy as jnp
@@ -33,17 +34,36 @@ class PExp(NamedTuple):
         # eta(t[i]) = a[i] exp(-b[i] dt[i]) = 1 / 2 / self.N0 =>
         return -jnp.log(1 / 2 / self.N0 / self.a) / jnp.diff(self.t)
 
-    def __call__(self, u: jnp.ndarray):
+    def __call__(self, u: jnp.ndarray, _no_searchsorted=False):
         r"Evaluate eta(u)."
         t = self.t
-        i = jnp.maximum(jnp.searchsorted(t, u) - 1, 0)  # t[j] <= u < t[j + 1]
+
+        if _no_searchsorted:
+            mask = (t[:-1] <= u) & (u < t[1:])
+            ti = t[:-1].dot(mask)
+            ti1 = t[1:].dot(mask)
+            N0i = self.N0.dot(mask)
+            N1i = self.N1.dot(mask)
+
+            # prevent annoying boundary effect
+            last = jnp.isclose(u, t[-1])
+            ti = jnp.where(last, t[-2], ti)
+            ti1 = jnp.where(last, t[-1], ti1)
+            N0i = jnp.where(last, self.N0[-2], N0i)
+            N1i = jnp.where(last, self.N1[-2], N1i)
+        else:
+            i = jnp.maximum(jnp.searchsorted(t, u) - 1, 0)  # t[j] <= u < t[j + 1]
+            ti = t[i]
+            ti1 = t[i + 1]
+            N0i = self.N0[i]
+            N1i = self.N1[i]
         # i = jnp.searchsorted(t, u) - 1
         # i = jnp.where(i >= 0, i, 0)  # t[j] <= u < t[j + 1]
-        ti1_safe = jnp.where(jnp.isinf(t[i + 1]), t[i] + 1, t[i + 1])
-        x = (ti1_safe - u) / (ti1_safe - t[i])
-        return jnp.where(
-            jnp.isinf(t[i + 1]), self.N0[i], self.N1[i] * (self.N0[i] / self.N1[i]) ** x
-        )
+        ti1_safe = jnp.where(jnp.isinf(ti1), ti + 1.0, ti1)
+        x = (ti1_safe - u) / (ti1_safe - ti)
+        ret = jnp.where(jnp.isinf(ti1), N0i, N1i * (N0i / N1i) ** x)
+        ret = eqx.error_if(ret, jnp.isnan(ret), "NaN in eta")
+        return ret
 
     def R(self, u: jnp.ndarray):
         r"Evaluate R(u) = \int_t[0]^u eta(s) ds"
