@@ -163,7 +163,7 @@ class _Momi3Iicr(_Momi3Base):
         num_samples = eqx.error_if(
             num_samples, pred, f"Number of lineages must equal n={self._n}."
         )
-        pd = self._update_from_paths(self._params_d, params)
+        pd = self._update_from_paths(params)
         return self._T.execute(params=pd, num_samples=num_samples, t=t, aux=self._aux)
 
     def ET(self, params: dict[Path, int] = {}) -> float:
