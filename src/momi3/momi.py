@@ -168,8 +168,11 @@ class _Momi3Iicr(_Momi3Base):
             num_samples, pred, f"Number of lineages must equal n={self._n}."
         )
         pd = _update_from_paths(self._params_d, params)
-        for path in params:
-            _set_path(pd, path, params[path])
+        for k, v in pd.items():
+            if not isinstance(k, frozenset):
+                k = frozenset([k])
+            for path in k:
+                set_path(pd, path, v)
         return self._T.execute(params=pd, num_samples=num_samples, t=t, aux=self._aux)
 
     def ET(self, params: dict[Path, int] = {}) -> float:
@@ -241,7 +244,7 @@ class _Momi3Sfs(_Momi3Base):
             set_path(pd, path, val)
         return self._event_tree.execute(pd, X, aux).phi
 
-    def E_tau(self, path_d: dict[Path, float], aux: Any) -> float:
+    def E_tau(self, path_d: dict[frozenset[Path] | Path, float], aux: Any) -> float:
         """Compute the expected total branch length of the genealogy for a given set of parameters.
 
         Args:
@@ -300,7 +303,7 @@ class _Momi3Sfs(_Momi3Base):
 
     def loglik(
         self,
-        path_d: dict[Path, float],
+        path_d: dict[frozenset[Path] | Path, float],
         jsfs: JSFS,
         *,
         theta: float = None,
@@ -333,7 +336,7 @@ class _Momi3Sfs(_Momi3Base):
         return dict(zip(self._num_samples, ds))
 
     def _branch_lengths(
-        self, path_d: dict[Path, float], jsfs: JSFS, folded: bool, aux
+        self, path_d: dict[frozenset[Path] | Path, float], jsfs: JSFS, folded: bool, aux
     ) -> float:
         configs = [vmap(lambda ds: self._configs(ds, False))(jsfs.sites)]
 
@@ -363,8 +366,11 @@ class _Momi3Sfs(_Momi3Base):
         # merge together all configs
         X_batch = jax.tree.map(lambda a, b: jnp.concatenate([a, b]), X, X_tau)
         pd = deepcopy(self.params)
-        for path, val in path_d.items():
-            set_path(pd, path, val)
+        for k, v in path_d.items():
+            if not isinstance(k, frozenset):
+                k = frozenset([k])
+            for path in k:
+                set_path(pd, path, v)
         etbls = vmap(self._event_tree.execute, in_axes=(None, 0, None))(
             pd, X_batch, aux
         ).phi
@@ -378,7 +384,7 @@ class _Momi3Sfs(_Momi3Base):
 
     def _loglik_vmap(
         self,
-        path_d: dict[Path, float],
+        path_d: dict[frozenset[Path], float],
         jsfs: JSFS,
         folded: bool,
         aux,
