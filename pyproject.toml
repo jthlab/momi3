@@ -6,7 +6,7 @@ build-backend = "pdm.backend"
 [project]
 name = "momi3"
 dynamic = ["version"]
-description = "momi3 infers complex demographic history from the joint site frequency spectrum"
+description = "Deprecated: momi3 has been folded into demestats"
 authors = [
     {name = "Enes Dilber", email = "enes@umich.edu"},
     {name = "Jonathan Terhorst", email = "jonth@umich.edu"},
@@ -43,7 +43,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/jthlab/momi3/"
+Homepage = "https://github.com/jthlab/demestats/"
+Repository = "https://github.com/jthlab/demestats/"
 
 [project.optional-dependencies]
 gpu = [
